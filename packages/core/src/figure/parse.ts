@@ -15,7 +15,14 @@ export interface ParsedPoint {
  */
 export type InputNode = ({ kind: "new" } & ParsedPoint) | { kind: "existing"; id: Id; x: number; y: number };
 
-export type InputTokenKind = "name" | "point" | "ref" | "connector" | "error";
+/** A free text to create. */
+export interface ParsedText {
+  text: string;
+  x: number;
+  y: number;
+}
+
+export type InputTokenKind = "name" | "point" | "ref" | "connector" | "text" | "error";
 
 /** A span of the input text, used to color it as the teacher types. */
 export interface InputToken {
@@ -34,6 +41,8 @@ export interface ParsedInput {
   nodes: InputNode[];
   /** Pairs of node indices to join with a segment. */
   segments: [number, number][];
+  /** Free texts, written "texto"@(x;y). */
+  texts: ParsedText[];
   tokens: InputToken[];
   errors: InputError[];
 }
@@ -61,10 +70,12 @@ const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
  * - `--` joins its neighbors with a segment, with or without spaces.
  *   A `--` at the very end closes the contour.
  * - Spaces without `--` separate independent points or chains.
+ * - `"texto"@(X;Y)` places a free text centered at a point; any point form works after `@`.
  */
 export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
   const nodes: InputNode[] = [];
   const segments: [number, number][] = [];
+  const texts: ParsedText[] = [];
   const tokens: InputToken[] = [];
   const errors: InputError[] = [];
 
@@ -146,6 +157,16 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
       }
     }
 
+    const p = readPosition(start, label ? `Depois de ${label}= vem um ponto, como (2;3).` : undefined);
+    if (!p) return null;
+    nodes.push({ kind: "new", x: roundTiny(p.x), y: roundTiny(p.y), ...(label ? { label } : {}) });
+    const index = nodes.length - 1;
+    if (label) names.set(label, index);
+    return index;
+  };
+
+  /** Reads a position: (x;y), (R:θ) or a displacement. Returns null after reporting an error. */
+  const readPosition = (start: number, formError = "Use (x;y), (R:θ), +(x;y) ou +(R:θ)."): Vec | null => {
     const pointStart = i;
     // A leading + makes it a displacement: +(1;2), +1;2, +(3:60).
     const isRelative = text[i] === "+";
@@ -162,7 +183,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     skipSpaces();
     const sep = text[i];
     if (a === null || (sep !== ";" && sep !== ":")) {
-      fail(start, label ? `Depois de ${label}= vem um ponto, como (2;3).` : "Use (x;y), (R:θ), +(x;y) ou +(R:θ).");
+      fail(start, formError);
       return null;
     }
     i++;
@@ -192,10 +213,38 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
       }
       p = add(from, p);
     }
-    nodes.push({ kind: "new", x: roundTiny(p.x), y: roundTiny(p.y), ...(label ? { label } : {}) });
-    const index = nodes.length - 1;
-    if (label) names.set(label, index);
-    return index;
+    return p;
+  };
+
+  /** Reads "texto"@position. Text ends the current chain. */
+  const readText = () => {
+    const start = i;
+    const close = text.slice(i + 1).search(/["”]/);
+    if (close < 0) {
+      errors.push({ message: "Falta fechar as aspas do texto.", start, end: text.length });
+      tokens.push({ kind: "error", start, end: text.length });
+      i = text.length;
+      return;
+    }
+    const content = text.slice(i + 1, i + 1 + close).trim();
+    i += close + 2;
+    if (content === "") {
+      fail(start, "O texto entre aspas está vazio.");
+      return;
+    }
+    skipSpaces();
+    if (text[i] !== "@") {
+      fail(start, `Diga onde fica o texto: "${content}"@(x;y).`);
+      return;
+    }
+    i++;
+    tokens.push({ kind: "text", start, end: i });
+    skipSpaces();
+    const p = readPosition(start, `Depois de @ vem um ponto, como (2;3).`);
+    if (!p) return;
+    texts.push({ text: content.slice(0, LIMITS.labelLength), x: roundTiny(p.x), y: roundTiny(p.y) });
+    chainStart = null;
+    chainLength = 0;
   };
 
   for (;;) {
@@ -212,6 +261,17 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
       }
       pendingConnector = { start, end: i };
       tokens.push({ kind: "connector", start, end: i });
+      continue;
+    }
+
+    if (text[i] === '"' || text[i] === "“") {
+      if (pendingConnector) {
+        const c: { start: number; end: number } = pendingConnector;
+        errors.push({ message: "Depois de -- vem um ponto.", ...c });
+        tokens.push({ kind: "error", ...c });
+        pendingConnector = null;
+      }
+      readText();
       continue;
     }
 
@@ -240,7 +300,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
 
   // Drop segments that would have no length.
   const kept = segments.filter(([p, q]) => dist(position(p), position(q)) > 0);
-  return { nodes, segments: kept, tokens: tokens.sort((x, y) => x.start - y.start), errors };
+  return { nodes, segments: kept, texts, tokens: tokens.sort((x, y) => x.start - y.start), errors };
 }
 
 /** Removes floating point noise like 2.9999999999999996. */

@@ -6,7 +6,7 @@ import { useCoarsePointer } from "@/lib/useMediaQuery";
 const HINTS = {
   select: "Clique nos objetos para selecioná-los, ou arraste uma caixa em volta deles.",
   pan: "Arraste para deslocar a vista. Clique nos objetos para selecioná-los.",
-  move: "Arraste um ponto, ou selecione vários e arraste um deles.",
+  move: "Arraste um ponto ou texto, ou selecione vários e arraste um deles.",
 } as const;
 
 const TOUCH_HINTS = {

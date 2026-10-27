@@ -4,6 +4,8 @@ import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { PointInput } from "@/components/PointInput";
 import { SidePanel } from "@/components/panel/SidePanel";
 import { useShortcuts } from "@/lib/useShortcuts";
+import { FileDrop } from "@/components/figures/FileDrop";
+import { SharedLinkImport } from "@/components/figures/SharedLinkImport";
 
 function App() {
   useShortcuts();
@@ -16,6 +18,8 @@ function App() {
         </main>
         <SidePanel />
       </div>
+      <FileDrop />
+      <SharedLinkImport />
       <Toaster position="bottom-center" richColors closeButton />
     </TooltipProvider>
   );

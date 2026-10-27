@@ -109,17 +109,66 @@ interface PrefsState {
   /** The teacher's own profiles. "Padrão" is built in and not stored. */
   profiles: Profile[];
   activeId: string;
+  /**
+   * Unsaved changes made while "Padrão" is active. "Padrão" itself never
+   * changes; the draft is used in its place until saved or discarded.
+   */
+  draft: Prefs | null;
   setActive: (id: string) => void;
-  /** Copies the active profile into a new one and switches to it. */
+  /** Copies the active profile (or the draft) into a new one and switches to it. */
   createProfile: (name: string) => string;
   renameProfile: (id: string, name: string) => void;
   deleteProfile: (id: string) => void;
-  /** Changes the active profile. Ignored while "Padrão" is active. */
+  /** Changes the active profile, or the draft while "Padrão" is active. */
   updatePrefs: (change: (prefs: Prefs) => Prefs) => void;
+  /** Drops the draft: "Padrão" is used as is again. */
+  discardDraft: () => void;
 }
 
-export function activePrefs(state: Pick<PrefsState, "profiles" | "activeId"> = usePrefsStore.getState()): Prefs {
+type ActiveState = Pick<PrefsState, "profiles" | "activeId" | "draft">;
+
+export function activePrefs(state: ActiveState = usePrefsStore.getState()): Prefs {
+  if (state.activeId === DEFAULT_PROFILE_ID) return state.draft ?? DEFAULT_PREFS;
   return state.profiles.find((p) => p.id === state.activeId)?.prefs ?? DEFAULT_PREFS;
+}
+
+/** True while "Padrão" is active with unsaved changes. */
+export function hasDraft(state: ActiveState = usePrefsStore.getState()): boolean {
+  return state.activeId === DEFAULT_PROFILE_ID && state.draft !== null;
+}
+
+export const DRAFT_NAME = "Padrão (alterada, não salva)";
+
+/** Name of the profile in use, as shown to the teacher. */
+export function activeProfileName(state: ActiveState = usePrefsStore.getState()): string {
+  if (state.activeId === DEFAULT_PROFILE_ID) return state.draft ? DRAFT_NAME : "Padrão";
+  return state.profiles.find((p) => p.id === state.activeId)?.name ?? "Padrão";
+}
+
+/** A free "Configuração N" name for a new profile. */
+export function nextProfileName(profiles: Profile[]): string {
+  const names = new Set(profiles.map((p) => p.name));
+  let n = profiles.length + 1;
+  while (names.has(`Configuração ${n}`)) n++;
+  return `Configuração ${n}`;
+}
+
+// Used by the persist merge, which runs while the store is created: keep these above it.
+type Raw = Record<string, unknown>;
+const isObj = (x: unknown): x is Raw => typeof x === "object" && x !== null && !Array.isArray(x);
+const num = (x: unknown, min: number, max: number, fallback: number) =>
+  typeof x === "number" && Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : fallback;
+const bool = (x: unknown, fallback: boolean) => (typeof x === "boolean" ? x : fallback);
+const color = (x: unknown, fallback: string) => (typeof x === "string" && isValidColor(x) ? x : fallback);
+
+/** Deep equality for plain JSON data, ignoring key order. */
+function sameData(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a).filter((k) => (a as Raw)[k] !== undefined);
+  const kb = Object.keys(b).filter((k) => (b as Raw)[k] !== undefined);
+  return ka.length === kb.length && ka.every((k) => sameData((a as Raw)[k], (b as Raw)[k]));
 }
 
 /** Applies a profile's view and export defaults to the editor. */
@@ -150,6 +199,7 @@ export const usePrefsStore = create<PrefsState>()(
     (set, get) => ({
       profiles: [],
       activeId: DEFAULT_PROFILE_ID,
+      draft: null,
 
       setActive: (id) => {
         const exists = id === DEFAULT_PROFILE_ID || get().profiles.some((p) => p.id === id);
@@ -160,14 +210,21 @@ export const usePrefsStore = create<PrefsState>()(
 
       createProfile: (name) => {
         const id = `p${Date.now().toString(36)}`;
-        const prefs = structuredClone(activePrefs(get()));
-        set((s) => ({ profiles: [...s.profiles, { id, name: name.trim() || "Minha configuração", prefs }], activeId: id }));
+        const state = get();
+        const prefs = structuredClone(activePrefs(state));
+        // Copying "Padrão" with changes saves the draft: it moves into the new profile.
+        const draft = hasDraft(state) ? null : state.draft;
+        set((s) => ({
+          profiles: [...s.profiles, { id, name: name.trim().slice(0, 60) || "Minha configuração", prefs }],
+          activeId: id,
+          draft,
+        }));
         return id;
       },
 
       renameProfile: (id, name) =>
         set((s) => ({
-          profiles: s.profiles.map((p) => (p.id === id ? { ...p, name: name.trim() || p.name } : p)),
+          profiles: s.profiles.map((p) => (p.id === id ? { ...p, name: name.trim().slice(0, 60) || p.name } : p)),
         })),
 
       deleteProfile: (id) => {
@@ -177,38 +234,47 @@ export const usePrefsStore = create<PrefsState>()(
       },
 
       updatePrefs: (change) => {
-        const { activeId, profiles } = get();
-        if (activeId === DEFAULT_PROFILE_ID) return;
+        const { activeId, profiles, draft } = get();
+        if (activeId === DEFAULT_PROFILE_ID) {
+          const next = change(draft ?? DEFAULT_PREFS);
+          // Changing everything back leaves nothing to save.
+          set({ draft: sameData(next, DEFAULT_PREFS) ? null : next });
+          return;
+        }
         set({ profiles: profiles.map((p) => (p.id === activeId ? { ...p, prefs: change(p.prefs) } : p)) });
+      },
+
+      discardDraft: () => {
+        set({ draft: null });
+        if (get().activeId === DEFAULT_PROFILE_ID) applyPrefsToSession(DEFAULT_PREFS);
       },
     }),
     {
       name: "geosimples-prefs",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ profiles: s.profiles, activeId: s.activeId }),
+      partialize: (s) => ({ profiles: s.profiles, activeId: s.activeId, draft: s.draft }),
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as { profiles?: unknown; activeId?: unknown };
+        const p = (persisted ?? {}) as { profiles?: unknown; activeId?: unknown; draft?: unknown };
         const profiles = Array.isArray(p.profiles) ? p.profiles.flatMap(sanitizeProfile) : [];
         const activeId =
           typeof p.activeId === "string" && profiles.some((x) => x.id === p.activeId) ? p.activeId : DEFAULT_PROFILE_ID;
-        return { ...current, profiles, activeId };
+        const draft = isObj(p.draft) ? sanitizePrefs(p.draft) : null;
+        return { ...current, profiles, activeId, draft: draft && !sameData(draft, DEFAULT_PREFS) ? draft : null };
       },
     },
   ),
 );
 
-type Raw = Record<string, unknown>;
-const isObj = (x: unknown): x is Raw => typeof x === "object" && x !== null && !Array.isArray(x);
-const num = (x: unknown, min: number, max: number, fallback: number) =>
-  typeof x === "number" && Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : fallback;
-const bool = (x: unknown, fallback: boolean) => (typeof x === "boolean" ? x : fallback);
-const color = (x: unknown, fallback: string) => (typeof x === "string" && isValidColor(x) ? x : fallback);
-
 /** Stored profiles may come from an older version: fill gaps with defaults and drop bad values. */
 function sanitizeProfile(raw: unknown): Profile[] {
   if (!isObj(raw) || typeof raw.id !== "string" || typeof raw.name !== "string") return [];
-  const r = isObj(raw.prefs) ? raw.prefs : {};
+  return [{ id: raw.id, name: raw.name.slice(0, 60), prefs: sanitizePrefs(raw.prefs) }];
+}
+
+/** Stored prefs (a profile's or the draft): fill gaps with defaults and drop bad values. */
+function sanitizePrefs(raw: unknown): Prefs {
+  const r = isObj(raw) ? raw : {};
   const d = DEFAULT_PREFS;
   const st = isObj(r.styles) ? r.styles : {};
   const sub = (key: string) => (isObj(st[key]) ? (st[key] as Raw) : {});
@@ -262,26 +328,20 @@ function sanitizeProfile(raw: unknown): Profile[] {
       return [id, Array.isArray(list) ? list.filter((x): x is string => typeof x === "string").slice(0, 4) : DEFAULT_SHORTCUTS[id]];
     }),
   ) as Record<ActionId, string[]>;
-  return [
-    {
-      id: raw.id,
-      name: raw.name.slice(0, 60),
-      prefs: {
-        styles,
-        behavior: {
-          autoName: bool(b.autoName, d.behavior.autoName),
-          mode: b.mode === "pan" || b.mode === "move" ? b.mode : "select",
-          autoFit: bool(b.autoFit, d.behavior.autoFit),
-          showGrid: bool(b.showGrid, d.behavior.showGrid),
-          decimals: Math.round(num(b.decimals, 0, 4, d.behavior.decimals)),
-        },
-        export: {
-          scale: num(e.scale, 0.1, 10, d.export.scale),
-          dpi: num(e.dpi, 72, 1200, d.export.dpi),
-          background: e.background === "transparent" ? "transparent" : "white",
-        },
-        shortcuts,
-      },
+  return {
+    styles,
+    behavior: {
+      autoName: bool(b.autoName, d.behavior.autoName),
+      mode: b.mode === "pan" || b.mode === "move" ? b.mode : "select",
+      autoFit: bool(b.autoFit, d.behavior.autoFit),
+      showGrid: bool(b.showGrid, d.behavior.showGrid),
+      decimals: Math.round(num(b.decimals, 0, 4, d.behavior.decimals)),
     },
-  ];
+    export: {
+      scale: num(e.scale, 0.1, 10, d.export.scale),
+      dpi: num(e.dpi, 72, 1200, d.export.dpi),
+      background: e.background === "transparent" ? "transparent" : "white",
+    },
+    shortcuts,
+  };
 }

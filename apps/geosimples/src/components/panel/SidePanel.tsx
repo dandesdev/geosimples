@@ -3,17 +3,18 @@ import { CircleHelp, Settings } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { IconButton } from "@/components/IconButton";
 import { Logo } from "@/components/icons";
-import { HelpDialog } from "@/components/dialogs/HelpDialog";
-import { SettingsDialog } from "@/components/dialogs/SettingsDialog";
+import { LazyHelpDialog, LazySettingsDialog } from "@/components/dialogs/lazy";
+import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
+import { FigureBar } from "@/components/figures/FigureBar";
 import { useCommand } from "@/lib/commands";
-import { usePrefsStore } from "@/store/prefsStore";
+import { activeProfileName, usePrefsStore } from "@/store/prefsStore";
 import { Customization } from "./Customization";
 import { Tools } from "./Tools";
 
 export function SidePanel() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const profileName = usePrefsStore((s) => s.profiles.find((p) => p.id === s.activeId)?.name ?? "Padrão");
+  const profileName = usePrefsStore((s) => activeProfileName(s));
   useCommand("help", useCallback(() => setHelpOpen(true), []));
   useCommand("settings", useCallback(() => setSettingsOpen(true), []));
 
@@ -38,6 +39,7 @@ export function SidePanel() {
           </IconButton>
         </div>
       </header>
+      <FigureBar />
       <div className="min-h-0 flex-1 overflow-y-auto px-4">
         <Accordion type="multiple" defaultValue={["custom"]}>
           <AccordionItem value="custom">
@@ -54,8 +56,12 @@ export function SidePanel() {
           </AccordionItem>
         </Accordion>
       </div>
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <MountOnFirstOpen open={helpOpen}>
+        <LazyHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      </MountOnFirstOpen>
+      <MountOnFirstOpen open={settingsOpen}>
+        <LazySettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      </MountOnFirstOpen>
     </aside>
   );
 }

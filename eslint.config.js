@@ -26,6 +26,15 @@ export default defineConfig([
     rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
+    // Playwright end-to-end tests run in Node and send small functions to the browser.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     // Core is framework-free and must not rely on browser globals.
     files: ['packages/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],

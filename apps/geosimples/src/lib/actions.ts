@@ -1,8 +1,12 @@
 import { toast } from "sonner";
 import {
+  addText,
   autoLabel,
+  buildScene,
   connectPoints,
+  construct,
   deleteElements,
+  freePoints,
   makeAngles,
   makeCircle,
   fillShapes,
@@ -11,6 +15,7 @@ import {
   projectPoint,
   selectedOfType,
   type CircleMode,
+  type ConstructionKind,
   type FigureDoc,
   type Id,
   type LabelScheme,
@@ -47,6 +52,12 @@ export const actions = {
 
   circle: (mode: CircleMode) => perform((doc, sel) => makeCircle(doc, sel, mode, opOptions())),
 
+  /** Midpoint, height, median, bisectors and intersections: see ConstructionKind. */
+  construct: (kind: ConstructionKind) => perform((doc, sel) => construct(doc, sel, kind, opOptions())),
+
+  /** Turns constructed points into free points that no longer follow their parents. */
+  freePoints: (ids: Id[]) => perform((doc) => freePoints(doc, ids), "keep"),
+
   deleteSelected: () => {
     const { selection } = useFigureStore.getState();
     if (selection.length === 0) return false;
@@ -59,6 +70,12 @@ export const actions = {
   project: (withHeight: boolean) =>
     perform((doc, sel) => projectPoint(doc, selectedPoints(doc, sel), withHeight, opOptions())),
 
+  /** Adds a free text centered under the figure, where it can then be dragged. */
+  addText: (text: string) => {
+    const { settings } = useFigureStore.getState();
+    return perform((doc) => addText(doc, spotBelow(doc, settings.scale), text, opOptions()));
+  },
+
   autoLabel: (type: LabelTarget, scheme: LabelScheme, onlySelected: boolean) => {
     const { settings } = useFigureStore.getState();
     return perform(
@@ -67,6 +84,14 @@ export const actions = {
     );
   },
 };
+
+/** A free spot centered under everything drawn, in world units. */
+function spotBelow(doc: FigureDoc, scale: number) {
+  const { box, k } = buildScene(doc, { scale });
+  if (!box) return { x: 0, y: 0 };
+  // About a line of text below the lowest mark.
+  return { x: Math.round(((box.minX + box.maxX) / 2 / k) * 100) / 100, y: Math.round((-box.maxY / k - 16 / k) * 100) / 100 };
+}
 
 /** The last selected point, used by R:θ in the point input. */
 export function lastSelectedPoint(doc: FigureDoc, selection: Id[]) {

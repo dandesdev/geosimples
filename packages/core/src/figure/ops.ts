@@ -2,6 +2,7 @@ import { DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
 import {
   angleArc,
   circumcircle,
+  constructionParents,
   distanceToLine,
   loopFromSegments,
   pointMap,
@@ -9,7 +10,7 @@ import {
   resolveConstructions,
   signedArea2,
 } from "./geometry";
-import { labelFor, type LabelScheme, nextPointNames, withText } from "./labels";
+import { labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Angle,
@@ -18,8 +19,10 @@ import type {
   Element,
   ElementType,
   FigureDoc,
+  FreeText,
   Id,
   Point,
+  PointConstruction,
   Polygon,
   Segment,
 } from "./types";
@@ -76,10 +79,11 @@ const PREFIX: Record<ElementType, string> = {
   angle: "a",
   circle: "c",
   polygon: "g",
+  text: "t",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
-function idMaker(doc: FigureDoc) {
+export function idMaker(doc: FigureDoc) {
   const used = new Set(doc.elements.map((e) => e.id));
   const counters: Partial<Record<ElementType, number>> = {};
   return (type: ElementType): Id => {
@@ -100,7 +104,7 @@ function roomFor(doc: FigureDoc, count: number): boolean {
   return doc.elements.length + count <= LIMITS.elements;
 }
 
-const LIMIT_ERROR = `A figura chegou ao limite de ${LIMITS.elements} elementos.`;
+export const LIMIT_ERROR = `A figura chegou ao limite de ${LIMITS.elements} elementos.`;
 
 export function selectedOfType<T extends ElementType>(
   doc: FigureDoc,
@@ -127,9 +131,9 @@ export function addPoints(doc: FigureDoc, parsed: ParsedPoint[], opts: OpOptions
  */
 export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions = {}): OpResult {
   if (parsed.errors.length > 0) return fail(doc, parsed.errors[0].message);
-  if (parsed.nodes.length === 0) return ok(doc);
+  if (parsed.nodes.length === 0 && parsed.texts.length === 0) return ok(doc);
   const fresh = parsed.nodes.filter((n) => n.kind === "new");
-  if (!roomFor(doc, fresh.length + parsed.segments.length)) return fail(doc, LIMIT_ERROR);
+  if (!roomFor(doc, fresh.length + parsed.segments.length + parsed.texts.length)) return fail(doc, LIMIT_ERROR);
 
   const nextId = idMaker(doc);
   const points = buildPoints(doc, fresh, opts, nextId);
@@ -143,16 +147,22 @@ export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions 
     if (a === b || segmentExists(working, a, b)) continue;
     working = withElements(working, [...working.elements, newSegment(nextId("segment"), a, b, opts)]);
   }
-  return ok(working, [...new Set(ids)]);
+  const texts: Id[] = [];
+  for (const t of parsed.texts) {
+    const added = addText(working, t, t.text, opts);
+    working = added.doc;
+    texts.push(...added.created);
+  }
+  return ok(working, [...new Set(ids), ...texts]);
 }
 
-function segmentExists(doc: FigureDoc, a: Id, b: Id): boolean {
+export function segmentExists(doc: FigureDoc, a: Id, b: Id): boolean {
   return doc.elements.some(
     (e) => e.type === "segment" && ((e.a === a && e.b === b) || (e.a === b && e.b === a)),
   );
 }
 
-function newSegment(id: Id, a: Id, b: Id, opts: OpOptions): Segment {
+export function newSegment(id: Id, a: Id, b: Id, opts: OpOptions): Segment {
   return { id, type: "segment", a, b, stroke: { ...stylesOf(opts).stroke }, ticks: 0 };
 }
 
@@ -181,7 +191,7 @@ export function connectPoints(doc: FigureDoc, pointIds: Id[], closed: boolean, o
   return ok(working, created.map((s) => s.id));
 }
 
-function angleExists(doc: FigureDoc, a: Id, vertex: Id, b: Id): boolean {
+export function angleExists(doc: FigureDoc, a: Id, vertex: Id, b: Id): boolean {
   return doc.elements.some(
     (e) =>
       e.type === "angle" &&
@@ -190,7 +200,7 @@ function angleExists(doc: FigureDoc, a: Id, vertex: Id, b: Id): boolean {
   );
 }
 
-function newAngle(id: Id, a: Id, vertex: Id, b: Id, reflex: boolean, opts: OpOptions): Angle {
+export function newAngle(id: Id, a: Id, vertex: Id, b: Id, reflex: boolean, opts: OpOptions): Angle {
   const styles = stylesOf(opts);
   return {
     id,
@@ -395,6 +405,7 @@ export function cascadeIds(doc: FigureDoc, ids: Id[]): Set<Id> {
 function referencedPoints(el: Element): Id[] {
   switch (el.type) {
     case "point":
+    case "text":
       return [];
     case "segment":
       return [el.a, el.b];
@@ -408,15 +419,16 @@ function referencedPoints(el: Element): Id[] {
 }
 
 /**
- * Deletes elements and everything built on them. Circles that lose the point
- * or segment they were built from keep their size and become free.
+ * Deletes elements and everything built on them. Circles and constructed
+ * points that lose what they were built from stay where they are and become free.
  */
 export function deleteElements(doc: FigureDoc, ids: Id[]): OpResult {
   if (ids.length === 0) return ok(doc);
-  const gone = cascadeIds(doc, ids);
+  const gone = withOrphanHelpers(doc, cascadeIds(doc, ids));
   const elements = doc.elements
     .filter((el) => !gone.has(el.id))
     .map((el): Element => {
+      if (el.type === "point") return freedPoint(el, gone);
       if (el.type !== "circle") return el;
       const c = el.construction;
       const lost =
@@ -428,11 +440,41 @@ export function deleteElements(doc: FigureDoc, ids: Id[]): OpResult {
   return ok(withElements(doc, elements));
 }
 
+function freedPoint(p: Point, gone: Set<Id>): Point {
+  if (!p.construction || !constructionParents(p.construction).some((id) => gone.has(id))) return p;
+  const next = { ...p };
+  delete next.construction;
+  return next;
+}
+
+/**
+ * Adds the hidden, unnamed constructed points that only the deleted elements
+ * used, such as the ends of a perpendicular bisector, so they don't linger.
+ */
+function withOrphanHelpers(doc: FigureDoc, gone: Set<Id>): Set<Id> {
+  const usedByGone = new Set<Id>();
+  const usedByKept = new Set<Id>();
+  for (const el of doc.elements) {
+    const refs = [
+      ...referencedPoints(el),
+      ...(el.type === "point" && el.construction ? constructionParents(el.construction) : []),
+    ];
+    for (const r of refs) (gone.has(el.id) ? usedByGone : usedByKept).add(r);
+  }
+  const out = new Set(gone);
+  for (const el of doc.elements) {
+    const helper = el.type === "point" && el.construction && el.shape === "none" && !el.label;
+    if (helper && usedByGone.has(el.id) && !usedByKept.has(el.id)) out.add(el.id);
+  }
+  return out;
+}
+
+/** Moves points and free texts. */
 export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number }[]): FigureDoc {
   const byId = new Map(moves.map((m) => [m.id, m]));
   const elements = doc.elements.map((el) => {
     const m = byId.get(el.id);
-    return m && el.type === "point" ? { ...el, x: m.x, y: m.y } : el;
+    return m && (el.type === "point" || el.type === "text") ? { ...el, x: m.x, y: m.y } : el;
   });
   return resolveConstructions(withElements(doc, elements));
 }
@@ -487,10 +529,17 @@ export function projectPoint(doc: FigureDoc, pointIds: Id[], withHeight: boolean
   if (dist(foot, p) < 1e-9) return fail(doc, "O ponto já está sobre a reta.");
 
   const added = addPoints(doc, [{ x: foot.x, y: foot.y }], opts);
-  if (added.error || !withHeight) return added;
+  if (added.error) return added;
   const footId = added.created[0];
-  const joined = connectPoints(added.doc, [p.id, footId], false, opts);
-  let working = joined.error ? added.doc : joined.doc;
+  // The foot follows the point and the line when they move.
+  const construction: PointConstruction = { kind: "foot", point: p.id, line: [a.id, b.id] };
+  const placed = withElements(
+    added.doc,
+    added.doc.elements.map((e) => (e.id === footId && e.type === "point" ? { ...e, construction } : e)),
+  );
+  if (!withHeight) return ok(placed, [footId]);
+  const joined = connectPoints(placed, [p.id, footId], false, opts);
+  let working = joined.error ? placed : joined.doc;
   // The right angle needs an arm that isn't the foot itself.
   const arm = dist(foot, b) > 1e-9 ? b : a;
   const nextId = idMaker(working);
@@ -518,15 +567,31 @@ export function autoLabel(
     const text = labelFor(scheme, i, el, doc, decimals);
     if (text !== null) texts.set(el.id, text);
   });
+  // Measures become live labels that follow the points. Angles keep at most one decimal.
+  const live = scheme === "length" || scheme === "measure";
   const elements = doc.elements.map((el) => {
     const text = texts.get(el.id);
-    return text === undefined ? el : ({ ...el, label: withText(el.label, text, stylesOf(opts).label) } as Element);
+    if (text === undefined || el.type === "text") return el;
+    const label = withText(el.label, text, stylesOf(opts).label);
+    const measure = live ? newMeasure(el, el.type === "angle" ? Math.min(decimals, 1) : decimals) : null;
+    return { ...el, label: measure ? { ...label, measure } : label } as Element;
   });
   return ok(withElements(doc, elements));
 }
 
+/** Adds a free text centered at (x, y), in the label style of the options. */
+export function addText(doc: FigureDoc, at: { x: number; y: number }, text: string, opts: OpOptions = {}): OpResult {
+  const trimmed = text.trim().slice(0, LIMITS.labelLength);
+  if (trimmed === "") return fail(doc, "Escreva o texto.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const { size, color, font } = stylesOf(opts).label;
+  const el: FreeText = { id: idMaker(doc)("text"), type: "text", x: at.x, y: at.y, text: trimmed, size, color, font };
+  return ok(withElements(doc, [...doc.elements, el]), [el.id]);
+}
+
 export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
+    if (el.type === "text") return el;
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
       const next = { ...el };
