@@ -1,0 +1,20 @@
+{
+  "name": "@geosimples/core",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Framework-free figure model and geometry for GeoSimples and fnplot",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./geo": "./src/geo/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

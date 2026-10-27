@@ -23,6 +23,16 @@ GeoSimples is a professional geometry editor for educational editorial workflows
 - **Rendering**: SVG for geometry (grouped for transforms) + Canvas for paper texture background
 - **Components**: shadcn/ui (Button, Toggle, Tabs, DropdownMenu, Switch, Tooltip, Sonner, Input, Slider)
 
+## Repository Layout
+
+npm workspaces monorepo. The services plan is in `.ai/SERVICES.md`.
+
+- `apps/geosimples`: the Vite + React editor
+- `packages/core` (`@geosimples/core`): framework-free figure model and geometry. Subpath `@geosimples/core/geo` holds element types, default styles, solvers and validations
+- Root scripts: `npm run build`, `npm test` (vitest for core), `npm run typecheck`, `npm run lint`
+
+Rules for `packages/core`: no React, no DOM, relative imports only (no `@/`). Its tsconfig has no DOM lib, so browser globals are a type error there.
+
 ## Agent Persona
 
 You are an expert frontend developer and UX specialist with deep knowledge of professional design tools (Figma, Excalidraw, n8n, Linear, online photo editors).
@@ -94,8 +104,8 @@ Usage: `text-primary/50`, `bg-primary`, `border-destructive`
 
 1. **Components**: React functional components with TypeScript interfaces
 2. **Hooks**: `use*` prefix for custom hooks (useCanvas, useExport, useKeyboard)
-3. **Store**: Zustand store in `src/store/useEditorStore.ts`
-4. **Types**: `src/geometry/types.ts` for all geometry interfaces
+3. **Store**: Zustand store in `apps/geosimples/src/store/useEditorStore.ts`
+4. **Types**: element and style types in `packages/core/src/geo/types.ts`; editor state types (tools, selection, preferences) in `apps/geosimples/src/geometry/types.ts`
 5. **Styles**: No inline styles; use Tailwind classes + semantic colors
 
 ## Workflow
