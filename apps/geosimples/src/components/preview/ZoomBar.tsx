@@ -1,6 +1,7 @@
 import { Grid3x3, Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { useFigureStore } from "@/store/figureStore";
+import { useCoarsePointer, useMediaQuery } from "@/lib/useMediaQuery";
 
 export function ZoomBar({
   onZoomIn,
@@ -15,14 +16,22 @@ export function ZoomBar({
 }) {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const setSetting = useFigureStore((s) => s.setSetting);
+  // On phones a column in the middle of the right edge covers the figure, so it becomes a row in the corner.
+  const vertical = useMediaQuery("(min-width: 640px)");
+  const coarse = useCoarsePointer();
   return (
     <div
       role="toolbar"
       aria-label="Visualização"
-      aria-orientation="vertical"
-      className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
+      aria-orientation={vertical ? "vertical" : "horizontal"}
+      className="absolute right-2 top-2 flex gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm sm:top-1/2 sm:-translate-y-1/2 sm:flex-col"
     >
-      <IconButton label="Aproximar" hint="Ou use a roda do mouse." shortcut="zoomIn" onClick={onZoomIn}>
+      <IconButton
+        label="Aproximar"
+        hint={coarse ? "Ou afaste dois dedos na prévia." : "Ou use a roda do mouse."}
+        shortcut="zoomIn"
+        onClick={onZoomIn}
+      >
         <ZoomIn />
       </IconButton>
       <IconButton label="Afastar" shortcut="zoomOut" onClick={onZoomOut}>

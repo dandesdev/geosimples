@@ -1,6 +1,15 @@
 import { DEFAULT_LABEL } from "./defaults";
-import { angleArc, centroid, pointMap } from "./geometry";
-import type { Element, FigureDoc, Id, Label, Point } from "./types";
+import { angleArc, centroid, pointMap, signedArea2 } from "./geometry";
+import type {
+  Element,
+  ElementType,
+  FigureDoc,
+  Id,
+  Label,
+  LabelMeasure,
+  MeasureKind,
+  Point,
+} from "./types";
 import { add, dist, len, mid, perp, polar, scale, sub, unit, type Vec } from "./vec";
 
 /** Formats a number the Brazilian way: decimal comma, no trailing zeros. */
@@ -8,7 +17,8 @@ export function formatNumber(n: number, decimals = 2): string {
   const factor = 10 ** decimals;
   const rounded = Math.round(n * factor) / factor;
   const text = (Object.is(rounded, -0) ? 0 : rounded).toFixed(decimals);
-  return text.replace(/\.?0+$/, "").replace(".", ",");
+  // Only zeros after the decimal point go: 90 with no decimals stays 90.
+  return (text.includes(".") ? text.replace(/\.?0+$/, "") : text).replace(".", ",");
 }
 
 const LATIN = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -67,8 +77,72 @@ export function labelFor(
   }
 }
 
+/** A label with static text. A live measure on the old label is dropped. */
 export function withText(label: Label | undefined, text: string, base: Omit<Label, "text"> = DEFAULT_LABEL): Label {
-  return { ...(label ?? { ...base, text: "" }), text };
+  const next: Label = { ...(label ?? { ...base, text: "" }), text };
+  delete next.measure;
+  return next;
+}
+
+/** Measures each element type offers for live labels, the first being the usual one. */
+export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
+  point: [],
+  segment: ["length"],
+  angle: ["angle"],
+  circle: ["radius"],
+  polygon: ["area", "perimeter"],
+  text: [],
+};
+
+/** Value of a measure in world units (degrees for angles), or null when it can't be measured. */
+export function measureValue(doc: FigureDoc, el: Element, kind: MeasureKind): number | null {
+  if (!MEASURES[el.type].includes(kind)) return null;
+  const pts = pointMap(doc);
+  switch (el.type) {
+    case "segment": {
+      const a = pts.get(el.a);
+      const b = pts.get(el.b);
+      return a && b ? dist(a, b) : null;
+    }
+    case "angle": {
+      const a = pts.get(el.a);
+      const v = pts.get(el.vertex);
+      const b = pts.get(el.b);
+      return (a && v && b && angleArc(a, v, b, el.reflex)?.measure) ?? null;
+    }
+    case "circle":
+      return el.radius;
+    case "polygon": {
+      const vs = el.vertices.map((id) => pts.get(id)).filter((p): p is Point => !!p);
+      if (vs.length < 3) return null;
+      if (kind === "area") return Math.abs(signedArea2(vs)) / 2;
+      return vs.reduce((acc, p, i) => acc + dist(p, vs[(i + 1) % vs.length]), 0);
+    }
+    default:
+      return null;
+  }
+}
+
+/** The number of a measure as shown: "5,3" or "60°". */
+export function measureNumber(doc: FigureDoc, el: Element, m: LabelMeasure): string | null {
+  const value = measureValue(doc, el, m.kind);
+  if (value === null) return null;
+  return formatNumber(value, m.decimals) + (m.kind === "angle" ? "°" : "");
+}
+
+/** A new live measure label setting, with the element's usual measure. */
+export function newMeasure(el: Element, decimals: number): LabelMeasure | null {
+  const kind = MEASURES[el.type][0];
+  return kind ? { kind, decimals: Math.max(0, Math.min(4, Math.round(decimals))), prefix: "", suffix: "" } : null;
+}
+
+/** The text a label shows now: its measure computed from the figure, or its static text. */
+export function labelText(doc: FigureDoc, el: Element): string {
+  if (el.type === "text" || !el.label) return "";
+  const m = el.label.measure;
+  if (!m) return el.label.text;
+  const value = measureNumber(doc, el, m);
+  return value === null ? "" : m.prefix + value + m.suffix;
 }
 
 /** Next free point name: A, B, …, Z, AA, … skipping names already in use. */
@@ -116,8 +190,9 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
 }
 
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
+  if (el.type === "text") return null;
   const label = el.label;
-  if (!label || label.text === "") return null;
+  if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);
   const fixed = label.angle === null ? null : polar(1, label.angle);
 
@@ -197,8 +272,34 @@ const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
  * mode (A', A₁, 3,5, 60°). Anything else is escaped text.
  */
 export function labelToLatex(text: string): string {
+  const body = mathBody(text);
+  return body === null ? escapeLatex(text) : `$${body}$`;
+}
+
+/**
+ * LaTeX of a free text. Only a single name like x or A₁ goes in math mode,
+ * so "Figura 1" stays upright like in the preview.
+ */
+export function textToLatex(text: string): string {
+  return isMathLabel(text) ? labelToLatex(text) : escapeLatex(text);
+}
+
+/**
+ * LaTeX of a live measure label. The number is always math; a prefix like
+ * "x = " joins it when it is math too, and units like " cm" stay upright.
+ */
+export function measureToLatex(m: LabelMeasure, number: string): string {
+  const value = mathBody(number) ?? "";
+  const unit = m.suffix === "" ? "" : `\\textrm{${escapeLatex(m.suffix)}}`;
+  const prefix = m.prefix === "" ? "" : mathBody(m.prefix);
+  if (prefix === null) return `${escapeLatex(m.prefix)}$${value}${unit}$`;
+  return `$${prefix}${value}${unit}$`;
+}
+
+/** Math-mode LaTeX for text made of letters, numbers and measure signs, or null for other text. */
+function mathBody(text: string): string | null {
   const mathSafe = /^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()+\-=\s]*$/u;
-  if (!mathSafe.test(text)) return escapeLatex(text);
+  if (!mathSafe.test(text)) return null;
   let out = "";
   const chars = Array.from(text);
   for (let i = 0; i < chars.length; i++) {
@@ -228,7 +329,7 @@ export function labelToLatex(text: string): string {
       out += ch;
     }
   }
-  return `$${out}$`;
+  return out;
 }
 
 function escapeLatex(text: string): string {

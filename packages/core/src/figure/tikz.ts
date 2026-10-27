@@ -8,9 +8,9 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { labelPlacement, labelToLatex } from "./labels";
+import { labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex, textToLatex } from "./labels";
 import { PATTERN } from "./svg";
-import type { Element, FigureDoc, Fill, Stroke } from "./types";
+import type { Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
 
 export interface TikzOptions {
@@ -178,6 +178,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         sections.polygon.push(`\\path${opts(o)} ${vs.map((id) => `(${id})`).join(" -- ")} -- cycle;`);
         break;
       }
+      case "text":
+        sections.label.push(
+          `\\node${opts(textOptions(el.color, el.size, el.font, color))} at (${at(el)}) {${textToLatex(el.text)}};`,
+        );
+        break;
     }
     const label = labelCommand(doc, el, color);
     if (label) sections.label.push(label);
@@ -198,16 +203,25 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   return lines.join("\n") + "\n";
 }
 
-function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
-  const placement = labelPlacement(doc, el);
-  if (!placement || !el.label) return null;
-  const { size, text } = el.label;
-  const base = el.type === "point" ? el.id : at(placement.anchor);
-  const o = [`text=${color(el.label.color)}`];
-  // 10 pt is the default: the label then follows the document's font size.
-  const family = el.label.font === "sans" ? "\\sffamily" : "";
+function textOptions(c: string, size: number, font: LabelFont, color: (c: string) => string): string[] {
+  const o = [`text=${color(c)}`];
+  // 10 pt is the default: the text then follows the document's font size.
+  const family = font === "sans" ? "\\sffamily" : "";
   const sizing = size !== 10 ? `\\fontsize{${n(size)}}{${n(size * 1.2)}}\\selectfont` : "";
   if (family || sizing) o.push(`font=${family}${sizing}`);
-  return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${labelToLatex(text)}};`;
+  return o;
+}
+
+function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
+  if (el.type === "text") return null;
+  const placement = labelPlacement(doc, el);
+  if (!placement || !el.label) return null;
+  const { size, measure } = el.label;
+  const base = el.type === "point" ? el.id : at(placement.anchor);
+  const o = textOptions(el.label.color, size, el.label.font, color);
+  // A live measure is written with the value it has at export time.
+  const number = measure ? measureNumber(doc, el, measure) : null;
+  const latex = measure && number !== null ? measureToLatex(measure, number) : labelToLatex(labelText(doc, el));
+  return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${latex}};`;
 }
 

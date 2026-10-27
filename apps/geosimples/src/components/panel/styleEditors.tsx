@@ -4,8 +4,12 @@ import {
   type FillPattern,
   type Label,
   type LabelFont,
+  type LabelMeasure,
+  type MeasureKind,
   type Stroke,
 } from "@geosimples/core/figure";
+import { MEASURE_NAMES, type LabelChange } from "@/lib/labels";
+import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
 import { Button } from "@/components/ui/button";
 import {
@@ -149,29 +153,108 @@ export function FillEditor({
   );
 }
 
+const TEXT_INPUT =
+  "h-8 w-full rounded-md border bg-background px-2 text-base sm:text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50";
+
 export function LabelEditor({
   label,
   onChange,
-  suggestions = [],
+  measures = [],
   placeholder = "Ex.: A, r, 60°",
   multi = false,
 }: {
   label: Label | undefined;
-  onChange: (l: Label | undefined, key: string) => void;
-  suggestions?: { text: string; title: string }[];
+  /** Applied to the label of each edited element. */
+  onChange: (change: LabelChange, key: string) => void;
+  /** Measures the element can show as a live label, the usual one first. */
+  measures?: readonly MeasureKind[];
   placeholder?: string;
-  /** Several elements are edited at once: style only, since one text for all is rarely wanted. */
+  /** Several elements are edited at once: no shared text, since one text for all is rarely wanted. */
   multi?: boolean;
 }) {
   const base = useActivePrefs().styles.label;
+  const decimals = useFigureStore((s) => s.settings.decimals);
   const current: Label = label ?? { ...base, text: "" };
-  const set = (patch: Partial<Label>, key: string) => {
-    const next = { ...current, ...patch };
-    onChange(next.text === "" ? undefined : next, key);
-  };
+  const measure = current.measure;
+  const set = (patch: Partial<Label>, key: string) => onChange((l) => ({ ...l, ...patch }), key);
+  const setMeasure = (patch: Partial<LabelMeasure>, key: string) =>
+    onChange((l) => (l.measure ? { ...l, measure: { ...l.measure, ...patch } } : l), key);
+  const toMeasure = () =>
+    onChange(
+      (l) => ({
+        ...l,
+        measure: {
+          kind: measures[0],
+          // Angles read best with at most one decimal, like the Medida readout.
+          decimals: measures[0] === "angle" ? Math.min(decimals, 1) : decimals,
+          prefix: "",
+          suffix: "",
+        },
+      }),
+      "label-measure",
+    );
+  // The value shown now becomes plain text, so nothing jumps.
+  const toText = () =>
+    onChange((l, shown) => {
+      const next = { ...l, text: shown };
+      delete next.measure;
+      return next;
+    }, "label-measure");
+
   return (
     <Section title="Rótulo">
-      {multi ? (
+      {measures.length > 0 && (
+        <Choice
+          label="Conteúdo"
+          value={measure ? "measure" : "text"}
+          options={[
+            { value: "text", label: "Texto" },
+            { value: "measure", label: "Medida (atualiza sozinha)" },
+          ]}
+          onChange={(v) => (v === "measure" ? toMeasure() : toText())}
+        />
+      )}
+      {measure ? (
+        <>
+          {measures.length > 1 && (
+            <Choice<MeasureKind>
+              label="Medida"
+              value={measure.kind}
+              options={measures.map((kind) => ({ value: kind, label: MEASURE_NAMES[kind] }))}
+              onChange={(kind) => setMeasure({ kind }, "label-measure-kind")}
+            />
+          )}
+          <RangeField
+            label="Casas decimais"
+            value={measure.decimals}
+            min={0}
+            max={4}
+            step={1}
+            format={(n) => String(n)}
+            onChange={(n) => setMeasure({ decimals: n }, "label-decimals")}
+          />
+          <Field label="Antes">
+            <input
+              value={measure.prefix}
+              maxLength={40}
+              placeholder="Ex.: x = "
+              aria-label="Texto antes da medida"
+              onChange={(e) => setMeasure({ prefix: e.target.value }, "label-prefix")}
+              className={TEXT_INPUT}
+            />
+          </Field>
+          <Field label="Depois">
+            <input
+              value={measure.suffix}
+              maxLength={40}
+              placeholder="Ex.:  cm"
+              aria-label="Texto depois da medida"
+              onChange={(e) => setMeasure({ suffix: e.target.value }, "label-suffix")}
+              className={TEXT_INPUT}
+            />
+          </Field>
+        </>
+      ) : multi ? (
         <p className="mb-1 text-xs text-muted-foreground">
           Para escrever os textos, desligue "Aplicar a todos" ou use Ferramentas
           › Rotular automaticamente.
@@ -185,53 +268,27 @@ export function LabelEditor({
               placeholder={placeholder}
               aria-label="Texto do rótulo"
               onChange={(e) => set({ text: e.target.value }, "label-text")}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className={TEXT_INPUT}
             />
           </Field>
-          {suggestions.length > 0 && (
+          {measures.length > 0 && (
             <div className="mb-1 flex flex-wrap justify-end gap-1">
-              {suggestions.map((s) => (
-                <Button
-                  key={s.title}
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={() => set({ text: s.text }, "label-text")}
-                >
-                  {s.title}
-                </Button>
-              ))}
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={toMeasure}>
+                Usar medida
+              </Button>
             </div>
           )}
         </>
       )}
       {label && (
+        <TextStyleFields
+          colorLabel="Cor do rótulo"
+          value={current}
+          onChange={(patch, key) => set(patch, `label-${key}`)}
+        />
+      )}
+      {label && (
         <>
-          <Choice<LabelFont>
-            label="Fonte"
-            value={current.font}
-            options={[
-              { value: "serif", label: "Serifada", title: "Como a fonte padrão do LaTeX" },
-              { value: "sans", label: "Sem serifa" },
-            ]}
-            onChange={(font) => set({ font }, "label-font")}
-          />
-          <RangeField
-            label="Tamanho"
-            value={current.size}
-            min={6}
-            max={24}
-            step={0.5}
-            format={pt}
-            onChange={(size) => set({ size }, "label-size")}
-          />
-          <Field label="Cor">
-            <ColorPicker
-              label="Cor do rótulo"
-              value={current.color}
-              onChange={(color) => set({ color }, "label-color")}
-            />
-          </Field>
           <SwitchField
             label="Posição automática"
             checked={current.angle === null}
@@ -260,5 +317,42 @@ export function LabelEditor({
         </>
       )}
     </Section>
+  );
+}
+
+/** Font, size and color, shared by labels and free texts. */
+export function TextStyleFields({
+  value,
+  onChange,
+  colorLabel = "Cor do texto",
+}: {
+  value: { font: LabelFont; size: number; color: string };
+  colorLabel?: string;
+  onChange: (patch: { font?: LabelFont; size?: number; color?: string }, key: string) => void;
+}) {
+  return (
+    <>
+      <Choice<LabelFont>
+        label="Fonte"
+        value={value.font}
+        options={[
+          { value: "serif", label: "Serifada", title: "Como a fonte padrão do LaTeX" },
+          { value: "sans", label: "Sem serifa" },
+        ]}
+        onChange={(font) => onChange({ font }, "font")}
+      />
+      <RangeField
+        label="Tamanho"
+        value={value.size}
+        min={6}
+        max={24}
+        step={0.5}
+        format={pt}
+        onChange={(size) => onChange({ size }, "size")}
+      />
+      <Field label="Cor">
+        <ColorPicker label={colorLabel} value={value.color} onChange={(color) => onChange({ color }, "color")} />
+      </Field>
+    </>
   );
 }

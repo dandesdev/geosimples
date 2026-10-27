@@ -45,9 +45,27 @@ export interface Label {
   color: Color;
   /** Serif matches LaTeX's default font; sans is for sans-serif documents. */
   font: LabelFont;
+  /**
+   * A live measure: the shown text is computed from the element when drawn,
+   * so it follows the points. `text` then only keeps the last value as a
+   * fallback for readers that don't know measures.
+   */
+  measure?: LabelMeasure;
 }
 
 export type LabelFont = "serif" | "sans";
+
+/** What a live label measures. Each element type supports some of them. */
+export type MeasureKind = "length" | "angle" | "radius" | "area" | "perimeter";
+
+export interface LabelMeasure {
+  kind: MeasureKind;
+  /** Decimal places, 0 to 4. */
+  decimals: number;
+  /** Text before and after the value, like "x = " and " cm". */
+  prefix: string;
+  suffix: string;
+}
 
 export type PointShape = "dot" | "ring" | "none";
 
@@ -156,7 +174,23 @@ export interface Polygon {
   label?: Label;
 }
 
-export type Element = Point | Segment | Angle | Circle | Polygon;
+/** Text placed anywhere, not attached to an object, like "Figura 1". */
+export interface FreeText {
+  id: Id;
+  type: "text";
+  /** Center of the text, in world units. */
+  x: number;
+  y: number;
+  text: string;
+  /** Font size in pt. */
+  size: number;
+  color: Color;
+  font: LabelFont;
+  /** The text is its own label. Declared so `el.label` reads on any element. */
+  label?: never;
+}
+
+export type Element = Point | Segment | Angle | Circle | Polygon | FreeText;
 export type ElementType = Element["type"];
 
 export interface FigureDoc {

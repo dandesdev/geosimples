@@ -46,7 +46,12 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </li>
           <li>
             <b>Ajustar.</b> Em Customização mude cor, traço, preenchimento, marcas e rótulos. Com vários objetos do mesmo
-            tipo selecionados, a mudança vale para todos.
+            tipo selecionados, a mudança vale para todos. Um rótulo pode ser <b>Medida (atualiza sozinha)</b>: o
+            comprimento, o ângulo, o raio, a área ou o perímetro, que muda quando os pontos se movem.
+          </li>
+          <li>
+            <b>Texto livre.</b> Em Ferramentas › Texto livre, ou na barra de pontos com <code>"Figura 1"@(2;-1)</code>.
+            Arraste o texto no modo Mover pontos e mude fonte, tamanho e cor em Customização.
           </li>
           <li>
             <b>Exportar.</b> TikZ para colar no LaTeX, PNG para colar no Word ou Google Docs, SVG para editar em outros
