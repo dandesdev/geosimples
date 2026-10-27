@@ -1,5 +1,23 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Kbd } from "@/components/ui/kbd";
+import { ShortcutKeys } from "@/components/ShortcutKeys";
+import { ACTION_LABELS, type ActionId } from "@/store/prefsStore";
+
+const HELP_ACTIONS: ActionId[] = [
+  "undo",
+  "redo",
+  "delete",
+  "selectAll",
+  "clearSelection",
+  "modeSelect",
+  "modePan",
+  "modeMove",
+  "connect",
+  "angle",
+  "polygon",
+  "export",
+  "focusInput",
+  "settings",
+];
 
 export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
@@ -37,26 +55,16 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
         <div className="text-sm">
           <h3 className="mb-1 font-semibold">Atalhos</h3>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-            <li>
-              <Kbd>Ctrl</Kbd> <Kbd>Z</Kbd> desfazer
-            </li>
-            <li>
-              <Kbd>Ctrl</Kbd> <Kbd>Y</Kbd> refazer
-            </li>
-            <li>
-              <Kbd>Delete</Kbd> apagar seleção
-            </li>
-            <li>
-              <Kbd>Esc</Kbd> limpar seleção
-            </li>
-            <li>
-              <Kbd>Ctrl</Kbd> <Kbd>A</Kbd> selecionar tudo
-            </li>
-            <li>
-              <Kbd>V</Kbd> <Kbd>H</Kbd> <Kbd>M</Kbd> selecionar, mover vista, mover pontos
-            </li>
+            {HELP_ACTIONS.map((id) => (
+              <li key={id} className="flex items-center justify-between gap-2">
+                {ACTION_LABELS[id]}
+                <ShortcutKeys action={id} />
+              </li>
+            ))}
             <li>Roda do mouse: zoom</li>
+            <li>Botão do meio: mover a vista</li>
           </ul>
+          <p className="mt-1 text-xs text-muted-foreground">Os atalhos podem ser mudados em Configurações.</p>
         </div>
         <p className="text-xs text-muted-foreground">A figura fica salva neste navegador, mesmo se você fechar a página.</p>
       </DialogContent>

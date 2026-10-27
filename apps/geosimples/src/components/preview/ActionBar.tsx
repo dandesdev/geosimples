@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useCommand } from "@/lib/commands";
 import { Download, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
@@ -65,6 +66,10 @@ export function ActionBar() {
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const openExport = useCallback(() => {
+    if (useFigureStore.getState().doc.elements.length > 0) setExportOpen(true);
+  }, []);
+  useCommand("export", openExport);
 
   const store = useFigureStore.getState;
 
@@ -79,20 +84,21 @@ export function ActionBar() {
       aria-label="Ações da figura"
       className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b bg-background px-2 py-1.5"
     >
-      <Button size="sm" className="mr-1 shrink-0" onClick={() => setExportOpen(true)} disabled={isEmpty}>
+      <Button size="sm" className="mr-1 shrink-0" onClick={() => setExportOpen(true)} disabled={isEmpty} title="Exportar">
         <Download />
         Exportar
       </Button>
       <Divider />
-      <IconButton label="Desfazer" hint="Ctrl+Z" onClick={() => store().undo()} disabled={!canUndo}>
+      <IconButton label="Desfazer" shortcut="undo" onClick={() => store().undo()} disabled={!canUndo}>
         <Undo2 />
       </IconButton>
-      <IconButton label="Refazer" hint="Ctrl+Y" onClick={() => store().redo()} disabled={!canRedo}>
+      <IconButton label="Refazer" shortcut="redo" onClick={() => store().redo()} disabled={!canRedo}>
         <Redo2 />
       </IconButton>
       <IconButton
         label={hasSelection ? "Apagar selecionados" : "Limpar figura"}
-        hint={hasSelection ? "Delete. Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
+        hint={hasSelection ? "Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
+        shortcut={hasSelection ? "delete" : undefined}
         onClick={onDelete}
         disabled={isEmpty}
       >
@@ -102,7 +108,7 @@ export function ActionBar() {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton label="Ligar pontos" hint="Cria segmentos entre os pontos selecionados, na ordem da seleção.">
+          <IconButton label="Ligar pontos" shortcut="connect" hint="Cria segmentos entre os pontos selecionados, na ordem da seleção.">
             <ConnectIcon />
           </IconButton>
         </DropdownMenuTrigger>
@@ -125,6 +131,7 @@ export function ActionBar() {
 
       <IconButton
         label="Marcar ângulo"
+        shortcut="angle"
         hint="Selecione A, B, C para marcar o ângulo em B, ou um polígono para marcar todos os seus ângulos."
         onClick={() => actions.angles()}
       >
@@ -132,8 +139,9 @@ export function ActionBar() {
       </IconButton>
 
       <IconButton
-        label="Polígono"
-        hint="Selecione os vértices em ordem (ou os segmentos de um contorno fechado) para preencher a região."
+        label="Polígono e preenchimento"
+        shortcut="polygon"
+        hint="Selecione os vértices em ordem, ou os segmentos de um contorno fechado. Circunferências e polígonos selecionados também são preenchidos."
         onClick={() => actions.polygon()}
       >
         <PolygonIcon />

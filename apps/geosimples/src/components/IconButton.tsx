@@ -1,18 +1,22 @@
 import { forwardRef, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { ShortcutKeys } from "@/components/ShortcutKeys";
+import type { ActionId } from "@/store/prefsStore";
 
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
-  /** Extra tooltip text, like a shortcut or what needs to be selected. */
+  /** Extra tooltip text, like what needs to be selected. */
   hint?: string;
+  /** Shows the action's current keys from the active profile. */
+  shortcut?: ActionId;
   active?: boolean;
   children: ReactNode;
 }
 
 /** A square toolbar button with a tooltip. The label doubles as its accessible name. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, hint, active, className, children, ...props },
+  { label, hint, shortcut, active, className, children, ...props },
   ref,
 ) {
   return (
@@ -34,7 +38,10 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-64">
-        <p className="font-medium">{label}</p>
+        <p className="flex items-center gap-2 font-medium">
+          {label}
+          {shortcut && <ShortcutKeys action={shortcut} />}
+        </p>
         {hint && <p className="opacity-90">{hint}</p>}
       </TooltipContent>
     </Tooltip>

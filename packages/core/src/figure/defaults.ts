@@ -33,6 +33,7 @@ export const DEFAULT_LABEL: Label = {
   distance: 9,
   size: 10,
   color: INK,
+  font: "serif",
 };
 
 export const DEFAULT_POINT: Pick<Point, "shape" | "size" | "color"> = {
@@ -55,6 +56,34 @@ export const DEFAULT_ANGLE: Pick<
 
 /** Default circle radius in world units, for a circle around a single point. */
 export const DEFAULT_CIRCLE_RADIUS = 1;
+
+/**
+ * How new elements look. Operations take these so an editor can let the
+ * teacher choose their own defaults. Elements keep their full style once
+ * created, so changing defaults never changes existing figures.
+ */
+export interface StyleDefaults {
+  point: Pick<Point, "shape" | "size" | "color">;
+  stroke: Stroke;
+  /** Fill for polygons, circles and the Polígono action. */
+  fill: Fill;
+  /** New polygons start filled. */
+  polygonFilled: boolean;
+  angle: Pick<Angle, "radius" | "arcs" | "rightMark" | "fill">;
+  label: Omit<Label, "text">;
+  /** World units. */
+  circleRadius: number;
+}
+
+export const DEFAULT_STYLES: StyleDefaults = {
+  point: { ...DEFAULT_POINT },
+  stroke: { ...DEFAULT_STROKE },
+  fill: { ...DEFAULT_FILL },
+  polygonFilled: true,
+  angle: { radius: DEFAULT_ANGLE.radius, arcs: DEFAULT_ANGLE.arcs, rightMark: DEFAULT_ANGLE.rightMark, fill: null },
+  label: { angle: null, distance: DEFAULT_LABEL.distance, size: DEFAULT_LABEL.size, color: DEFAULT_LABEL.color, font: "serif" },
+  circleRadius: DEFAULT_CIRCLE_RADIUS,
+};
 
 export function emptyDoc(): FigureDoc {
   return { kind: "geo", version: 1, elements: [] };

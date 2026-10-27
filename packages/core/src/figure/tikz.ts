@@ -205,7 +205,9 @@ function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string)
   const base = el.type === "point" ? el.id : at(placement.anchor);
   const o = [`text=${color(el.label.color)}`];
   // 10 pt is the default: the label then follows the document's font size.
-  if (size !== 10) o.push(`font=\\fontsize{${n(size)}}{${n(size * 1.2)}}\\selectfont`);
+  const family = el.label.font === "sans" ? "\\sffamily" : "";
+  const sizing = size !== 10 ? `\\fontsize{${n(size)}}{${n(size * 1.2)}}\\selectfont` : "";
+  if (family || sizing) o.push(`font=${family}${sizing}`);
   return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${labelToLatex(text)}};`;
 }
 

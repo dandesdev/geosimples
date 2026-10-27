@@ -67,8 +67,25 @@ export function labelFor(
   }
 }
 
-export function withText(label: Label | undefined, text: string): Label {
-  return { ...(label ?? DEFAULT_LABEL), text };
+export function withText(label: Label | undefined, text: string, base: Omit<Label, "text"> = DEFAULT_LABEL): Label {
+  return { ...(label ?? { ...base, text: "" }), text };
+}
+
+/** Next free point name: A, B, …, Z, AA, … skipping names already in use. */
+export function nextPointNames(doc: FigureDoc, count: number, alsoTaken: string[] = []): string[] {
+  const used = new Set([
+    ...doc.elements.flatMap((e) => (e.type === "point" && e.label?.text ? [e.label.text] : [])),
+    ...alsoTaken,
+  ]);
+  const names: string[] = [];
+  for (let i = 0; names.length < count; i++) {
+    const name = sequenceName(i, LATIN);
+    if (!used.has(name)) {
+      names.push(name);
+      used.add(name);
+    }
+  }
+  return names;
 }
 
 /** Where a label goes: a world anchor plus an offset in pt. */
