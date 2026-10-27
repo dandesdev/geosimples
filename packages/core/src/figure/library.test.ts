@@ -172,14 +172,6 @@ describe("figure library", () => {
     expect(library.untitled()).toBe("Figura 5");
   });
 
-  it("can add a copy without making it the active figure", () => {
-    const { library } = setup();
-    const { index } = library.open();
-    const copy = library.create("Figura 1 (cópia)", emptyDoc(), false);
-    expect(copy.index.activeId).toBe(index.activeId);
-    expect(copy.index.figures).toHaveLength(2);
-  });
-
   it("starts with one empty figure", () => {
     const { library, storage } = setup();
     const { index, doc } = library.open();

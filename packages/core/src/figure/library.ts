@@ -124,8 +124,8 @@ export interface FigureLibrary {
   load(id: string): FigureDoc | null;
   /** Stores the doc and marks the figure as just edited. */
   save(id: string, doc: FigureDoc): LibraryIndex;
-  /** Adds a figure. It becomes the active one unless `activate` is false. */
-  create(name: string, doc: FigureDoc, activate?: boolean): { meta: FigureMeta; index: LibraryIndex };
+  /** Adds a figure and makes it the active one. */
+  create(name: string, doc: FigureDoc): { meta: FigureMeta; index: LibraryIndex };
   /** The name for a new untitled figure: "Figura N", counting up. */
   untitled(): string;
   rename(id: string, name: string): LibraryIndex;
@@ -207,13 +207,12 @@ export function createLibrary(storage: KeyValueStorage, env: { now: () => number
       return write({ ...index, figures });
     },
 
-    create(name, doc, activate = true) {
+    create(name, doc) {
       const index = current();
       const meta = freshMeta(cleanFigureName(name, untitledName(names(index), index.lastUntitled)));
       storage.setItem(figureKey(meta.id), JSON.stringify(doc));
       try {
-        const activeId = activate ? meta.id : index.activeId;
-        return { meta, index: write({ ...index, activeId, figures: [...index.figures, meta] }) };
+        return { meta, index: write({ ...index, activeId: meta.id, figures: [...index.figures, meta] }) };
       } catch (e) {
         storage.removeItem(figureKey(meta.id));
         throw e;

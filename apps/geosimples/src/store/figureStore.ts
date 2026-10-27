@@ -247,12 +247,7 @@ function withLibrary(
       duplicateFigure: (id) => {
         const source = get().figures.find((f) => f.id === id);
         if (!source) return;
-        // The copy goes to the library; the teacher stays on the figure they were editing.
-        flushSave();
-        const created = tryWrite(() => library.create(copyName(source.name, names()), loadFigureDoc(id), false));
-        if (!created) return;
-        set({ figures: created.index.figures });
-        toast.success(`Cópia criada: ${created.meta.name}`);
+        if (addAndOpen(copyName(source.name, names()), loadFigureDoc(id))) toast.success("Cópia criada e aberta");
       },
       renameFigure: (id, name) => {
         const index = tryWrite(() => library.rename(id, name));
