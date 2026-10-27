@@ -12,7 +12,8 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 - **Figure model**: `FigureDoc` v1 in `packages/core/src/figure/types.ts`. World units are cm at scale 1, Y up. Visual sizes (stroke, point, angle radius, labels) are in pt. Styles are stored in full on each element, so saved figures never change look.
 - **One renderer**: `buildScene` (core) lays the figure out in pt. The preview injects the same markup that `toSvg` writes, so the preview is the export. `toTikz` writes TikZ from the doc with the same geometry helpers.
 - **Editing operations** are pure functions in `packages/core/src/figure/ops.ts` and return `{ doc, created, error }`. The app wraps them in `src/lib/actions.ts` and shows errors as toasts.
-- **Store**: `apps/geosimples/src/store/figureStore.ts` (Zustand, persisted). Undo history starts from the loaded doc. Edits with the same key within 1 s merge into one undo step, and a drag is one step.
+- **Store**: `apps/geosimples/src/store/figureStore.ts` (Zustand). Undo history starts from the loaded doc. Edits with the same key within 1 s merge into one undo step, and a drag is one step.
+- **Figure library**: every figure is kept in localStorage (`geosimples-library` index plus one `geosimples-figure:<id>` key per doc; logic in `packages/core/src/figure/library.ts`). The open figure autosaves; switching figures starts a fresh undo history. Files (`.geosimples.json`) and share links (`#figura=`, deflate-raw + base64url) are in `packages/core/src/figure/file.ts` and always open as a new figure.
 - **Stack**: React 19 + TypeScript + React Compiler, Tailwind CSS v4, shadcn/ui (Radix), Zustand, sonner.
 
 ## Repository Layout

@@ -9,3 +9,5 @@ export * from "./render";
 export * from "./svg";
 export * from "./tikz";
 export * from "./normalize";
+export * from "./file";
+export * from "./library";

@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { Copy, Download } from "lucide-react";
 import { toast } from "sonner";
-import { PT_PER_CM } from "@geosimples/core/figure";
+import { FIGURE_FILE_EXTENSION, figureFileName, PT_PER_CM } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Choice, Field, NumberInput } from "@/components/panel/controls";
+import { ShareContent } from "@/components/figures/ShareFigure";
 import {
   canCopyImage,
   copyPng,
@@ -17,8 +18,6 @@ import {
   type ExportSettings,
 } from "@/lib/exporting";
 import { useFigureStore } from "@/store/figureStore";
-
-const FILE = "figura";
 
 function sizeOf(svg: string) {
   const w = Number(/width="([\d.]+)pt"/.exec(svg)?.[1] ?? 0) / PT_PER_CM;
@@ -38,7 +37,10 @@ function ExportBody() {
   const doc = useFigureStore((s) => s.doc);
   const settings = useFigureStore((s) => s.settings);
   const setSetting = useFigureStore((s) => s.setSetting);
+  const name = useFigureStore((s) => s.figures.find((f) => f.id === s.figureId)?.name ?? "figura");
   const [busy, setBusy] = useState(false);
+  // Exports are named after the figure, like "Triângulo.png".
+  const fileBase = figureFileName(name).slice(0, -FIGURE_FILE_EXTENSION.length);
 
   const exportSettings: ExportSettings = {
     scale: settings.scale,
@@ -85,10 +87,11 @@ function ExportBody() {
       </Field>
 
       <Tabs defaultValue="tikz">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="tikz">LaTeX (TikZ)</TabsTrigger>
           <TabsTrigger value="png">Imagem PNG</TabsTrigger>
           <TabsTrigger value="svg">Vetor SVG</TabsTrigger>
+          <TabsTrigger value="share">Arquivo e link</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tikz" className="space-y-3">
@@ -104,7 +107,7 @@ function ExportBody() {
             Cole dentro do documento. O preâmbulo precisa das linhas indicadas no comentário do topo.
           </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => downloadBlob(new Blob([tikz], { type: "text/x-tex" }), `${FILE}.tex`)}>
+            <Button variant="outline" onClick={() => downloadBlob(new Blob([tikz], { type: "text/x-tex" }), `${fileBase}.tex`)}>
               <Download />
               Baixar .tex
             </Button>
@@ -132,7 +135,7 @@ function ExportBody() {
             <Button
               variant="outline"
               disabled={busy}
-              onClick={() => run(async () => downloadBlob(await pngBlob(doc, exportSettings), `${FILE}.png`), "PNG salvo")}
+              onClick={() => run(async () => downloadBlob(await pngBlob(doc, exportSettings), `${fileBase}.png`), "PNG salvo")}
             >
               <Download />
               Baixar PNG
@@ -154,11 +157,15 @@ function ExportBody() {
               <Copy />
               Copiar código
             </Button>
-            <Button onClick={() => downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${FILE}.svg`)}>
+            <Button onClick={() => downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${fileBase}.svg`)}>
               <Download />
               Baixar SVG
             </Button>
           </div>
+        </TabsContent>
+
+        <TabsContent value="share">
+          <ShareContent />
         </TabsContent>
       </Tabs>
     </>
