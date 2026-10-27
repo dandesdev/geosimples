@@ -11,7 +11,12 @@ export interface Settings {
   pngBackground: "white" | "transparent";
   /** 1 cm grid behind the preview. Never exported. */
   showGrid: boolean;
+  /** Keep the whole figure in view as it changes. Zooming or panning turns it off. */
+  autoFit: boolean;
 }
+
+/** What dragging in the preview does. Clicking an object always selects it. */
+export type CanvasMode = "select" | "pan" | "move";
 
 const DEFAULT_SETTINGS: Settings = {
   scale: 1,
@@ -19,6 +24,7 @@ const DEFAULT_SETTINGS: Settings = {
   pngDpi: 300,
   pngBackground: "white",
   showGrid: true,
+  autoFit: true,
 };
 
 function sanitizeSettings(raw: Partial<Settings> | undefined): Settings {
@@ -31,6 +37,7 @@ function sanitizeSettings(raw: Partial<Settings> | undefined): Settings {
     pngDpi: num(r.pngDpi, 72, 1200, DEFAULT_SETTINGS.pngDpi),
     pngBackground: r.pngBackground === "transparent" ? "transparent" : "white",
     showGrid: typeof r.showGrid === "boolean" ? r.showGrid : DEFAULT_SETTINGS.showGrid,
+    autoFit: typeof r.autoFit === "boolean" ? r.autoFit : DEFAULT_SETTINGS.autoFit,
   };
 }
 
@@ -44,7 +51,7 @@ interface FigureState {
   selection: Id[];
   past: FigureDoc[];
   future: FigureDoc[];
-  moveMode: boolean;
+  mode: CanvasMode;
   settings: Settings;
 
   commit: (doc: FigureDoc, coalesceKey?: string) => void;
@@ -63,7 +70,7 @@ interface FigureState {
   undo: () => void;
   redo: () => void;
   clear: () => void;
-  setMoveMode: (on: boolean) => void;
+  setMode: (mode: CanvasMode) => void;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }
 
@@ -83,7 +90,7 @@ export const useFigureStore = create<FigureState>()(
       selection: [],
       past: [],
       future: [],
-      moveMode: false,
+      mode: "select",
       settings: DEFAULT_SETTINGS,
 
       commit: (doc, coalesceKey) => {
@@ -163,7 +170,7 @@ export const useFigureStore = create<FigureState>()(
         get().commit(emptyDoc());
         set({ selection: [] });
       },
-      setMoveMode: (on) => set({ moveMode: on }),
+      setMode: (mode) => set({ mode }),
       setSetting: (key, value) => set((s) => ({ settings: { ...s.settings, [key]: value } })),
     }),
     {

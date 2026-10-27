@@ -5,13 +5,13 @@ import { useFigureStore } from "@/store/figureStore";
 export function ZoomBar({
   onZoomIn,
   onZoomOut,
-  onFit,
-  fitted,
+  autoFit,
+  onToggleAutoFit,
 }: {
   onZoomIn: () => void;
   onZoomOut: () => void;
-  onFit: () => void;
-  fitted: boolean;
+  autoFit: boolean;
+  onToggleAutoFit: () => void;
 }) {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const setSetting = useFigureStore((s) => s.setSetting);
@@ -28,7 +28,16 @@ export function ZoomBar({
       <IconButton label="Afastar" onClick={onZoomOut}>
         <ZoomOut />
       </IconButton>
-      <IconButton label="Enquadrar a figura" hint="Volta a mostrar a figura inteira." onClick={onFit} disabled={fitted}>
+      <IconButton
+        label="Enquadrar automaticamente"
+        hint={
+          autoFit
+            ? "Ligado: a vista acompanha a figura inteira, com rótulos e marcas. Aproximar ou arrastar a vista desliga."
+            : "Desligado: a vista fica onde você deixou. Ligue para mostrar a figura inteira."
+        }
+        active={autoFit}
+        onClick={onToggleAutoFit}
+      >
         <Scan />
       </IconButton>
       <IconButton

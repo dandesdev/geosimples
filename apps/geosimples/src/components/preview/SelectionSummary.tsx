@@ -2,10 +2,16 @@ import type { ElementType } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { TYPE_NAMES } from "@/lib/names";
 
+const HINTS = {
+  select: "Clique nos objetos para selecioná-los, ou arraste uma caixa em volta deles.",
+  pan: "Arraste para deslocar a vista. Clique nos objetos para selecioná-los.",
+  move: "Arraste um ponto, ou selecione vários e arraste um deles.",
+} as const;
+
 export function SelectionSummary() {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
-  const moveMode = useFigureStore((s) => s.moveMode);
+  const mode = useFigureStore((s) => s.mode);
   if (doc.elements.length === 0) return null;
 
   const counts = new Map<ElementType, number>();
@@ -18,9 +24,7 @@ export function SelectionSummary() {
   const text =
     parts.length > 0
       ? `Selecionados: ${parts.join(", ")}. Clique fora para limpar.`
-      : moveMode
-        ? "Mover ligado: arraste um ponto, ou selecione vários e arraste um deles."
-        : "Clique nos objetos para selecioná-los. Arraste o fundo para deslocar a vista.";
+      : HINTS[mode];
 
   return (
     <p

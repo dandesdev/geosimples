@@ -16,6 +16,8 @@ import { ActionBar } from "./ActionBar";
 import { ZoomBar } from "./ZoomBar";
 import { EmptyState } from "./EmptyState";
 import { SelectionSummary } from "./SelectionSummary";
+import { boxFrom, elementsInBox } from "@/lib/boxSelect";
+import { cn } from "@/lib/utils";
 
 const PRIMARY = "#10b981";
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
@@ -25,9 +27,10 @@ type View = { x: number; y: number; w: number; h: number };
 
 type Gesture =
   | { kind: "none" }
-  | { kind: "press"; owner: Id | null; x: number; y: number }
+  | { kind: "press"; owner: Id | null; x: number; y: number; shift: boolean }
   | { kind: "drag"; owner: Id; ids: Id[]; base: FigureDoc; start: { x: number; y: number }; moved: boolean }
-  | { kind: "pan"; x: number; y: number; view: View };
+  | { kind: "pan"; x: number; y: number; view: View }
+  | { kind: "box"; start: { x: number; y: number }; end: { x: number; y: number }; shift: boolean };
 
 function fitView(box: Box | null, k: number): View {
   const b =
@@ -38,12 +41,22 @@ function fitView(box: Box | null, k: number): View {
   return { x: p.minX, y: p.minY, w: p.maxX - p.minX, h: p.maxY - p.minY };
 }
 
+/** The view a reload starts from when auto-fit is off: the figure as it was saved. */
+function initialView(): View | null {
+  const { doc, settings } = useFigureStore.getState();
+  if (settings.autoFit) return null;
+  const scene = buildScene(doc, { scale: settings.scale });
+  return fitView(scene.box, scene.k);
+}
+
 export function PreviewPanel() {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
-  const moveMode = useFigureStore((s) => s.moveMode);
+  const mode = useFigureStore((s) => s.mode);
   const scale = useFigureStore((s) => s.settings.scale);
   const showGrid = useFigureStore((s) => s.settings.showGrid);
+  const autoFit = useFigureStore((s) => s.settings.autoFit);
+  const setSetting = useFigureStore((s) => s.setSetting);
 
   const scene = useMemo(() => buildScene(doc, { scale }), [doc, scale]);
   const markup = useMemo(() => sceneMarkup(scene), [scene]);
@@ -52,18 +65,31 @@ export function PreviewPanel() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
-  /** null follows the figure; set when the teacher zooms or pans. */
-  const [view, setView] = useState<View | null>(null);
+  /** The camera when auto-fit is off. */
+  const [view, setView] = useState<View | null>(initialView);
+  /** Holds the camera still while a point is dragged. */
   const [frozen, setFrozen] = useState<View | null>(null);
+  const [box, setBox] = useState<Box | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
 
   const fitted = useMemo(() => fitView(scene.box, k), [scene.box, k]);
-  const vb = frozen ?? view ?? fitted;
+  const vb = frozen ?? (autoFit ? fitted : (view ?? fitted));
   const unitsPerPx = Math.max(vb.w / Math.max(size.w, 1), vb.h / Math.max(size.h, 1));
   const vbRef = useRef(vb);
   useEffect(() => {
     vbRef.current = vb;
   });
+
+  /** Moves the camera by hand, which turns auto-fit off. */
+  const placeCamera = (next: View) => {
+    setView(next);
+    if (useFigureStore.getState().settings.autoFit) setSetting("autoFit", false);
+  };
+
+  const toggleAutoFit = () => {
+    if (autoFit) placeCamera(vb);
+    else setSetting("autoFit", true);
+  };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -83,15 +109,16 @@ export function PreviewPanel() {
       e.preventDefault();
       const p = toUser(svg, e.clientX, e.clientY);
       const factor = Math.exp(e.deltaY * 0.0015);
-      setView((current) => zoomView(current ?? vbRef.current, factor, p));
+      setView(zoomView(vbRef.current, factor, p));
+      const store = useFigureStore.getState();
+      if (store.settings.autoFit) store.setSetting("autoFit", false);
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
   }, []);
 
   const zoomBy = (factor: number) => {
-    const current = view ?? vb;
-    setView(zoomView(current, factor, { x: current.x + current.w / 2, y: current.y + current.h / 2 }));
+    placeCamera(zoomView(vb, factor, { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 }));
   };
 
   const ownerAt = (target: EventTarget | null): Id | null =>
@@ -103,16 +130,16 @@ export function PreviewPanel() {
     svg.setPointerCapture(e.pointerId);
     const owner = ownerAt(e.target);
     const store = useFigureStore.getState();
-    const isPoint = owner !== null && pointMap(store.doc).has(owner);
-    if (moveMode && owner && isPoint) {
-      const selectedPoints = store.selection.filter((id) => pointMap(store.doc).has(id));
+    const pts = pointMap(store.doc);
+    if (mode === "move" && owner && pts.has(owner)) {
+      const selectedPoints = store.selection.filter((id) => pts.has(id));
       const ids = store.selection.includes(owner) ? selectedPoints : [owner];
       store.beginTransient();
       setFrozen(vb);
       gesture.current = { kind: "drag", owner, ids, base: store.doc, start: toUser(svg, e.clientX, e.clientY), moved: false };
       return;
     }
-    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY };
+    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, shift: e.shiftKey };
   };
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -131,11 +158,21 @@ export function PreviewPanel() {
         .map((pt) => ({ id: pt.id, x: round2(pt.x + dx), y: round2(pt.y + dy) }));
       useFigureStore.getState().setTransient(movePoints(g.base, moves));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > 4) {
-      gesture.current = { kind: "pan", x: e.clientX, y: e.clientY, view: view ?? vb };
+      if (mode === "pan") {
+        gesture.current = { kind: "pan", x: g.x, y: g.y, view: vb };
+      } else {
+        const start = toUser(svg, g.x, g.y);
+        const end = toUser(svg, e.clientX, e.clientY);
+        gesture.current = { kind: "box", start, end, shift: g.shift };
+        setBox(boxFrom(start, end));
+      }
     } else if (g.kind === "pan") {
       const dx = (e.clientX - g.x) * unitsPerPx;
       const dy = (e.clientY - g.y) * unitsPerPx;
-      setView({ ...g.view, x: g.view.x - dx, y: g.view.y - dy });
+      placeCamera({ ...g.view, x: g.view.x - dx, y: g.view.y - dy });
+    } else if (g.kind === "box") {
+      g.end = toUser(svg, e.clientX, e.clientY);
+      setBox(boxFrom(g.start, g.end));
     }
   };
 
@@ -145,11 +182,20 @@ export function PreviewPanel() {
     const store = useFigureStore.getState();
     if (g.kind === "press") {
       if (g.owner) store.toggleSelect(g.owner);
-      else store.clearSelection();
+      else if (!g.shift) store.clearSelection();
     } else if (g.kind === "drag") {
       store.endTransient();
       setFrozen(null);
       if (!g.moved) store.toggleSelect(g.owner);
+    } else if (g.kind === "box") {
+      setBox(null);
+      const found = elementsInBox(store.doc, k, boxFrom(g.start, g.end));
+      if (g.shift) {
+        const kept = new Set(store.selection);
+        store.select([...store.selection, ...found.filter((id) => !kept.has(id))]);
+      } else {
+        store.select(found);
+      }
     }
   };
 
@@ -164,7 +210,11 @@ export function PreviewPanel() {
       <div ref={containerRef} className="relative min-h-0 flex-1">
         <svg
           ref={svgRef}
-          className={`absolute inset-0 h-full w-full touch-none select-none bg-white ${moveMode ? "cursor-default" : ""}`}
+          className={cn(
+            "absolute inset-0 h-full w-full touch-none select-none bg-white",
+            mode === "pan" && "cursor-grab active:cursor-grabbing",
+            mode === "select" && "cursor-crosshair",
+          )}
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
           preserveAspectRatio="xMidYMid meet"
           onPointerDown={onPointerDown}
@@ -179,16 +229,31 @@ export function PreviewPanel() {
             selection={selection}
             pointOrder={pointOrder}
             unitsPerPx={unitsPerPx}
-            moveMode={moveMode}
+            moveMode={mode === "move"}
             doc={doc}
           />
+          {box && (
+            <rect
+              x={box.minX}
+              y={box.minY}
+              width={box.maxX - box.minX}
+              height={box.maxY - box.minY}
+              fill={PRIMARY}
+              fillOpacity={0.08}
+              stroke={PRIMARY}
+              strokeWidth={1}
+              strokeDasharray="4 3"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          )}
         </svg>
         {doc.elements.length === 0 && <EmptyState />}
         <ZoomBar
           onZoomIn={() => zoomBy(1 / 1.25)}
           onZoomOut={() => zoomBy(1.25)}
-          onFit={() => setView(null)}
-          fitted={view === null}
+          autoFit={autoFit}
+          onToggleAutoFit={toggleAutoFit}
         />
         <SelectionSummary />
       </div>
