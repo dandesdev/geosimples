@@ -86,6 +86,69 @@ export const CircumcircleIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** Base triangle of the construction icons. */
+const Tri = () => <path d="M3.5 19 L20.5 19 L9 5 Z" strokeWidth={1.2} />;
+
+export const ConstructionsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 19 L20.5 19 L9 5 Z" strokeWidth={1.2} />
+    <path d="M9 5 L9 19" />
+    <path d="M9 16.5 L11.5 16.5 L11.5 19" strokeWidth={1.1} />
+  </Icon>
+);
+
+export const MidpointIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 17 L21 7" />
+    <path d="M7.4 12.4 L8.6 14.6 M15.4 7.9 L16.6 10.1" strokeWidth={1.2} />
+    <Dot cx={3} cy={17} />
+    <Dot cx={21} cy={7} />
+    <circle cx={12} cy={12} r={2.2} fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+export const AltitudeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Tri />
+    <path d="M9 5 L9 19" />
+    <path d="M9 16.5 L11.5 16.5 L11.5 19" strokeWidth={1.1} />
+  </Icon>
+);
+
+export const MedianIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Tri />
+    <path d="M9 5 L12 19" />
+    <Dot cx={12} cy={19} />
+  </Icon>
+);
+
+export const BisectorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M20 5 L4 19 L21 19" />
+    <path d="M4 19 L20 12" strokeDasharray="2.5 2" />
+    <path d="M10 19 A6 6 0 0 0 8.5 15" strokeWidth={1.1} />
+  </Icon>
+);
+
+export const PerpendicularBisectorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 15 L21 15" />
+    <path d="M12 4 L12 21" strokeDasharray="2.5 2" />
+    <path d="M12 12.5 L14.5 12.5 L14.5 15" strokeWidth={1.1} />
+    <Dot cx={3} cy={15} />
+    <Dot cx={21} cy={15} />
+  </Icon>
+);
+
+export const IntersectionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 18 L20 6" />
+    <path d="M4 6 L20 18" />
+    <circle cx={12} cy={12} r={2.2} fill="currentColor" stroke="none" />
+  </Icon>
+);
+
 export const Logo = (p: IconProps) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...p}>
     <path d="M4 19 L12 5 L20 19 Z" fill="currentColor" fillOpacity={0.18} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />

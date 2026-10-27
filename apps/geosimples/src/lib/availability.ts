@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import {
+  construct,
   connectPoints,
   fillShapes,
   makeAngles,
   makeCircle,
   selectedOfType,
   type CircleMode,
+  type ConstructionKind,
   type FigureDoc,
   type Id,
   type OpResult,
@@ -20,7 +22,8 @@ export type CheckId =
   | "closeContour"
   | "angle"
   | "polygon"
-  | `circle-${CircleMode}`;
+  | `circle-${CircleMode}`
+  | `construct-${ConstructionKind}`;
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -30,6 +33,15 @@ export interface Availability {
 }
 
 const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircle"];
+
+export const CONSTRUCTION_KINDS: ConstructionKind[] = [
+  "midpoint",
+  "altitude",
+  "median",
+  "bisector",
+  "perpendicularBisector",
+  "intersection",
+];
 
 /** Elements an operation adds or changes. Operations keep unchanged elements as the same objects. */
 function changedIds(before: FigureDoc, after: FigureDoc): Id[] {
@@ -69,6 +81,9 @@ export function useAvailability(): Record<CheckId, Availability> {
     } as Record<CheckId, Availability>;
     for (const mode of CIRCLE_MODES) {
       out[`circle-${mode}`] = check(doc, makeCircle(doc, selection, mode, opts), text);
+    }
+    for (const kind of CONSTRUCTION_KINDS) {
+      out[`construct-${kind}`] = check(doc, construct(doc, selection, kind, opts), text);
     }
     return out;
   }, [doc, selection, prefs]);
