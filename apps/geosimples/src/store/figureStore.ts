@@ -158,7 +158,7 @@ function openLibrary() {
   // Storage is full or broken: edit in memory. An old single figure stays where it was.
   const now = Date.now();
   const meta: FigureMeta = { id: newFigureId(), name: untitledName([]), createdAt: now, updatedAt: now };
-  return { index: { version: 1 as const, activeId: meta.id, figures: [meta] }, doc: emptyDoc() };
+  return { index: { version: 1 as const, activeId: meta.id, figures: [meta], lastUntitled: 1 }, doc: emptyDoc() };
 }
 
 const opened = openLibrary();
@@ -230,7 +230,7 @@ function withLibrary(
       doc: opened.doc,
 
       newFigure: () => {
-        addAndOpen(untitledName(names()), emptyDoc());
+        addAndOpen(library.untitled(), emptyDoc());
       },
       openFigure: (id) => {
         if (id === get().figureId) return;
@@ -247,7 +247,12 @@ function withLibrary(
       duplicateFigure: (id) => {
         const source = get().figures.find((f) => f.id === id);
         if (!source) return;
-        if (addAndOpen(copyName(source.name, names()), loadFigureDoc(id))) toast.success("Cópia criada e aberta");
+        // The copy goes to the library; the teacher stays on the figure they were editing.
+        flushSave();
+        const created = tryWrite(() => library.create(copyName(source.name, names()), loadFigureDoc(id), false));
+        if (!created) return;
+        set({ figures: created.index.figures });
+        toast.success(`Cópia criada: ${created.meta.name}`);
       },
       renameFigure: (id, name) => {
         const index = tryWrite(() => library.rename(id, name));
@@ -270,7 +275,7 @@ function withLibrary(
           show(next.id, doc, index.figures);
         } else {
           set({ figures: index.figures });
-          addAndOpen(untitledName([]), emptyDoc());
+          addAndOpen(library.untitled(), emptyDoc());
         }
       },
       importFigure: (file) => {

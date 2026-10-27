@@ -148,6 +148,38 @@ describe("figure library", () => {
     expect(copyName("T (cópia)", ["T", "T (cópia)"])).toBe("T (cópia 2)");
   });
 
+  it("counts untitled figures up, even after a rename or a delete", () => {
+    expect(untitledName(["Figura 2"], 1)).toBe("Figura 3");
+    const { library } = setup();
+    const first = library.open().index.figures[0];
+    library.rename(first.id, "Triângulo");
+    expect(library.untitled()).toBe("Figura 2");
+    const second = library.create(library.untitled(), emptyDoc()).meta;
+    expect(second.name).toBe("Figura 2");
+    library.remove(second.id);
+    expect(library.untitled()).toBe("Figura 3");
+  });
+
+  it("derives the counter for libraries saved before it existed", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      LIBRARY_KEY,
+      JSON.stringify({ version: 1, activeId: "a", figures: [{ id: "a", name: "Figura 4", createdAt: 1, updatedAt: 1 }] }),
+    );
+    storage.setItem(figureKey("a"), JSON.stringify(emptyDoc()));
+    const { library } = setup(storage);
+    library.open();
+    expect(library.untitled()).toBe("Figura 5");
+  });
+
+  it("can add a copy without making it the active figure", () => {
+    const { library } = setup();
+    const { index } = library.open();
+    const copy = library.create("Figura 1 (cópia)", emptyDoc(), false);
+    expect(copy.index.activeId).toBe(index.activeId);
+    expect(copy.index.figures).toHaveLength(2);
+  });
+
   it("starts with one empty figure", () => {
     const { library, storage } = setup();
     const { index, doc } = library.open();
