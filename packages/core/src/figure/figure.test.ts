@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addPoints,
+  addText,
   angleArc,
   autoLabel,
   buildScene,
@@ -16,7 +17,10 @@ import {
   fillShapes,
   formatNumber,
   labelRuns,
+  labelText,
   labelToLatex,
+  measureRuns,
+  measureToLatex,
   makeAngles,
   makeCircle,
   makePolygon,
@@ -30,6 +34,8 @@ import {
   toTikz,
   type Circle,
   type FigureDoc,
+  type FreeText,
+  type Label,
   type ParsedPoint,
   type Point,
 } from "./index";
@@ -139,6 +145,13 @@ describe("parseInput", () => {
     const r = parseInput(text);
     expect(r.nodes).toHaveLength(1);
     expect(r.errors.map((e) => text.slice(e.start, e.end))).toEqual(["abc", "3;x"]);
+  });
+
+  it("closes a contour with -- right before a free text", () => {
+    const r = parseInput('A=(0;0)--B=(4;0)--C=(0;3)-- "Figura 1"@(1;-1)');
+    expect(r.errors).toEqual([]);
+    expect(r.segments).toContainEqual([2, 0]);
+    expect(r.texts).toHaveLength(1);
   });
 
   it("refuses to close fewer than three points", () => {
@@ -298,6 +311,9 @@ describe("labels", () => {
     expect(formatNumber(3.5)).toBe("3,5");
     expect(formatNumber(2)).toBe("2");
     expect(formatNumber(1 / 3)).toBe("0,33");
+    expect(formatNumber(90, 0)).toBe("90");
+    expect(formatNumber(100.4, 0)).toBe("100");
+    expect(formatNumber(2.5, 3)).toBe("2,5");
   });
 
   it("converts labels to LaTeX", () => {
@@ -534,5 +550,178 @@ describe("export fidelity", () => {
       const bad = body.filter((l) => !/^[\x20-\x7e\u00c0-\u00ff]*$/.test(l));
       expect(bad, name).toEqual([]);
     }
+  });
+});
+
+describe("live measure labels", () => {
+  /** Triangle with its sides labeled by live lengths: s1 = 4, s2 = 5, s3 = 3. */
+  function measured(): FigureDoc {
+    const doc = connectPoints(triangle(), ["p1", "p2", "p3"], true).doc;
+    return autoLabel(doc, "segment", "length", null, 2).doc;
+  }
+  const label = (doc: FigureDoc, id: string): Label => doc.elements.find((e) => e.id === id)!.label!;
+
+  it("makes the Medida schemes live, with the decimals stored on the label", () => {
+    const doc = measured();
+    expect(label(doc, "s1").measure).toEqual({ kind: "length", decimals: 2, prefix: "", suffix: "" });
+    const angles = autoLabel(makeAngles(doc, ["p2", "p1", "p3"]).doc, "angle", "measure", null, 3).doc;
+    expect(label(angles, "a1").measure).toMatchObject({ kind: "angle", decimals: 1 });
+    // A naming scheme replaces the measure with static text.
+    const named = autoLabel(doc, "segment", "latin-lower", null).doc;
+    expect(label(named, "s1")).toMatchObject({ text: "a" });
+    expect(label(named, "s1").measure).toBeUndefined();
+  });
+
+  it("computes the text from the figure when it is drawn", () => {
+    const doc = movePoints(measured(), [{ id: "p2", x: 2.5, y: 0 }]);
+    const s1 = doc.elements.find((e) => e.id === "s1")!;
+    expect(labelText(doc, s1)).toBe("2,5");
+    // The stored text is only a fallback for older readers.
+    expect(label(doc, "s1").text).toBe("4");
+    expect(toSvg(doc)).toContain(">2,5</text>");
+    expect(toSvg(doc)).not.toContain(">4</text>");
+  });
+
+  it("adds prefix, suffix and decimals, and measures angles, circles and polygons", () => {
+    let doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
+    doc = makeAngles(doc, ["p2", "p1", "p3"]).doc;
+    doc = makeCircle(doc, ["p1", "p3"], "through").doc;
+    const measure = (id: string, m: Label["measure"]) => {
+      doc = {
+        ...doc,
+        elements: doc.elements.map((e) =>
+          e.id === id && e.type !== "text" ? { ...e, label: { ...DEFAULT_STYLES.label, text: "?", measure: m } } : e,
+        ),
+      };
+      return labelText(doc, doc.elements.find((e) => e.id === id)!);
+    };
+    expect(measure("s1", { kind: "length", decimals: 1, prefix: "x = ", suffix: " cm" })).toBe("x = 4 cm");
+    expect(measure("g1", { kind: "area", decimals: 2, prefix: "", suffix: "" })).toBe("6");
+    expect(measure("g1", { kind: "perimeter", decimals: 0, prefix: "P = ", suffix: "" })).toBe("P = 12");
+    expect(measure("a1", { kind: "angle", decimals: 0, prefix: "", suffix: "" })).toBe("90°");
+    expect(measure("c1", { kind: "radius", decimals: 2, prefix: "r = ", suffix: "" })).toBe("r = 3");
+    doc = movePoints(doc, [{ id: "p3", x: 0, y: 1.234 }]);
+    expect(labelText(doc, doc.elements.find((e) => e.id === "c1")!)).toBe("r = 1,23");
+  });
+
+  it("writes the value at export time in TikZ, with upright units", () => {
+    let doc = measured();
+    doc = {
+      ...doc,
+      elements: doc.elements.map((e) =>
+        e.id === "s1" && e.label?.measure
+          ? { ...e, label: { ...e.label, measure: { ...e.label.measure, prefix: "x = ", suffix: " cm" } } }
+          : e,
+      ),
+    };
+    doc = movePoints(doc, [{ id: "p2", x: 1.5, y: 0 }]);
+    const tikz = toTikz(doc);
+    // Math mode spaces the = itself.
+    expect(tikz).toContain("{$x=1{,}5\\textrm{ cm}$};");
+    expect(tikz).toContain("{$3$};");
+    // The SVG sets the prefix like LaTeX math and keeps the unit upright.
+    expect(toSvg(doc)).toContain('<tspan font-style="italic">x</tspan> = 1,5 cm</text>');
+  });
+
+  it("writes word prefixes and sans-serif measures as text", () => {
+    const m = { kind: "length" as const, decimals: 2, prefix: "lado ", suffix: " cm" };
+    expect(measureToLatex(m, "2,5")).toBe("lado $2{,}5\\textrm{ cm}$");
+    expect(measureToLatex({ ...m, prefix: "" }, "2,5", "sans")).toBe("2,5 cm");
+    expect(measureRuns(m, "2,5")).toEqual([{ text: "lado 2,5 cm", italic: false }]);
+  });
+
+  it("keeps measures through normalizeDoc and drops ones the element can't have", () => {
+    const doc = measured();
+    expect(normalizeDoc(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
+    const fixed = normalizeDoc({
+      kind: "geo",
+      version: 1,
+      elements: [
+        { id: "p1", type: "point", x: 0, y: 0, label: { text: "A", measure: { kind: "length", decimals: 2 } } },
+        { id: "p2", type: "point", x: 3, y: 0 },
+        { id: "s1", type: "segment", a: "p1", b: "p2", label: { text: "", measure: { kind: "length", decimals: 9 } } },
+        { id: "s2", type: "segment", a: "p2", b: "p1", label: { text: "", measure: { kind: "nope" } } },
+      ],
+    });
+    expect(fixed.elements[0].label).toMatchObject({ text: "A" });
+    expect(fixed.elements[0].label?.measure).toBeUndefined();
+    expect(fixed.elements[2].label?.measure).toEqual({ kind: "length", decimals: 4, prefix: "", suffix: "" });
+    expect(labelText(fixed, fixed.elements[2])).toBe("3");
+    expect(fixed.elements[3].label).toBeUndefined();
+  });
+
+  it("opens old docs that have no measures or texts", () => {
+    const ink = { color: "ink", width: 0.8, dash: "solid", opacity: 1 };
+    const doc = normalizeDoc({
+      kind: "geo",
+      version: 1,
+      elements: [
+        { id: "p1", type: "point", x: 0, y: 0, label: { text: "A", angle: null, distance: 9, size: 10, color: "ink" } },
+        { id: "p2", type: "point", x: 4, y: 0 },
+        { id: "s1", type: "segment", a: "p1", b: "p2", stroke: ink, ticks: 0, label: { text: "4", angle: null } },
+      ],
+    });
+    expect(doc.elements).toHaveLength(3);
+    expect(doc.elements[2].label).toEqual({ text: "4", angle: null, distance: 9, size: 10, color: "ink", font: "serif" });
+    expect(toTikz(doc)).toContain("{$4$};");
+  });
+});
+
+describe("free text", () => {
+  it('is created from the input bar with "texto"@(x;y)', () => {
+    const r = parseInput('A=(0;0) "Figura 1"@(2;-1) “não está em escala”@ +(0;-1)');
+    expect(r.errors).toEqual([]);
+    expect(r.texts).toEqual([
+      { text: "Figura 1", x: 2, y: -1 },
+      { text: "não está em escala", x: 0, y: -1 },
+    ]);
+    expect(r.tokens.filter((t) => t.kind === "text")).toHaveLength(2);
+    const doc = applyInput(emptyDoc(), r).doc;
+    expect(doc.elements.map((e) => e.type)).toEqual(["point", "text", "text"]);
+    expect(doc.elements[1]).toMatchObject({ id: "t1", text: "Figura 1", size: 10, color: "ink", font: "serif" });
+  });
+
+  it("reports text without a place or a closing quote", () => {
+    expect(parseInput('"Figura 1"').errors[0].message).toMatch(/onde fica/);
+    expect(parseInput('"Figura 1@(1;1)').errors[0].message).toMatch(/aspas/);
+    expect(parseInput('""@(1;1)').errors[0].message).toMatch(/vazio/);
+  });
+
+  it("draws, exports, moves, bounds and deletes a text", () => {
+    let doc = addText(triangle(), { x: 2, y: -1 }, "Figura 1").doc;
+    const t = doc.elements.at(-1) as FreeText;
+    expect(t).toMatchObject({ type: "text", x: 2, y: -1 });
+    expect(toSvg(doc)).toContain(">Figura 1</text>");
+    expect(toTikz(doc)).toContain("\\node[text=black] at (2,-1) {Figura 1};");
+    expect(toTikz(addText(doc, { x: 0, y: 0 }, "x₁").doc)).toContain("{$x_{1}$};");
+    const scene = buildScene(doc);
+    expect(scene.hits.some((h) => h.owner === t.id && h.type === "text")).toBe(true);
+    expect(scene.box!.maxY).toBeGreaterThanOrEqual(1 * scene.k);
+    doc = movePoints(doc, [{ id: t.id, x: 5, y: 5 }]);
+    expect(doc.elements.at(-1)).toMatchObject({ x: 5, y: 5 });
+    expect(deleteElements(doc, [t.id]).doc.elements.some((e) => e.type === "text")).toBe(false);
+    expect(addText(doc, { x: 0, y: 0 }, "   ").error).toBeDefined();
+  });
+
+  it("escapes text that isn't math in TikZ", () => {
+    const doc = addText(emptyDoc(), { x: 0, y: 0 }, "não está em escala").doc;
+    expect(toTikz(doc)).toContain("{não está em escala}");
+  });
+
+  it("survives normalizeDoc and drops broken texts", () => {
+    const doc = addText(triangle(), { x: 1, y: 1 }, "x", {
+      styles: { ...DEFAULT_STYLES, label: { ...DEFAULT_STYLES.label, size: 14, font: "sans", color: "#d62828" } },
+    }).doc;
+    expect(normalizeDoc(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
+    const fixed = normalizeDoc({
+      kind: "geo",
+      version: 1,
+      elements: [
+        { id: "t1", type: "text", x: 0, y: 0, text: "ok", size: 500, color: "red" },
+        { id: "t2", type: "text", x: 0, y: 0, text: "  " },
+        { id: "t3", type: "text", x: "a", y: 0, text: "x" },
+      ],
+    });
+    expect(fixed.elements).toEqual([{ id: "t1", type: "text", x: 0, y: 0, text: "ok", size: 72, color: "ink", font: "serif" }]);
   });
 });

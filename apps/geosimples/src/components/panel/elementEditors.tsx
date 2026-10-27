@@ -2,11 +2,13 @@ import {
   angleArc,
   dist,
   formatNumber,
+  MEASURES,
   pointMap,
   signedArea2,
   type Angle,
   type Circle,
   type FigureDoc,
+  type FreeText,
   type Point,
   type Polygon,
   type Segment,
@@ -18,14 +20,17 @@ import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
 import { Choice, ColorPicker, Field, NumberInput, RangeField, Section, SwitchField } from "./controls";
 import { pt } from "@/lib/format";
+import type { LabelChange } from "@/lib/labels";
 import { describeConstruction } from "@/lib/names";
-import { FillEditor, LabelEditor, StrokeEditor } from "./styleEditors";
+import { FillEditor, LabelEditor, StrokeEditor, TextStyleFields } from "./styleEditors";
 
 export type Update<T> = (change: (el: T) => T, key: string) => void;
 
 interface EditorProps<T> {
   el: T;
   update: Update<T>;
+  /** Changes the label of every edited element. */
+  updateLabel: (change: LabelChange, key: string) => void;
   /** True when the edit applies to several selected elements. */
   multi: boolean;
   doc: FigureDoc;
@@ -47,7 +52,7 @@ function Readout({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function PointEditor({ el, update, multi, doc }: EditorProps<Point>) {
+export function PointEditor({ el, update, updateLabel, multi, doc }: EditorProps<Point>) {
   const decimals = useFigureStore((s) => s.settings.decimals);
   return (
     <div className="space-y-2">
@@ -86,12 +91,12 @@ export function PointEditor({ el, update, multi, doc }: EditorProps<Point>) {
           <ColorPicker label="Cor do ponto" value={el.color} onChange={(color) => update((p) => ({ ...p, color }), "color")} />
         </Field>
       </Section>
-      <LabelEditor multi={multi} label={el.label} onChange={(label, key) => update((p) => withLabel(p, label), key)} placeholder="Ex.: A, B', P₁" />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} placeholder="Ex.: A, B', P₁" />
     </div>
   );
 }
 
-export function SegmentEditor({ el, update, doc, multi }: EditorProps<Segment>) {
+export function SegmentEditor({ el, update, updateLabel, doc, multi }: EditorProps<Segment>) {
   const pts = pointMap(doc);
   const a = pts.get(el.a);
   const b = pts.get(el.b);
@@ -109,17 +114,12 @@ export function SegmentEditor({ el, update, doc, multi }: EditorProps<Segment>) 
           onChange={(t) => update((s) => ({ ...s, ticks: Number(t) as Ticks }), "ticks")}
         />
       </Section>
-      <LabelEditor multi={multi}
-        label={el.label}
-        onChange={(label, key) => update((s) => withLabel(s, label), key)}
-        suggestions={length ? [{ text: length, title: "Usar medida" }] : []}
-        placeholder="Ex.: a, 5, x"
-      />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.segment} placeholder="Ex.: a, 5, x" />
     </div>
   );
 }
 
-export function AngleEditor({ el, update, doc, multi }: EditorProps<Angle>) {
+export function AngleEditor({ el, update, updateLabel, doc, multi }: EditorProps<Angle>) {
   const styles = useActivePrefs().styles;
   const angleFill = styles.angle.fill ?? styles.fill;
   const pts = pointMap(doc);
@@ -162,17 +162,12 @@ export function AngleEditor({ el, update, doc, multi }: EditorProps<Angle>) {
       </Section>
       <StrokeEditor stroke={el.stroke} onChange={(stroke, key) => update((x) => ({ ...x, stroke }), key)} />
       <FillEditor fill={el.fill} defaultFill={angleFill} onChange={(fill, key) => update((x) => ({ ...x, fill }), key)} />
-      <LabelEditor multi={multi}
-        label={el.label}
-        onChange={(label, key) => update((x) => withLabel(x, label), key)}
-        suggestions={measure ? [{ text: measure, title: "Usar medida" }] : []}
-        placeholder="Ex.: α, 60°, x"
-      />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.angle} placeholder="Ex.: α, 60°, x" />
     </div>
   );
 }
 
-export function CircleEditor({ el, update, multi }: EditorProps<Circle>) {
+export function CircleEditor({ el, update, updateLabel, multi }: EditorProps<Circle>) {
   const built = el.construction.kind !== "free";
   return (
     <div className="space-y-2">
@@ -211,12 +206,12 @@ export function CircleEditor({ el, update, multi }: EditorProps<Circle>) {
       </Section>
       <StrokeEditor stroke={el.stroke} onChange={(stroke, key) => update((c) => ({ ...c, stroke }), key)} />
       <FillEditor fill={el.fill} onChange={(fill, key) => update((c) => ({ ...c, fill }), key)} />
-      <LabelEditor multi={multi} label={el.label} onChange={(label, key) => update((c) => withLabel(c, label), key)} placeholder="Ex.: λ, C₁" />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.circle} placeholder="Ex.: λ, C₁" />
     </div>
   );
 }
 
-export function PolygonEditor({ el, update, doc, multi }: EditorProps<Polygon>) {
+export function PolygonEditor({ el, update, updateLabel, doc, multi }: EditorProps<Polygon>) {
   const profileStroke = useActivePrefs().styles.stroke;
   const pts = pointMap(doc);
   const vs = el.vertices.map((id) => pts.get(id)).filter((p): p is Point => !!p);
@@ -246,16 +241,36 @@ export function PolygonEditor({ el, update, doc, multi }: EditorProps<Polygon>) 
         <p className="mb-1 text-xs text-muted-foreground">Normalmente os lados já são segmentos. Use isto para um contorno sem segmentos.</p>
       </Section>
       {el.stroke && <StrokeEditor title="Traço do contorno" stroke={el.stroke} onChange={(stroke, key) => update((g) => ({ ...g, stroke }), key)} />}
-      <LabelEditor multi={multi} label={el.label} onChange={(label, key) => update((g) => withLabel(g, label), key)} placeholder="Ex.: S, A₁" />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.polygon} placeholder="Ex.: S, A₁" />
     </div>
   );
 }
 
-function withLabel<T extends { label?: unknown }>(el: T, label: T["label"] | undefined): T {
-  if (label === undefined) {
-    const next = { ...el };
-    delete next.label;
-    return next;
-  }
-  return { ...el, label };
+export function TextEditor({ el, update, multi }: EditorProps<FreeText>) {
+  return (
+    <div className="space-y-2">
+      {!multi && (
+        <Section title="Texto">
+          <Field label="Texto">
+            <input
+              value={el.text}
+              maxLength={200}
+              aria-label="Texto"
+              // An empty text can't be drawn or picked; delete the text to remove it.
+              onChange={(e) => e.target.value.trim() !== "" && update((t) => ({ ...t, text: e.target.value }), "text")}
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <NumberInput ariaLabel="Coordenada X" value={el.x} suffix="x" onChange={(x) => update((t) => ({ ...t, x }), "x")} />
+            <NumberInput ariaLabel="Coordenada Y" value={el.y} suffix="y" onChange={(y) => update((t) => ({ ...t, y }), "y")} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Para arrastar o texto, use o modo Mover pontos.</p>
+        </Section>
+      )}
+      <Section title="Estilo">
+        <TextStyleFields value={el} onChange={(patch, key) => update((t) => ({ ...t, ...patch }), key)} />
+      </Section>
+    </div>
+  );
 }

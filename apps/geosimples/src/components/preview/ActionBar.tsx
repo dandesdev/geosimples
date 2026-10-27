@@ -38,13 +38,17 @@ import {
   PerpendicularBisectorIcon,
   PolygonIcon,
 } from "@/components/icons";
-import { ExportDialog } from "@/components/dialogs/ExportDialog";
+import { LazyExportDialog } from "@/components/dialogs/lazy";
+import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { actions } from "@/lib/actions";
 import { CONSTRUCTION_KINDS, previewProps, useAvailability, type Availability } from "@/lib/availability";
 import type { ConstructionKind } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
+import { cn } from "@/lib/utils";
 
-const Divider = () => <div className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden="true" />;
+const Divider = ({ className }: { className?: string }) => (
+  <div className={cn("mx-1 h-6 w-px shrink-0 bg-border", className)} aria-hidden="true" />
+);
 
 function MenuItem({
   icon,
@@ -149,11 +153,19 @@ export function ActionBar() {
     <div
       role="toolbar"
       aria-label="Ações da figura"
-      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b bg-background px-2 py-1.5"
+      // Wraps instead of scrolling, so on phones the modes sit on a second row instead of off screen.
+      className="flex shrink-0 flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1.5"
     >
-      <Button size="sm" className="mr-1 shrink-0" onClick={() => setExportOpen(true)} disabled={isEmpty} title="Exportar">
+      <Button
+        size="sm"
+        className="mr-1 shrink-0"
+        onClick={() => setExportOpen(true)}
+        disabled={isEmpty}
+        title="Exportar"
+        aria-label="Exportar"
+      >
         <Download />
-        Exportar
+        <span className="hidden sm:inline">Exportar</span>
       </Button>
       <Divider />
       <IconButton label="Desfazer" shortcut="undo" onClick={() => store().undo()} disabled={!canUndo}>
@@ -296,10 +308,12 @@ export function ActionBar() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Divider />
+      <Divider className="hidden sm:block" />
       <ModeSwitch />
 
-      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <MountOnFirstOpen open={exportOpen}>
+        <LazyExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      </MountOnFirstOpen>
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -10,7 +10,7 @@ import {
   resolveConstructions,
   signedArea2,
 } from "./geometry";
-import { labelFor, type LabelScheme, nextPointNames, withText } from "./labels";
+import { labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Angle,
@@ -19,6 +19,7 @@ import type {
   Element,
   ElementType,
   FigureDoc,
+  FreeText,
   Id,
   Point,
   PointConstruction,
@@ -78,6 +79,7 @@ const PREFIX: Record<ElementType, string> = {
   angle: "a",
   circle: "c",
   polygon: "g",
+  text: "t",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
@@ -129,9 +131,9 @@ export function addPoints(doc: FigureDoc, parsed: ParsedPoint[], opts: OpOptions
  */
 export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions = {}): OpResult {
   if (parsed.errors.length > 0) return fail(doc, parsed.errors[0].message);
-  if (parsed.nodes.length === 0) return ok(doc);
+  if (parsed.nodes.length === 0 && parsed.texts.length === 0) return ok(doc);
   const fresh = parsed.nodes.filter((n) => n.kind === "new");
-  if (!roomFor(doc, fresh.length + parsed.segments.length)) return fail(doc, LIMIT_ERROR);
+  if (!roomFor(doc, fresh.length + parsed.segments.length + parsed.texts.length)) return fail(doc, LIMIT_ERROR);
 
   const nextId = idMaker(doc);
   const points = buildPoints(doc, fresh, opts, nextId);
@@ -145,7 +147,13 @@ export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions 
     if (a === b || segmentExists(working, a, b)) continue;
     working = withElements(working, [...working.elements, newSegment(nextId("segment"), a, b, opts)]);
   }
-  return ok(working, [...new Set(ids)]);
+  const texts: Id[] = [];
+  for (const t of parsed.texts) {
+    const added = addText(working, t, t.text, opts);
+    working = added.doc;
+    texts.push(...added.created);
+  }
+  return ok(working, [...new Set(ids), ...texts]);
 }
 
 export function segmentExists(doc: FigureDoc, a: Id, b: Id): boolean {
@@ -397,6 +405,7 @@ export function cascadeIds(doc: FigureDoc, ids: Id[]): Set<Id> {
 function referencedPoints(el: Element): Id[] {
   switch (el.type) {
     case "point":
+    case "text":
       return [];
     case "segment":
       return [el.a, el.b];
@@ -460,11 +469,12 @@ function withOrphanHelpers(doc: FigureDoc, gone: Set<Id>): Set<Id> {
   return out;
 }
 
+/** Moves points and free texts. */
 export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number }[]): FigureDoc {
   const byId = new Map(moves.map((m) => [m.id, m]));
   const elements = doc.elements.map((el) => {
     const m = byId.get(el.id);
-    return m && el.type === "point" ? { ...el, x: m.x, y: m.y } : el;
+    return m && (el.type === "point" || el.type === "text") ? { ...el, x: m.x, y: m.y } : el;
   });
   return resolveConstructions(withElements(doc, elements));
 }
@@ -557,15 +567,31 @@ export function autoLabel(
     const text = labelFor(scheme, i, el, doc, decimals);
     if (text !== null) texts.set(el.id, text);
   });
+  // Measures become live labels that follow the points. Angles keep at most one decimal.
+  const live = scheme === "length" || scheme === "measure";
   const elements = doc.elements.map((el) => {
     const text = texts.get(el.id);
-    return text === undefined ? el : ({ ...el, label: withText(el.label, text, stylesOf(opts).label) } as Element);
+    if (text === undefined || el.type === "text") return el;
+    const label = withText(el.label, text, stylesOf(opts).label);
+    const measure = live ? newMeasure(el, el.type === "angle" ? Math.min(decimals, 1) : decimals) : null;
+    return { ...el, label: measure ? { ...label, measure } : label } as Element;
   });
   return ok(withElements(doc, elements));
 }
 
+/** Adds a free text centered at (x, y), in the label style of the options. */
+export function addText(doc: FigureDoc, at: { x: number; y: number }, text: string, opts: OpOptions = {}): OpResult {
+  const trimmed = text.trim().slice(0, LIMITS.labelLength);
+  if (trimmed === "") return fail(doc, "Escreva o texto.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const { size, color, font } = stylesOf(opts).label;
+  const el: FreeText = { id: idMaker(doc)("text"), type: "text", x: at.x, y: at.y, text: trimmed, size, color, font };
+  return ok(withElements(doc, [...doc.elements, el]), [el.id]);
+}
+
 export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
+    if (el.type === "text") return el;
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
       const next = { ...el };

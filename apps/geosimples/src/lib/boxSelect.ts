@@ -1,4 +1,4 @@
-import { pointMap, type Box, type Element, type FigureDoc, type Id } from "@geosimples/core/figure";
+import { estimateTextWidth, pointMap, type Box, type Element, type FigureDoc, type Id } from "@geosimples/core/figure";
 
 /**
  * Elements drawn entirely inside a box in preview coordinates (pt, Y down).
@@ -29,6 +29,11 @@ export function elementsInBox(doc: FigureDoc, k: number, box: Box): Id[] {
         if (!c) return false;
         const r = el.radius * k;
         return inside(c.x * k - r, -c.y * k - r) && inside(c.x * k + r, -c.y * k + r);
+      }
+      case "text": {
+        const w = estimateTextWidth(el.text, el.size) / 2;
+        const h = el.size * 0.6;
+        return inside(el.x * k - w, -el.y * k - h) && inside(el.x * k + w, -el.y * k + h);
       }
     }
   };

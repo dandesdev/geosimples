@@ -14,6 +14,7 @@ const TOKEN_CLASS: Record<InputTokenKind, string> = {
   name: "text-primary",
   point: "rounded-sm bg-primary/10",
   ref: "text-sky-700",
+  text: "text-amber-700",
   // The text stays "--" but shows as a connector line, so it can't be mistaken for a minus.
   connector:
     "relative text-transparent after:absolute after:inset-x-px after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
@@ -43,7 +44,9 @@ function summary(parsed: ParsedInput): string {
   if (parsed.segments.length) {
     parts.push(`${parsed.segments.length} ${parsed.segments.length === 1 ? "segmento" : "segmentos"}`);
   }
-  return parts.length ? `${parts.join(" e ")}. Enter para adicionar.` : "";
+  if (parsed.texts.length) parts.push(`${parsed.texts.length} ${parsed.texts.length === 1 ? "texto" : "textos"}`);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} e ${parts[parts.length - 1]}` : parts[0];
+  return list ? `${list}. Enter para adicionar.` : "";
 }
 
 export function PointInput() {
@@ -52,7 +55,10 @@ export function PointInput() {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
   const inputRef = useRef<HTMLInputElement>(null);
+  const helpRef = useRef<HTMLButtonElement>(null);
   const [scroll, setScroll] = useState(0);
+  const [helpPinned, setHelpPinned] = useState(false);
+  const [helpHovered, setHelpHovered] = useState(false);
 
   const parsed = useMemo(() => parseDraft(text, doc, selection), [text, doc, selection]);
   const syncScroll = () => setScroll(inputRef.current?.scrollLeft ?? 0);
@@ -91,7 +97,8 @@ export function PointInput() {
         <div className="relative min-w-0 flex-1 overflow-hidden">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
             <div
-              className="whitespace-pre px-2 py-1.5 font-mono text-sm"
+              // Same font size as the input, or the colors drift off the letters.
+              className="whitespace-pre px-2 py-1.5 font-mono text-base sm:text-sm"
               // Follows the input's horizontal scroll; the offset comes from the DOM.
               style={{ transform: `translateX(${-scroll}px)` }}
             >
@@ -113,24 +120,41 @@ export function PointInput() {
             onScroll={syncScroll}
             onSelect={syncScroll}
             autoComplete="off"
+            autoCorrect="off"
+            // Point names are capital letters; on phones this saves a shift per name.
+            autoCapitalize="characters"
+            enterKeyHint="go"
             spellCheck={false}
             aria-invalid={parsed.errors.length > 0}
             aria-describedby="point-input-message"
             placeholder="Ex.: A=(0;0)--B=(4;0)--C=(0;3)--   ou   (1;1) +(2;0) +(3:90)"
-            className="relative w-full bg-transparent px-2 py-1.5 font-mono text-sm text-transparent caret-foreground outline-none selection:bg-primary/25 selection:text-transparent placeholder:font-sans placeholder:text-muted-foreground"
+            // 16px on phones: smaller text makes iOS zoom the page when the input gets focus.
+            className="relative w-full bg-transparent px-2 py-1.5 font-mono text-base text-transparent caret-foreground outline-none selection:bg-primary/25 selection:text-transparent placeholder:font-sans placeholder:text-muted-foreground sm:text-sm"
           />
         </div>
-        <Tooltip>
+        {/* Tapping toggles the help too: touch screens have no hover. */}
+        <Tooltip open={helpHovered || helpPinned} onOpenChange={setHelpHovered}>
           <TooltipTrigger asChild>
             <button
               type="button"
               aria-label="Como digitar pontos"
+              aria-expanded={helpHovered || helpPinned}
+              ref={helpRef}
+              onClick={() => setHelpPinned((v) => !v)}
               className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-primary"
             >
               <CircleHelp className="h-4 w-4" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-96 space-y-1 p-3 text-left">
+          <TooltipContent
+            side="top"
+            collisionPadding={8}
+            onPointerDownOutside={(e) => {
+              if (!helpRef.current?.contains(e.target as Node)) setHelpPinned(false);
+            }}
+            onEscapeKeyDown={() => setHelpPinned(false)}
+            className="max-w-[min(24rem,calc(100vw-1rem))] space-y-1 p-3 text-left"
+          >
             <p>
               <b>(X;Y)</b> coordenadas: <code>(2;3)</code>, <code>(1,5;-2)</code>. Os parênteses são opcionais.
             </p>
@@ -149,11 +173,19 @@ export function PointInput() {
             <p>
               Espaço sem <b>--</b> separa pontos soltos. <code>A--C</code> liga pontos que já existem.
             </p>
+            <p>
+              <b>"texto"@(X;Y)</b> escreve um texto solto centrado no ponto: <code>"Figura 1"@(2;-1)</code>
+            </p>
           </TooltipContent>
         </Tooltip>
-        <Button type="submit" size="sm" disabled={text.trim() === "" || parsed.errors.length > 0}>
+        <Button
+          type="submit"
+          size="sm"
+          aria-label="Adicionar"
+          disabled={text.trim() === "" || parsed.errors.length > 0}
+        >
           <Plus />
-          Adicionar
+          <span className="hidden sm:inline">Adicionar</span>
         </Button>
       </form>
       <p

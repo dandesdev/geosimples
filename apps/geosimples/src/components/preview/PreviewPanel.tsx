@@ -3,14 +3,12 @@ import {
   buildScene,
   movePoints,
   paddedBox,
-  pointMap,
   sceneMarkup,
   type Box,
   type FigureDoc,
   type Hit,
   type Id,
   type ParsedInput,
-  type Point,
   type Prim,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
@@ -22,19 +20,35 @@ import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
 import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
+import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camera";
+import { useCoarsePointer } from "@/lib/useMediaQuery";
 
 const PRIMARY = "#10b981";
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
 const EMPTY_WORLD = { minX: -1, minY: -1, maxX: 6, maxY: 4 };
 
-type View = { x: number; y: number; w: number; h: number };
+/** Hit target sizes in screen px: a finger needs more room than a mouse. */
+const HIT_FINE = { point: 7, stroke: 14 };
+const HIT_COARSE = { point: 16, stroke: 28 };
 
 type Gesture =
   | { kind: "none" }
-  | { kind: "press"; owner: Id | null; x: number; y: number; shift: boolean }
-  | { kind: "drag"; owner: Id; ids: Id[]; base: FigureDoc; start: { x: number; y: number }; moved: boolean }
+  /** `slop` is how far (px) the pointer may wander before a press becomes a drag. */
+  | { kind: "press"; owner: Id | null; x: number; y: number; shift: boolean; slop: number }
+  | { kind: "drag"; owner: Id; ids: Id[]; base: FigureDoc; start: { x: number; y: number }; moved: boolean; slop: number }
   | { kind: "pan"; x: number; y: number; view: View }
-  | { kind: "box"; start: { x: number; y: number }; end: { x: number; y: number }; shift: boolean };
+  | { kind: "box"; start: { x: number; y: number }; end: { x: number; y: number }; shift: boolean }
+  /** Two fingers: pinch to zoom and drag to pan, in any mode. */
+  | { kind: "pinch"; ids: [number, number]; from: Pinch; at: { x: number; y: number }; view: View; unitsPerPx: number }
+  /** A finger left a pinch: the rest are ignored until all are up, so nothing gets selected by accident. */
+  | { kind: "spent" };
+
+/** Elements that "Mover pontos" drags: points and free texts. */
+function movables(doc: FigureDoc): Map<Id, { id: Id; x: number; y: number }> {
+  const map = new Map<Id, { id: Id; x: number; y: number }>();
+  for (const el of doc.elements) if (el.type === "point" || el.type === "text") map.set(el.id, el);
+  return map;
+}
 
 function fitView(box: Box | null, k: number): View {
   const b =
@@ -82,13 +96,16 @@ export function PreviewPanel() {
   const [frozen, setFrozen] = useState<View | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
+  /** Pointers down on the preview, by id, at their last client position. */
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const coarse = useCoarsePointer();
 
   const draft = useFigureStore((s) => s.inputDraft);
   const ghost = useMemo(() => {
     if (draft.trim() === "") return null;
     const parsed = parseDraft(draft, doc, selection);
     // Parts typed correctly show even while a later part is unfinished.
-    return parsed.nodes.length > 0 ? parsed : null;
+    return parsed.nodes.length > 0 || parsed.texts.length > 0 ? parsed : null;
   }, [draft, doc, selection]);
 
   const fitted = useMemo(() => fitView(unionBox(scene.box, ghost && ghostBox(ghost, k)), k), [scene.box, ghost, k]);
@@ -146,47 +163,97 @@ export function PreviewPanel() {
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
 
+  /** Drops the gesture in progress without selecting or moving anything. */
+  const abortGesture = () => {
+    const g = gesture.current;
+    gesture.current = { kind: "none" };
+    if (g.kind === "box") setBox(null);
+    else if (g.kind === "drag") {
+      const store = useFigureStore.getState();
+      if (g.moved) store.setTransient(g.base);
+      // The doc is the base again, so this adds no undo step.
+      store.endTransient();
+      setFrozen(null);
+    }
+  };
+
+  const startPinch = (svg: SVGSVGElement) => {
+    abortGesture();
+    const [[idA, a], [idB, b]] = [...pointers.current];
+    const from = pinchOf(a, b);
+    gesture.current = { kind: "pinch", ids: [idA, idB], from, at: toUser(svg, from.x, from.y), view: vb, unitsPerPx };
+  };
+
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current!;
+    if (e.button !== 0 && e.button !== 1) return;
+    // A primary pointer starts a fresh touch sequence: anything still tracked lost its pointerup.
+    if (e.isPrimary && pointers.current.size > 0) {
+      pointers.current.clear();
+      abortGesture();
+    }
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    capture(svg, e.pointerId);
+    // A second finger turns whatever the first one started into a pinch; more fingers are ignored.
+    if (pointers.current.size === 2) {
+      startPinch(svg);
+      return;
+    }
+    if (pointers.current.size > 2 || gesture.current.kind === "spent") return;
     // The middle button always moves the view, whatever the mode.
     if (e.button === 1) {
       e.preventDefault();
-      svg.setPointerCapture(e.pointerId);
       gesture.current = { kind: "pan", x: e.clientX, y: e.clientY, view: vb };
       return;
     }
-    if (e.button !== 0) return;
-    svg.setPointerCapture(e.pointerId);
+    const slop = e.pointerType === "touch" ? 10 : 4;
     const owner = ownerAt(e.target);
     const store = useFigureStore.getState();
-    const pts = pointMap(store.doc);
-    if (mode === "move" && owner && pts.has(owner)) {
-      const selectedPoints = store.selection.filter((id) => pts.has(id));
-      const ids = store.selection.includes(owner) ? selectedPoints : [owner];
+    const movable = movables(store.doc);
+    if (mode === "move" && owner && movable.has(owner)) {
+      const selectedMovable = store.selection.filter((id) => movable.has(id));
+      const ids = store.selection.includes(owner) ? selectedMovable : [owner];
       store.beginTransient();
       setFrozen(vb);
-      gesture.current = { kind: "drag", owner, ids, base: store.doc, start: toUser(svg, e.clientX, e.clientY), moved: false };
+      gesture.current = {
+        kind: "drag",
+        owner,
+        ids,
+        base: store.doc,
+        start: toUser(svg, e.clientX, e.clientY),
+        moved: false,
+        slop: slop / 2,
+      };
       return;
     }
-    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, shift: e.shiftKey };
+    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, shift: e.shiftKey, slop };
   };
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const tracked = pointers.current.get(e.pointerId);
+    if (tracked) {
+      tracked.x = e.clientX;
+      tracked.y = e.clientY;
+    }
     const g = gesture.current;
     const svg = svgRef.current!;
-    if (g.kind === "drag") {
+    if (g.kind === "pinch") {
+      const a = pointers.current.get(g.ids[0]);
+      const b = pointers.current.get(g.ids[1]);
+      if (tracked && a && b) placeCamera(pinchView(g.view, g.unitsPerPx, g.at, g.from, pinchOf(a, b)));
+    } else if (g.kind === "drag") {
       const p = toUser(svg, e.clientX, e.clientY);
       const dx = (p.x - g.start.x) / k;
       const dy = -(p.y - g.start.y) / k;
-      if (!g.moved && Math.hypot(dx, dy) * k < 2 * unitsPerPx) return;
+      if (!g.moved && Math.hypot(dx, dy) * k < g.slop * unitsPerPx) return;
       g.moved = true;
-      const pts = pointMap(g.base);
+      const movable = movables(g.base);
       const moves = g.ids
-        .map((id) => pts.get(id))
-        .filter((pt): pt is Point => pt !== undefined)
-        .map((pt) => ({ id: pt.id, x: round2(pt.x + dx), y: round2(pt.y + dy) }));
+        .map((id) => movable.get(id))
+        .filter((m) => m !== undefined)
+        .map((m) => ({ id: m.id, x: round2(m.x + dx), y: round2(m.y + dy) }));
       useFigureStore.getState().setTransient(movePoints(g.base, moves));
-    } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > 4) {
+    } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > g.slop) {
       if (mode === "pan") {
         gesture.current = { kind: "pan", x: g.x, y: g.y, view: vb };
       } else {
@@ -205,7 +272,24 @@ export function PreviewPanel() {
     }
   };
 
-  const onPointerUp = () => {
+  /** Handles a pointer leaving a pinch. True when the pointer was part of one, or of what is left of it. */
+  const releaseFromPinch = (pointerId: number) => {
+    const g = gesture.current;
+    if (g.kind === "spent" || (g.kind === "pinch" && g.ids.includes(pointerId))) {
+      gesture.current = pointers.current.size === 0 ? { kind: "none" } : { kind: "spent" };
+      return true;
+    }
+    return g.kind === "pinch";
+  };
+
+  const onPointerCancel = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!pointers.current.delete(e.pointerId)) return;
+    if (!releaseFromPinch(e.pointerId)) abortGesture();
+  };
+
+  const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!pointers.current.delete(e.pointerId)) return;
+    if (releaseFromPinch(e.pointerId)) return;
     const g = gesture.current;
     gesture.current = { kind: "none" };
     const store = useFigureStore.getState();
@@ -233,14 +317,15 @@ export function PreviewPanel() {
   return (
     <section
       aria-label="Prévia da figura"
-      className="relative flex min-h-[55dvh] flex-1 flex-col overflow-hidden rounded-lg border bg-card md:min-h-0"
+      className="relative flex min-h-[55dvh] flex-1 flex-col overflow-hidden rounded-lg border bg-card lg:min-h-0"
     >
       <ActionBar />
       <div ref={containerRef} className="relative min-h-0 flex-1">
         <svg
           ref={svgRef}
           className={cn(
-            "absolute inset-0 h-full w-full touch-none select-none bg-white",
+            // touch-none keeps the browser from scrolling or zooming the page under the fingers.
+            "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
             mode === "pan" && "cursor-grab active:cursor-grabbing",
             mode === "select" && "cursor-crosshair",
           )}
@@ -249,7 +334,7 @@ export function PreviewPanel() {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerCancel={onPointerCancel}
           // Stops the browser's autoscroll from starting on a middle click.
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.preventDefault()}
@@ -264,6 +349,7 @@ export function PreviewPanel() {
             unitsPerPx={unitsPerPx}
             moveMode={mode === "move"}
             doc={doc}
+            hit={coarse ? HIT_COARSE : HIT_FINE}
           />
           {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
           {box && (
@@ -299,17 +385,20 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/** Synthetic or already-released pointers can't be captured; the gesture still works without it. */
+function capture(el: Element, pointerId: number) {
+  try {
+    el.setPointerCapture(pointerId);
+  } catch {
+    // Moves still arrive while the pointer stays over the preview.
+  }
+}
+
 function toUser(svg: SVGSVGElement, clientX: number, clientY: number) {
   const ctm = svg.getScreenCTM();
   if (!ctm) return { x: 0, y: 0 };
   const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
   return { x: p.x, y: p.y };
-}
-
-function zoomView(v: View, factor: number, at: { x: number; y: number }): View {
-  const w = Math.min(Math.max(v.w * factor, 5), 1e6);
-  const f = w / v.w;
-  return { x: at.x - (at.x - v.x) * f, y: at.y - (at.y - v.y) * f, w, h: v.h * f };
 }
 
 function Grid({ k, vb, unitsPerPx }: { k: number; vb: View; unitsPerPx: number }) {
@@ -340,6 +429,7 @@ function Overlay({
   unitsPerPx,
   moveMode,
   doc,
+  hit,
 }: {
   hits: Hit[];
   selection: Id[];
@@ -347,6 +437,8 @@ function Overlay({
   unitsPerPx: number;
   moveMode: boolean;
   doc: FigureDoc;
+  /** Hit target sizes in screen px. They only change the preview, never the export. */
+  hit: { point: number; stroke: number };
 }) {
   const selected = new Set(selection);
   const hidden = new Set(
@@ -358,7 +450,7 @@ function Overlay({
       {hits.map((h) => {
         const isSel = selected.has(h.owner);
         if (h.type === "point") {
-          const r = Math.max(h.r, 7 * px);
+          const r = Math.max(h.r, hit.point * px);
           return (
             <g key={h.owner} data-owner={h.owner} className={moveMode ? "cursor-move" : "cursor-pointer"}>
               {hidden.has(h.owner) && (
@@ -372,7 +464,7 @@ function Overlay({
           );
         }
         return (
-          <g key={h.owner} data-owner={h.owner} className="cursor-pointer">
+          <g key={h.owner} data-owner={h.owner} className={moveMode && h.type === "text" ? "cursor-move" : "cursor-pointer"}>
             {isSel && (
               <path
                 d={h.d}
@@ -390,7 +482,7 @@ function Overlay({
               d={h.d}
               fill={h.area ? "transparent" : "none"}
               stroke="transparent"
-              strokeWidth={14}
+              strokeWidth={hit.stroke}
               vectorEffect="non-scaling-stroke"
               pointerEvents={h.area ? "all" : "stroke"}
             />
@@ -417,9 +509,10 @@ function Overlay({
 }
 
 function ghostBox(parsed: ParsedInput, k: number): Box | null {
-  if (parsed.nodes.length === 0) return null;
-  const xs = parsed.nodes.map((n) => n.x * k);
-  const ys = parsed.nodes.map((n) => -n.y * k);
+  const spots = [...parsed.nodes, ...parsed.texts];
+  if (spots.length === 0) return null;
+  const xs = spots.map((n) => n.x * k);
+  const ys = spots.map((n) => -n.y * k);
   return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
 }
 
@@ -470,6 +563,19 @@ function DraftGhost({ parsed, k, px }: { parsed: ParsedInput; k: number; px: num
           </g>
         );
       })}
+      {parsed.texts.map((t, i) => (
+        <text
+          key={`text-${i}`}
+          x={t.x * k}
+          y={-t.y * k + 4 * px}
+          fontSize={12 * px}
+          textAnchor="middle"
+          fill={PRIMARY}
+          fontFamily="Inter, system-ui, sans-serif"
+        >
+          {t.text}
+        </text>
+      ))}
     </g>
   );
 }
