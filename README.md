@@ -1,6 +1,6 @@
 # GeoSimples
 
-Geometry figures for teaching material, exported as SVG, PNG or TikZ.
+Geometry figures for teaching material, exported as TikZ (LaTeX), PNG or SVG. The interface is in Brazilian Portuguese.
 
 This is the v2 rewrite. v1 is [tikzgenerator](https://github.com/dandesdev/tikzgenerator), live at https://geosimples.vercel.app.
 
@@ -8,7 +8,7 @@ This is the v2 rewrite. v1 is [tikzgenerator](https://github.com/dandesdev/tikzg
 
 ```
 apps/geosimples   Vite + React editor
-packages/core     framework-free geometry (@geosimples/core)
+packages/core     framework-free figure model, geometry and exporters (@geosimples/core)
 ```
 
 ## Scripts

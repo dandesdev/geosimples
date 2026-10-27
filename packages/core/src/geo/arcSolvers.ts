@@ -280,7 +280,7 @@ export function getProposedArcs(
       // Determine sweep direction - we want the arc to curve OUTWARD (convex)
       // The sweep flag determines clockwise (1) vs counter-clockwise (0) direction
       // For a convex arc between two points, we need the opposite of the "short way"
-      let angleDiff = normalizeAngle(endAngle - startAngle);
+      const angleDiff = normalizeAngle(endAngle - startAngle);
       const sweepFlag: 0 | 1 = angleDiff > Math.PI ? 0 : 1;
       const largeArcFlag: 0 | 1 = 0; // Always small arc for angle notation
 
@@ -384,7 +384,7 @@ export function calculateTickMarks(
   let midAngle = (startAngle + endAngle) / 2;
 
   // Adjust if we crossed 0/2π boundary
-  let angleDiff = endAngle - startAngle;
+  const angleDiff = endAngle - startAngle;
   if (Math.abs(angleDiff) > Math.PI) {
     midAngle += Math.PI;
   }

@@ -1,33 +1,23 @@
-import { useEffect } from 'react';
-import { Header } from '@/components/header';
-import { Toolbar } from '@/components/toolbar';
-import { UtilityToolbar } from '@/components/toolbar/UtilityToolbar';
-import { PropertiesPanel } from '@/components/properties';
-import { GeometryCanvas, PaperBackground } from '@/components/canvas';
-import { useKeyboardShortcuts } from '@/hooks';
-import { useEditorStore } from '@/store/useEditorStore';
-import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
+import { PreviewPanel } from "@/components/preview/PreviewPanel";
+import { PointInput } from "@/components/PointInput";
+import { SidePanel } from "@/components/panel/SidePanel";
+import { useShortcuts } from "@/lib/useShortcuts";
 
 function App() {
-  const preferences = useEditorStore((state) => state.preferences);
-  useKeyboardShortcuts();
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', preferences.theme === 'dark');
-  }, [preferences.theme]);
-
+  useShortcuts();
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <PaperBackground />
-      <Header />
-      <div className="flex-1 flex overflow-hidden">
-        <Toolbar />
-        <GeometryCanvas />
-        <UtilityToolbar />
-        <PropertiesPanel />
+    <TooltipProvider delayDuration={300}>
+      <div className="flex min-h-dvh flex-col gap-3 bg-muted/40 p-3 md:grid md:h-dvh md:grid-cols-[minmax(0,1fr)_22rem] md:overflow-hidden">
+        <main className="flex min-h-0 flex-col gap-3">
+          <PreviewPanel />
+          <PointInput />
+        </main>
+        <SidePanel />
       </div>
-      <Toaster />
-    </div>
+      <Toaster position="bottom-center" richColors closeButton />
+    </TooltipProvider>
   );
 }
 
