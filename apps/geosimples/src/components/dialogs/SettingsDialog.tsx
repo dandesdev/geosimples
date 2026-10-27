@@ -63,7 +63,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
  * tabs stay narrow, with room for longer labels than the side panel's.
  */
 function TabBody({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
-  return <div className={cn("space-y-3 pb-1", narrow && "max-w-xl [--field-label:14rem]")}>{children}</div>;
+  return <div className={cn("space-y-3 pb-1", narrow && "max-w-xl sm:[--field-label:14rem]")}>{children}</div>;
 }
 
 /** One group of style controls; the groups flow into as many columns as the window fits. */
