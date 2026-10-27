@@ -51,6 +51,30 @@ export type LabelFont = "serif" | "sans";
 
 export type PointShape = "dot" | "ring" | "none";
 
+/**
+ * How a constructed point was built from other elements. The editor moves it
+ * when they move. Points without one are free. Lines are given by two points.
+ */
+export type PointConstruction =
+  | { kind: "midpoint"; points: [Id, Id] }
+  /** Foot of the perpendicular from `point` to the line through `line`. */
+  | { kind: "foot"; point: Id; line: [Id, Id] }
+  /**
+   * On the bisector of the angle a → vertex → b (reflex side when `reflex`):
+   * where it meets `line`, or `length` world units from the vertex when `line` is null.
+   */
+  | { kind: "bisector"; angle: [Id, Id, Id]; reflex: boolean; line: [Id, Id] | null; length: number }
+  /**
+   * In the frame of segment pq: lerp(p, q, along) plus `across` times pq
+   * turned 90° counterclockwise. Ends of a perpendicular bisector.
+   */
+  | { kind: "perpendicular"; points: [Id, Id]; along: number; across: number }
+  /**
+   * Where two segments or circles cross. With two crossings, `index` 0 is the
+   * one nearer the first end of a segment, or left of center-to-center for two circles.
+   */
+  | { kind: "intersection"; of: [Id, Id]; index: 0 | 1 };
+
 export interface Point {
   id: Id;
   type: "point";
@@ -61,6 +85,8 @@ export interface Point {
   size: number;
   color: Color;
   label?: Label;
+  /** Absent for free points. */
+  construction?: PointConstruction;
 }
 
 export type Ticks = 0 | 1 | 2 | 3;

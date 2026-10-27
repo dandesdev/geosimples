@@ -1,4 +1,4 @@
-import type { ElementType, FigureDoc, Id } from "@geosimples/core/figure";
+import type { Element, ElementType, FigureDoc, Id, PointConstruction } from "@geosimples/core/figure";
 
 export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title: string }> = {
   point: { one: "ponto", many: "pontos", title: "Ponto" },
@@ -18,4 +18,33 @@ export function describeSelection(doc: FigureDoc, selection: Id[]): string | nul
   }
   if (counts.size === 0) return null;
   return [...counts].map(([type, n]) => `${n} ${n === 1 ? TYPE_NAMES[type].one : TYPE_NAMES[type].many}`).join(", ");
+}
+
+/** Name of an element as the teacher sees it: its label, or what it joins. */
+function elementName(byId: Map<Id, Element>, id: Id): string {
+  const el = byId.get(id);
+  if (!el) return "?";
+  if (el.label?.text) return el.label.text;
+  if (el.type === "segment") return `${elementName(byId, el.a)}${elementName(byId, el.b)}`;
+  if (el.type === "circle") return `a circunferência de centro ${elementName(byId, el.center)}`;
+  return el.id;
+}
+
+/** "Ponto médio de A e B", for the point editor. */
+export function describeConstruction(doc: FigureDoc, c: PointConstruction): string {
+  const byId = new Map(doc.elements.map((e) => [e.id, e]));
+  const name = (id: Id) => elementName(byId, id);
+  const line = ([a, b]: [Id, Id]) => `${name(a)}${name(b)}`;
+  switch (c.kind) {
+    case "midpoint":
+      return `Ponto médio de ${name(c.points[0])} e ${name(c.points[1])}`;
+    case "foot":
+      return `Pé da altura de ${name(c.point)} sobre a reta ${line(c.line)}`;
+    case "bisector":
+      return `Na bissetriz do ângulo ${c.angle.map(name).join("")}${c.line ? `, sobre a reta ${line(c.line)}` : ""}`;
+    case "perpendicular":
+      return `Na mediatriz de ${line(c.points)}`;
+    case "intersection":
+      return `Interseção de ${name(c.of[0])} e ${name(c.of[1])}`;
+  }
 }

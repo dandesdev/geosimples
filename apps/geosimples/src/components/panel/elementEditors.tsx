@@ -18,6 +18,7 @@ import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
 import { Choice, ColorPicker, Field, NumberInput, RangeField, Section, SwitchField } from "./controls";
 import { pt } from "@/lib/format";
+import { describeConstruction } from "@/lib/names";
 import { FillEditor, LabelEditor, StrokeEditor } from "./styleEditors";
 
 export type Update<T> = (change: (el: T) => T, key: string) => void;
@@ -46,10 +47,22 @@ function Readout({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function PointEditor({ el, update, multi }: EditorProps<Point>) {
+export function PointEditor({ el, update, multi, doc }: EditorProps<Point>) {
+  const decimals = useFigureStore((s) => s.settings.decimals);
   return (
     <div className="space-y-2">
-      {!multi && (
+      {!multi && el.construction && (
+        <Section title="Construção">
+          <p className="text-xs text-muted-foreground">
+            {describeConstruction(doc, el.construction)}. Acompanha esses objetos quando eles se movem.
+          </p>
+          <Readout label="Posição" value={`(${formatNumber(el.x, decimals)}; ${formatNumber(el.y, decimals)})`} />
+          <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => actions.freePoints([el.id])}>
+            Soltar ponto
+          </Button>
+        </Section>
+      )}
+      {!multi && !el.construction && (
         <Section title="Posição">
           <div className="grid grid-cols-2 gap-2">
             <NumberInput ariaLabel="Coordenada X" value={el.x} suffix="x" onChange={(x) => update((p) => ({ ...p, x }), "x")} />

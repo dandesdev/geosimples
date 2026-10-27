@@ -10,6 +10,7 @@ import type {
   FillPattern,
   Label,
   Point,
+  PointConstruction,
   Polygon,
   Segment,
   Stroke,
@@ -203,7 +204,72 @@ export function normalizeDoc(input: unknown): FigureDoc {
       }
     }
   }
-  return { kind: "geo", version: 1, elements: out };
+  return { kind: "geo", version: 1, elements: withPointConstructions(out, pointRaws) };
+}
+
+/**
+ * Adds back the constructions of constructed points once every element is
+ * known, since they can refer to segments and circles. A construction whose
+ * parents are missing is dropped and the point stays free where it is.
+ */
+function withPointConstructions(elements: Element[], pointRaws: Set<Raw>): Element[] {
+  const types = new Map(elements.map((e) => [e.id, e.type]));
+  const rawById = new Map([...pointRaws].map((r) => [r.id as string, r]));
+  return elements.map((el) => {
+    if (el.type !== "point") return el;
+    const construction = pointConstruction(rawById.get(el.id)?.construction, el.id, types);
+    return construction ? { ...el, construction } : el;
+  });
+}
+
+function pointConstruction(
+  x: unknown,
+  self: string,
+  types: Map<string, Element["type"]>,
+): PointConstruction | undefined {
+  if (!isObj(x)) return undefined;
+  const isPoint = (id: unknown): id is string => id !== self && types.get(id as string) === "point";
+  const isCurve = (id: unknown): id is string =>
+    id !== self && (types.get(id as string) === "segment" || types.get(id as string) === "circle");
+  const pair = (v: unknown): [string, string] | null =>
+    Array.isArray(v) && v.length === 2 && v.every(isPoint) ? [v[0], v[1]] : null;
+  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+  switch (x.kind) {
+    case "midpoint": {
+      const points = pair(x.points);
+      return points ? { kind: "midpoint", points } : undefined;
+    }
+    case "foot": {
+      const line = pair(x.line);
+      return line && isPoint(x.point) ? { kind: "foot", point: x.point, line } : undefined;
+    }
+    case "bisector": {
+      const angle = Array.isArray(x.angle) && x.angle.length === 3 && x.angle.every(isPoint) ? x.angle : null;
+      const line = x.line === null ? null : pair(x.line);
+      if (!angle || (x.line !== null && !line)) return undefined;
+      const length = coord(x.length);
+      return {
+        kind: "bisector",
+        angle: [angle[0], angle[1], angle[2]],
+        reflex: x.reflex === true,
+        line,
+        length: length !== null && length > 0 ? length : 1,
+      };
+    }
+    case "perpendicular": {
+      const points = pair(x.points);
+      if (!points || !finite(x.along) || !finite(x.across)) return undefined;
+      const along = num(x.along, -100, 100, 0.5);
+      const across = num(x.across, -100, 100, 0);
+      return { kind: "perpendicular", points, along, across };
+    }
+    case "intersection": {
+      const of = x.of;
+      if (!Array.isArray(of) || of.length !== 2 || !of.every(isCurve) || of[0] === of[1]) return undefined;
+      return { kind: "intersection", of: [of[0], of[1]], index: x.index === 1 ? 1 : 0 };
+    }
+  }
+  return undefined;
 }
 
 /** Upgrades older documents. Version 1 is the first, so this only normalizes. */

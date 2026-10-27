@@ -2,7 +2,9 @@ import { toast } from "sonner";
 import {
   autoLabel,
   connectPoints,
+  construct,
   deleteElements,
+  freePoints,
   makeAngles,
   makeCircle,
   fillShapes,
@@ -11,6 +13,7 @@ import {
   projectPoint,
   selectedOfType,
   type CircleMode,
+  type ConstructionKind,
   type FigureDoc,
   type Id,
   type LabelScheme,
@@ -46,6 +49,12 @@ export const actions = {
   polygon: () => perform((doc, sel) => fillShapes(doc, sel, opOptions()), "keep"),
 
   circle: (mode: CircleMode) => perform((doc, sel) => makeCircle(doc, sel, mode, opOptions())),
+
+  /** Midpoint, height, median, bisectors and intersections: see ConstructionKind. */
+  construct: (kind: ConstructionKind) => perform((doc, sel) => construct(doc, sel, kind, opOptions())),
+
+  /** Turns constructed points into free points that no longer follow their parents. */
+  freePoints: (ids: Id[]) => perform((doc) => freePoints(doc, ids), "keep"),
 
   deleteSelected: () => {
     const { selection } = useFigureStore.getState();
