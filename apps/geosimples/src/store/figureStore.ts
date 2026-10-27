@@ -15,6 +15,12 @@ export interface Settings {
   autoFit: boolean;
 }
 
+/** A figure an action would produce, and the elements it adds or changes. */
+export interface ActionPreview {
+  doc: FigureDoc;
+  ids: Id[];
+}
+
 /** What dragging in the preview does. Clicking an object always selects it. */
 export type CanvasMode = "select" | "pan" | "move";
 
@@ -40,6 +46,8 @@ interface FigureState {
   mode: CanvasMode;
   /** Text in the point input. The preview draws what it would create. */
   inputDraft: string;
+  /** What an action would produce, shown while its button is hovered. */
+  actionPreview: ActionPreview | null;
   settings: Settings;
 
   commit: (doc: FigureDoc, coalesceKey?: string) => void;
@@ -60,6 +68,7 @@ interface FigureState {
   clear: () => void;
   setMode: (mode: CanvasMode) => void;
   setInputDraft: (text: string) => void;
+  setActionPreview: (preview: ActionPreview | null) => void;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }
 
@@ -81,6 +90,7 @@ export const useFigureStore = create<FigureState>()(
       future: [],
       mode: "select",
       inputDraft: "",
+      actionPreview: null,
       settings: DEFAULT_SETTINGS,
 
       commit: (doc, coalesceKey) => {
@@ -162,6 +172,7 @@ export const useFigureStore = create<FigureState>()(
       },
       setMode: (mode) => set({ mode }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
+      setActionPreview: (actionPreview) => set({ actionPreview }),
       setSetting: (key, value) => set((s) => ({ settings: { ...s.settings, [key]: value } })),
     }),
     {
