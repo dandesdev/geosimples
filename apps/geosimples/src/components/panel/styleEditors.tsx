@@ -185,7 +185,7 @@ export function LabelEditor({
               placeholder={placeholder}
               aria-label="Texto do rótulo"
               onChange={(e) => set({ text: e.target.value }, "label-text")}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="h-8 w-full rounded-md border bg-background px-2 text-base outline-none sm:text-sm focus-visible:ring-2 focus-visible:ring-primary/50"
             />
           </Field>
           {suggestions.length > 0 && (

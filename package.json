@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run dev -w apps/geosimples",
     "build": "npm run build -w apps/geosimples",
-    "test": "npm test -w packages/core",
+    "test": "npm test -w packages/core -w apps/geosimples",
     "typecheck": "npm run typecheck -w packages/core",
     "lint": "eslint ."
   },

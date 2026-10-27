@@ -17,6 +17,7 @@ import {
   type ExportSettings,
 } from "@/lib/exporting";
 import { useFigureStore } from "@/store/figureStore";
+import { useCoarsePointer } from "@/lib/useMediaQuery";
 
 const FILE = "figura";
 
@@ -27,9 +28,20 @@ function sizeOf(svg: string) {
 }
 
 export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const coarse = useCoarsePointer();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">{open && <ExportBody />}</DialogContent>
+      <DialogContent
+        className="max-w-2xl"
+        // On touch screens focusing the scale field would open the keyboard over the dialog.
+        onOpenAutoFocus={(e) => {
+          if (!coarse) return;
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).focus();
+        }}
+      >
+        {open && <ExportBody />}
+      </DialogContent>
     </Dialog>
   );
 }

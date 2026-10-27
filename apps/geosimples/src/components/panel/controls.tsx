@@ -117,7 +117,7 @@ export function NumberInput({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
         className={cn(
-          "h-8 w-full min-w-0 rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50",
+          "h-8 w-full min-w-0 rounded-md border bg-background px-2 font-mono text-base outline-none sm:text-sm focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50",
           draft !== null && parseDecimal(draft) === null && "border-destructive",
         )}
       />
