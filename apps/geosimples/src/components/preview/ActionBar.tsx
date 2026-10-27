@@ -31,7 +31,8 @@ import {
   ConnectIcon,
   PolygonIcon,
 } from "@/components/icons";
-import { ExportDialog } from "@/components/dialogs/ExportDialog";
+import { LazyExportDialog } from "@/components/dialogs/lazy";
+import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { actions } from "@/lib/actions";
 import { previewProps, useAvailability, type Availability } from "@/lib/availability";
 import { useFigureStore } from "@/store/figureStore";
@@ -233,7 +234,9 @@ export function ActionBar() {
       <Divider />
       <ModeSwitch />
 
-      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <MountOnFirstOpen open={exportOpen}>
+        <LazyExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      </MountOnFirstOpen>
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent>
           <AlertDialogHeader>

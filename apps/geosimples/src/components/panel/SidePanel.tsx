@@ -3,8 +3,8 @@ import { CircleHelp, Settings } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { IconButton } from "@/components/IconButton";
 import { Logo } from "@/components/icons";
-import { HelpDialog } from "@/components/dialogs/HelpDialog";
-import { SettingsDialog } from "@/components/dialogs/SettingsDialog";
+import { LazyHelpDialog, LazySettingsDialog } from "@/components/dialogs/lazy";
+import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { useCommand } from "@/lib/commands";
 import { usePrefsStore } from "@/store/prefsStore";
 import { Customization } from "./Customization";
@@ -54,8 +54,12 @@ export function SidePanel() {
           </AccordionItem>
         </Accordion>
       </div>
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <MountOnFirstOpen open={helpOpen}>
+        <LazyHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      </MountOnFirstOpen>
+      <MountOnFirstOpen open={settingsOpen}>
+        <LazySettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      </MountOnFirstOpen>
     </aside>
   );
 }

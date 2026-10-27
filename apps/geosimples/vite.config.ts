@@ -17,4 +17,15 @@ export default defineConfig({
       "@": resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // React rarely changes between deploys, so browsers keep it cached while the app chunk updates.
+        manualChunks(id) {
+          // Rollup ids use forward slashes on every platform.
+          if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return "react";
+        },
+      },
+    },
+  },
 });
