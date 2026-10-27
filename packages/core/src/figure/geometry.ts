@@ -1,4 +1,4 @@
-import type { Angle, Circle, Element, FigureDoc, Id, Point, Segment } from "./types";
+import type { Angle, Circle, Element, FigureDoc, Id, Point, PointConstruction, Segment } from "./types";
 import {
   add,
   cross,
@@ -6,6 +6,7 @@ import {
   dot,
   heading,
   len,
+  lerp,
   mid,
   normDeg,
   perp,
@@ -238,32 +239,57 @@ export function loopFromSegments(
   return { vertices };
 }
 
-/** Rebuilds circles from their construction after points move. */
+/** Passes over the figure before giving up on settling chained constructions. */
+const MAX_RESOLVE_PASSES = 16;
+
+/**
+ * Rebuilds constructed circles and points after points move. Constructions
+ * can build on each other in any order, so this repeats until nothing moves.
+ */
 export function resolveConstructions(doc: FigureDoc): FigureDoc {
   let changed = false;
-  let pts = pointMap(doc);
   const elements = doc.elements.slice();
-  const segments = new Map(
-    doc.elements.filter((e): e is Segment => e.type === "segment").map((s) => [s.id, s]),
-  );
+  const pts = pointMap(doc);
+  const circles = new Map<Id, Circle>();
+  const segments = new Map<Id, Segment>();
+  for (const el of doc.elements) {
+    if (el.type === "circle") circles.set(el.id, el);
+    else if (el.type === "segment") segments.set(el.id, el);
+  }
+  const replacePoint = (p: Point) => {
+    const i = elements.findIndex((e) => e.id === p.id);
+    if (i >= 0) elements[i] = p;
+    pts.set(p.id, p);
+  };
 
-  for (let i = 0; i < elements.length; i++) {
-    const el = elements[i];
-    if (el.type !== "circle") continue;
-    const next = resolveCircle(el, pts, segments);
-    if (!next) continue;
-    if (next.circle !== el) {
-      elements[i] = next.circle;
-      changed = true;
-    }
-    if (next.center) {
-      const ci = elements.findIndex((e) => e.id === el.center);
-      if (ci >= 0) {
-        elements[ci] = next.center;
-        pts = new Map(pts).set(next.center.id, next.center);
-        changed = true;
+  for (let pass = 0; pass < MAX_RESOLVE_PASSES; pass++) {
+    let moved = false;
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i];
+      if (el.type === "circle") {
+        const next = resolveCircle(el, pts, segments);
+        if (!next) continue;
+        if (next.circle !== el) {
+          elements[i] = next.circle;
+          circles.set(el.id, next.circle);
+          moved = true;
+        }
+        if (next.center) {
+          replacePoint(next.center);
+          moved = true;
+        }
+      } else if (el.type === "point" && el.construction) {
+        const at = constructedPosition(el.construction, pts, segments, circles);
+        if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
+        if (Math.abs(at.x - el.x) < 1e-12 && Math.abs(at.y - el.y) < 1e-12) continue;
+        const next = { ...el, x: at.x, y: at.y };
+        elements[i] = next;
+        pts.set(el.id, next);
+        moved = true;
       }
     }
+    if (!moved) break;
+    changed = true;
   }
   return changed ? { ...doc, elements } : doc;
 }
@@ -302,4 +328,152 @@ function resolveCircle(
     circle: sameRadius ? circle : { ...circle, radius },
     center: movedCenter,
   };
+}
+
+/** Where the lines through ab and cd meet, with the parameters along each, or null if they are parallel. */
+export function lineIntersection(a: Vec, b: Vec, c: Vec, d: Vec): { point: Vec; t: number; u: number } | null {
+  const r = sub(b, a);
+  const s = sub(d, c);
+  const den = cross(r, s);
+  if (den === 0 || Math.abs(den) <= 1e-12 * len(r) * len(s)) return null;
+  const ac = sub(c, a);
+  const t = cross(ac, s) / den;
+  return { point: add(a, scale(r, t)), t, u: cross(ac, r) / den };
+}
+
+/** Parameters along ab, in increasing order, where the line through a and b meets a circle. */
+export function lineCircleParams(a: Vec, b: Vec, center: Vec, radius: number): number[] {
+  const d = sub(b, a);
+  const f = sub(a, center);
+  const qa = dot(d, d);
+  if (qa === 0) return [];
+  const qb = 2 * dot(f, d);
+  const qc = dot(f, f) - radius * radius;
+  const disc = qb * qb - 4 * qa * qc;
+  if (disc < 0) return [];
+  const root = Math.sqrt(disc);
+  return [(-qb - root) / (2 * qa), (-qb + root) / (2 * qa)];
+}
+
+/** Crossings of two circles: left of the c1 → c2 direction first. Null if they don't meet. */
+export function circleCircle(c1: Vec, r1: number, c2: Vec, r2: number): [Vec, Vec] | null {
+  const d = dist(c1, c2);
+  if (d === 0 || d > r1 + r2 + 1e-12 || d < Math.abs(r1 - r2) - 1e-12) return null;
+  const along = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, r1 * r1 - along * along));
+  const u = unit(sub(c2, c1));
+  const base = add(c1, scale(u, along));
+  const n = perp(u);
+  return [add(base, scale(n, h)), add(base, scale(n, -h))];
+}
+
+/** True when p, a point of the circle, lies on its drawn arc. */
+export function onCircleArc(circle: Pick<Circle, "arc">, center: Vec, p: Vec): boolean {
+  if (!circle.arc) return true;
+  const sweep = normDeg(circle.arc.end - circle.arc.start) || 360;
+  return normDeg(heading(sub(p, center)) - circle.arc.start) <= sweep + 1e-9;
+}
+
+/** Unit direction of the bisector of the marked angle a → vertex → b, or null if an arm has no length. */
+export function bisectorDirection(a: Vec, vertex: Vec, b: Vec, reflex: boolean): Vec | null {
+  const arc = angleArc(a, vertex, b, reflex);
+  return arc ? polar(1, arc.start + arc.sweep / 2) : null;
+}
+
+/** A crossing of two segments or circles. `inside` is false when it falls on an extension or off an arc. */
+export interface Crossing {
+  point: Vec;
+  index: 0 | 1;
+  inside: boolean;
+}
+
+/** Crossings of two segments or circles, numbered as PointConstruction "intersection" numbers them. */
+export function crossings(first: Segment | Circle, second: Segment | Circle, pts: Map<Id, Point>): Crossing[] {
+  const eps = 1e-9;
+  const within = (t: number) => t >= -eps && t <= 1 + eps;
+  if (first.type === "segment" && second.type === "segment") {
+    const [a, b, c, d] = [first.a, first.b, second.a, second.b].map((id) => pts.get(id));
+    const hit = a && b && c && d ? lineIntersection(a, b, c, d) : null;
+    return hit ? [{ point: hit.point, index: 0, inside: within(hit.t) && within(hit.u) }] : [];
+  }
+  if (first.type === "circle" && second.type === "circle") {
+    const c1 = pts.get(first.center);
+    const c2 = pts.get(second.center);
+    const both = c1 && c2 ? circleCircle(c1, first.radius, c2, second.radius) : null;
+    if (!c1 || !c2 || !both) return [];
+    const hits = dist(both[0], both[1]) < eps ? [both[0]] : both;
+    return hits.map((point, i) => ({
+      point,
+      index: i as 0 | 1,
+      inside: onCircleArc(first, c1, point) && onCircleArc(second, c2, point),
+    }));
+  }
+  const seg = first.type === "segment" ? first : (second as Segment);
+  const circle = first.type === "circle" ? first : (second as Circle);
+  const a = pts.get(seg.a);
+  const b = pts.get(seg.b);
+  const center = pts.get(circle.center);
+  if (!a || !b || !center) return [];
+  const ts = lineCircleParams(a, b, center, circle.radius);
+  const unique = ts.length === 2 && Math.abs(ts[0] - ts[1]) < eps ? [ts[0]] : ts;
+  return unique.map((t, i) => {
+    const point = lerp(a, b, t);
+    return { point, index: i as 0 | 1, inside: within(t) && onCircleArc(circle, center, point) };
+  });
+}
+
+/** Where a constructed point goes now, or null to leave it where it is. */
+export function constructedPosition(
+  c: PointConstruction,
+  pts: Map<Id, Point>,
+  segments: Map<Id, Segment>,
+  circles: Map<Id, Circle>,
+): Vec | null {
+  switch (c.kind) {
+    case "midpoint": {
+      const [p, q] = c.points.map((id) => pts.get(id));
+      return p && q ? mid(p, q) : null;
+    }
+    case "foot": {
+      const p = pts.get(c.point);
+      const [a, b] = c.line.map((id) => pts.get(id));
+      if (!p || !a || !b || dist(a, b) === 0) return null;
+      return projectOntoLine(p, a, b);
+    }
+    case "bisector": {
+      const [a, v, b] = c.angle.map((id) => pts.get(id));
+      const dir = a && v && b ? bisectorDirection(a, v, b, c.reflex) : null;
+      if (!v || !dir) return null;
+      if (!c.line) return add(v, scale(dir, c.length));
+      const [p, q] = c.line.map((id) => pts.get(id));
+      const hit = p && q ? lineIntersection(v, add(v, dir), p, q) : null;
+      return hit && hit.t > 1e-9 ? hit.point : null;
+    }
+    case "perpendicular": {
+      const [p, q] = c.points.map((id) => pts.get(id));
+      if (!p || !q) return null;
+      return add(lerp(p, q, c.along), scale(perp(sub(q, p)), c.across));
+    }
+    case "intersection": {
+      const [first, second] = c.of.map((id) => segments.get(id) ?? circles.get(id));
+      if (!first || !second) return null;
+      const all = crossings(first, second, pts);
+      return (all.find((x) => x.index === c.index) ?? all[0])?.point ?? null;
+    }
+  }
+}
+
+/** Ids a point construction is built from. */
+export function constructionParents(c: PointConstruction): Id[] {
+  switch (c.kind) {
+    case "midpoint":
+    case "perpendicular":
+      return c.points;
+    case "foot":
+      return [c.point, ...c.line];
+    case "bisector":
+      return [...c.angle, ...(c.line ?? [])];
+    case "intersection":
+      return c.of;
+  }
 }

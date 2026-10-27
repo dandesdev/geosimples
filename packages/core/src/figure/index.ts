@@ -5,6 +5,7 @@ export * from "./geometry";
 export * from "./labels";
 export * from "./parse";
 export * from "./ops";
+export * from "./constructions";
 export * from "./render";
 export * from "./svg";
 export * from "./tikz";

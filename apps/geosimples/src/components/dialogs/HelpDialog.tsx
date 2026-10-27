@@ -41,7 +41,8 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </li>
           <li>
             <b>Construir.</b> Com pontos selecionados, use a barra acima da prévia: ligar pontos, marcar ângulo (A, B, C
-            marca o ângulo em B), polígono e circunferência.
+            marca o ângulo em B), polígono e circunferência. Em Construções ficam ponto médio, altura, mediana,
+            bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando você os move.
           </li>
           <li>
             <b>Ajustar.</b> Em Customização mude cor, traço, preenchimento, marcas e rótulos. Com vários objetos do mesmo
