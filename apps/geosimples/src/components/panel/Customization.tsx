@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { labelText, updateElements, type Element, type FigureDoc } from "@geosimples/core/figure";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { changeLabel, type LabelChange } from "@/lib/labels";
 import { TYPE_NAMES } from "@/lib/names";
@@ -66,27 +67,29 @@ export function Customization() {
         </span>
         {selected.length > 1 && (
           <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label="Objeto anterior"
-              className="rounded p-1 hover:bg-muted disabled:opacity-30"
+              className="h-6 w-6 disabled:opacity-30"
               disabled={i === 0}
               onClick={() => setIndex(i - 1)}
             >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
+              <ChevronLeft />
+            </Button>
             <span>
               {i + 1} de {selected.length}
             </span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label="Próximo objeto"
-              className="rounded p-1 hover:bg-muted disabled:opacity-30"
+              className="h-6 w-6 disabled:opacity-30"
               disabled={i === selected.length - 1}
               onClick={() => setIndex(i + 1)}
             >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              <ChevronRight />
+            </Button>
           </div>
         )}
       </div>

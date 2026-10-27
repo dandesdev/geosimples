@@ -5,6 +5,7 @@ import { FIGURE_FILE_EXTENSION, figureFileName, PT_PER_CM } from "@geosimples/co
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Choice, Field, NumberInput } from "@/components/panel/controls";
 import { ShareContent } from "@/components/figures/ShareFigure";
 import {
@@ -107,13 +108,13 @@ function ExportBody() {
         </TabsList>
 
         <TabsContent value="tikz" className="space-y-3">
-          <textarea
+          <Textarea
             readOnly
             value={tikz}
             aria-label="Código TikZ"
             rows={12}
             onFocus={(e) => e.currentTarget.select()}
-            className="w-full resize-y rounded-md border bg-muted/40 p-2 font-mono text-xs"
+            className="resize-y bg-muted/40 p-2 font-mono text-xs md:text-xs"
           />
           <p className="text-xs text-muted-foreground">
             Cole dentro do documento. O preâmbulo precisa das linhas indicadas no comentário do topo.

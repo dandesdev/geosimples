@@ -111,6 +111,28 @@ test("settings dialog opens from the button and the shortcut", async ({ page }) 
   await expect(dialog).toBeVisible();
 });
 
+test("settings: a changed default can be saved as a new profile, with help behind ?", async ({ page }) => {
+  await page.getByRole("button", { name: "Configurações" }).click();
+  const dialog = page.getByRole("dialog", { name: "Configurações" });
+  await dialog.getByRole("radio", { name: "Vazado" }).click();
+
+  // Escape closes the help popover first, and only then the dialog.
+  await dialog.getByRole("button", { name: "Sobre as alterações não salvas" }).click();
+  await expect(page.getByText("já valem para objetos novos")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("já valem para objetos novos")).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole("textbox", { name: "Nome da nova configuração" }).fill("Prova");
+  await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
+  const profile = dialog.getByRole("combobox", { name: "Configuração em uso" });
+  await expect(profile).toHaveText("Prova");
+
+  await profile.click();
+  await page.getByRole("option", { name: "Padrão" }).click();
+  await expect(profile).toHaveText("Padrão");
+});
+
 test("help dialog opens from the button and the shortcut", async ({ page }) => {
   await page.getByRole("button", { name: "Como usar", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Como usar o GeoSimples" });

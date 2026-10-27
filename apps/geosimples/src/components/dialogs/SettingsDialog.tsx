@@ -2,9 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Pencil, Plus, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { PointShape } from "@geosimples/core/figure";
+import { HelpTip } from "@/components/HelpTip";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -42,9 +45,9 @@ const OWN_ESCAPE = "data-own-escape";
 export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* A fixed height keeps the dialog from resizing between tabs: the tab content scrolls instead. */}
+      {/* Fills the window, so the dialog never resizes between tabs: the tab content scrolls instead. */}
       <DialogContent
-        className="flex h-[min(85dvh,720px)] max-w-3xl flex-col gap-3 overflow-hidden"
+        className="flex h-[calc(100dvh-2rem)] max-h-none w-[calc(100vw-2rem)] max-w-none flex-col gap-3 overflow-hidden sm:h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)]"
         onEscapeKeyDown={(e) => {
           if (document.activeElement?.hasAttribute(OWN_ESCAPE)) e.preventDefault();
         }}
@@ -55,15 +58,26 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   );
 }
 
-/** Lays out one tab's controls; the tab scrolls inside the dialog. */
-function TabBody({ children }: { children: ReactNode }) {
-  return <div className="space-y-3 pb-1">{children}</div>;
+/**
+ * Lays out one tab's controls; the tab scrolls inside the dialog. Single-column
+ * tabs stay narrow, with room for longer labels than the side panel's.
+ */
+function TabBody({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
+  return <div className={cn("space-y-3 pb-1", narrow && "max-w-xl sm:[--field-label:14rem]")}>{children}</div>;
 }
 
-/** Tabs share the row and scroll sideways when the dialog is too narrow for their names. */
-const TAB = "flex-1 px-2.5 text-xs sm:text-sm";
+/** One group of style controls; the groups flow into as many columns as the window fits. */
+function Card({ children }: { children: ReactNode }) {
+  return <div className="mb-3 break-inside-avoid rounded-lg border p-3">{children}</div>;
+}
 
-const TAB_CONTENT = "mt-0 min-h-0 flex-1 overflow-y-auto pr-1 pt-3";
+/** A row of tabs on narrow windows, a side column from md up. */
+const TAB_LIST =
+  "w-full shrink-0 justify-start overflow-x-auto md:h-auto md:w-44 md:self-start md:flex-col md:items-stretch md:gap-1 md:overflow-visible";
+
+const TAB = "flex-1 px-2.5 text-xs sm:text-sm md:flex-none md:justify-start md:py-1.5";
+
+const TAB_CONTENT = "mt-0 min-h-0 flex-1 overflow-y-auto pr-1 pt-3 md:pt-0";
 
 function SettingsBody() {
   const updatePrefs = usePrefsStore((s) => s.updatePrefs);
@@ -85,18 +99,24 @@ function SettingsBody() {
 
   return (
     <>
-      <DialogHeader className="space-y-2">
-        <DialogTitle>Configurações</DialogTitle>
-        <ProfileBar />
-        <DialogDescription className="sr-only text-xs sm:not-sr-only">
-          Padrões para objetos novos, comportamento e atalhos, salvos neste computador. Figuras já feitas não mudam.
-        </DialogDescription>
+      {/* The right padding keeps the profile controls clear of the close button. */}
+      <DialogHeader className="flex-col gap-2 space-y-0 pr-8 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-1">
+          <DialogTitle>Configurações</DialogTitle>
+          <HelpTip label="Sobre as configurações">
+            Padrões para objetos novos, comportamento e atalhos, salvos neste computador. Figuras já feitas não mudam.
+          </HelpTip>
+        </div>
+        <DialogDescription className="sr-only">Padrões para objetos novos, comportamento e atalhos.</DialogDescription>
+        <div className="sm:ml-auto sm:w-96">
+          <ProfileBar />
+        </div>
       </DialogHeader>
 
       {draftActive && <DraftBar />}
 
-      <Tabs defaultValue="styles" className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="w-full shrink-0 justify-start overflow-x-auto">
+      <Tabs defaultValue="styles" className="flex min-h-0 flex-1 flex-col md:flex-row md:gap-4">
+        <TabsList className={TAB_LIST}>
           <TabsTrigger value="styles" className={TAB}>
             Estilos
           </TabsTrigger>
@@ -113,9 +133,8 @@ function SettingsBody() {
 
         <TabsContent value="styles" className={TAB_CONTENT}>
           <TabBody>
-            <p className="text-xs text-muted-foreground">Como os objetos novos começam. Cada objeto pode ser mudado depois.</p>
-            <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
-              <div className="space-y-3">
+            <div className="columns-1 gap-3 lg:columns-2 2xl:columns-3">
+              <Card>
                 <Section title="Pontos">
                   <Choice<PointShape>
                     label="Destaque"
@@ -144,11 +163,15 @@ function SettingsBody() {
                     />
                   </Field>
                 </Section>
+              </Card>
+              <Card>
                 <StrokeEditor
                   title="Traços"
                   stroke={prefs.styles.stroke}
                   onChange={(stroke) => styles((s) => ({ ...s, stroke }))}
                 />
+              </Card>
+              <Card>
                 <Section title="Rótulos">
                   <Choice
                     label="Fonte"
@@ -185,16 +208,19 @@ function SettingsBody() {
                     onChange={(distance) => styles((s) => ({ ...s, label: { ...s.label, distance } }))}
                   />
                 </Section>
-              </div>
-              <div className="space-y-3">
+              </Card>
+              <Card>
                 <FillEditor
-                  switchLabel="Polígonos preenchidos"
+                  title="Preenchimento de polígonos"
+                  switchLabel="Preencher"
                   fill={prefs.styles.polygonFilled ? prefs.styles.fill : null}
                   defaultFill={prefs.styles.fill}
                   onChange={(fill) =>
                     styles((s) => (fill ? { ...s, fill, polygonFilled: true } : { ...s, polygonFilled: false }))
                   }
                 />
+              </Card>
+              <Card>
                 <Section title="Ângulos">
                   <RangeField
                     label="Raio"
@@ -221,30 +247,37 @@ function SettingsBody() {
                     onChange={(rightMark) => styles((s) => ({ ...s, angle: { ...s.angle, rightMark } }))}
                   />
                 </Section>
+              </Card>
+              <Card>
                 <FillEditor
-                  switchLabel="Ângulos preenchidos"
+                  title="Preenchimento de ângulos"
+                  switchLabel="Preencher"
                   fill={prefs.styles.angle.fill}
                   defaultFill={prefs.styles.fill}
                   onChange={(fill) => styles((s) => ({ ...s, angle: { ...s.angle, fill } }))}
                 />
+              </Card>
+              <Card>
                 <Section title="Circunferências">
                   <Field label="Raio inicial">
-                    <NumberInput
-                      ariaLabel="Raio inicial"
-                      value={prefs.styles.circleRadius}
-                      min={0.01}
-                      max={1e5}
-                      onChange={(circleRadius) => styles((s) => ({ ...s, circleRadius }))}
-                    />
+                    <div className="w-36">
+                      <NumberInput
+                        ariaLabel="Raio inicial"
+                        value={prefs.styles.circleRadius}
+                        min={0.01}
+                        max={1e5}
+                        onChange={(circleRadius) => styles((s) => ({ ...s, circleRadius }))}
+                      />
+                    </div>
                   </Field>
                 </Section>
-              </div>
+              </Card>
             </div>
           </TabBody>
         </TabsContent>
 
         <TabsContent value="behavior" className={TAB_CONTENT}>
-          <TabBody>
+          <TabBody narrow>
             <SwitchField
               label="Nomear pontos novos (A, B, C…)"
               checked={prefs.behavior.autoName}
@@ -279,7 +312,7 @@ function SettingsBody() {
         </TabsContent>
 
         <TabsContent value="export" className={TAB_CONTENT}>
-          <TabBody>
+          <TabBody narrow>
             <Field label="1 unidade =">
               <div className="w-36">
                 <NumberInput
@@ -315,7 +348,7 @@ function SettingsBody() {
         </TabsContent>
 
         <TabsContent value="shortcuts" className={TAB_CONTENT}>
-          <TabBody>
+          <TabBody narrow>
             <ShortcutsEditor
               shortcuts={prefs.shortcuts}
               onChange={(shortcuts) => update((p) => ({ ...p, shortcuts }))}
@@ -326,8 +359,6 @@ function SettingsBody() {
     </>
   );
 }
-
-const FIELD = "h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm text-foreground";
 
 /** Picks the profile in use, with compact new, rename and delete buttons. */
 function ProfileBar() {
@@ -351,7 +382,7 @@ function ProfileBar() {
   return (
     <div className="flex items-center gap-1">
       {renaming && active ? (
-        <input
+        <Input
           autoFocus
           aria-label="Nome da configuração"
           defaultValue={active.name}
@@ -369,24 +400,24 @@ function ProfileBar() {
               e.currentTarget.blur();
             }
           }}
-          className={FIELD}
+          className="min-w-0 flex-1"
         />
       ) : (
-        <select
-          aria-label="Configuração em uso"
-          value={activeId}
-          onChange={(e) => setActive(e.target.value)}
-          className={FIELD}
-        >
-          <option value={DEFAULT_PROFILE_ID}>{draft ? DRAFT_NAME : "Padrão"}</option>
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <Select value={activeId} onValueChange={setActive}>
+          <SelectTrigger aria-label="Configuração em uso" className="min-w-0 flex-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={DEFAULT_PROFILE_ID}>{draft ? DRAFT_NAME : "Padrão"}</SelectItem>
+            {profiles.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
-      <IconButton label="Nova configuração" hint="Cria uma cópia da configuração atual." onClick={newProfile}>
+      <IconButton label="Nova configuração" hint="Cópia da atual" onClick={newProfile}>
         <Plus />
       </IconButton>
       {active && (
@@ -456,24 +487,27 @@ function DraftBar() {
       }}
       className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 p-2"
     >
-      <p className="w-full px-1 text-xs text-muted-foreground">
-        Você alterou a Padrão. As mudanças já valem para objetos novos, mas a Padrão não muda: salve-as como uma nova
-        configuração ou descarte.
-      </p>
-      <input
+      <span className="flex items-center gap-0.5 pl-1 text-sm font-medium">
+        Alterações não salvas
+        <HelpTip label="Sobre as alterações não salvas">
+          As mudanças na Padrão já valem para objetos novos, mas a Padrão em si não muda. Salve-as como uma nova
+          configuração ou descarte.
+        </HelpTip>
+      </span>
+      <Input
         aria-label="Nome da nova configuração"
         value={name}
         maxLength={60}
         onChange={(e) => setName(e.target.value)}
-        className={cn(FIELD, "h-8 min-w-40")}
+        className="h-8 w-auto min-w-40 flex-1 bg-background sm:max-w-64"
       />
       <Button type="submit" size="sm">
         <Save />
-        Salvar como nova configuração
+        Salvar
       </Button>
       <Button type="button" size="sm" variant="ghost" onClick={discard}>
         <Undo2 />
-        Descartar alterações
+        Descartar
       </Button>
     </form>
   );
@@ -515,10 +549,10 @@ function ShortcutsEditor({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+      <div className="flex items-center justify-end gap-1">
+        <HelpTip label="Como mudar atalhos">
           Clique em + e pressione a combinação. Esc cancela. Arrastar com o botão do meio sempre move a vista.
-        </p>
+        </HelpTip>
         <Button size="sm" variant="outline" onClick={() => onChange(DEFAULT_SHORTCUTS)}>
           <RotateCcw />
           Restaurar padrões
@@ -551,6 +585,7 @@ function ShortcutsEditor({
                 size="sm"
                 variant={recording === id ? "default" : "ghost"}
                 className="h-7 px-2 text-xs"
+                aria-label={recording === id ? undefined : `Adicionar atalho: ${ACTION_LABELS[id]}`}
                 onClick={() => setRecording(recording === id ? null : id)}
               >
                 {recording === id ? "Pressione…" : <Plus />}
