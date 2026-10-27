@@ -2,34 +2,29 @@
 
 ## Project Overview
 
-GeoSimples is a professional geometry editor for educational editorial workflows. It enables editors to create standardized geometric figures for print and digital math evaluations.
+GeoSimples makes standard geometry figures for teaching material (tests, worksheets, books) and exports them as TikZ for LaTeX, PNG and SVG. The main user is a Brazilian teacher, so the whole interface is in Brazilian Portuguese.
 
-**Core User**: Educational editor who needs precise, exportable geometric figures.
-
-**Key Features**:
-
-- Create points, line segments, angle arcs, polygons, and circles
-- Stylize elements (width, color, markings, labels)
-- Geometric constructions (midpoint, perpendicular, intersection, etc.)
-- Export to SVG, PNG, and TikZ (LaTeX)
-- Local state persistence across sessions
-- Minimal, accessible UI with dark/light themes
+**Main flow**: type points in the input bar (`A=0;0 B=4;0 +3:90`), select them in the preview, build with the action bar (connect, angle, polygon, circle), style in the side panel, export.
 
 ## Architecture
 
-- **Framework**: React 19 + TypeScript + React Compiler
-- **Styling**: Tailwind CSS v4 with semantic color system
-- **State Management**: Zustand (history, selection, preferences, theme)
-- **Rendering**: SVG for geometry (grouped for transforms) + Canvas for paper texture background
-- **Components**: shadcn/ui (Button, Toggle, Tabs, DropdownMenu, Switch, Tooltip, Sonner, Input, Slider)
+- **Layout**: kept from v1 (tikzgenerator), Adobe-like: a large preview with the action bar on top and zoom on its edge, the point input below it, and a side panel with Customização and Ferramentas accordions.
+- **Figure model**: `FigureDoc` v1 in `packages/core/src/figure/types.ts`. World units are cm at scale 1, Y up. Visual sizes (stroke, point, angle radius, labels) are in pt. Styles are stored in full on each element, so saved figures never change look.
+- **One renderer**: `buildScene` (core) lays the figure out in pt. The preview injects the same markup that `toSvg` writes, so the preview is the export. `toTikz` writes TikZ from the doc with the same geometry helpers.
+- **Editing operations** are pure functions in `packages/core/src/figure/ops.ts` and return `{ doc, created, error }`. The app wraps them in `src/lib/actions.ts` and shows errors as toasts.
+- **Store**: `apps/geosimples/src/store/figureStore.ts` (Zustand, persisted). Undo history starts from the loaded doc. Edits with the same key within 1 s merge into one undo step, and a drag is one step.
+- **Stack**: React 19 + TypeScript + React Compiler, Tailwind CSS v4, shadcn/ui (Radix), Zustand, sonner.
 
 ## Repository Layout
 
 npm workspaces monorepo. The services plan is in `.ai/SERVICES.md`.
 
 - `apps/geosimples`: the Vite + React editor
-- `packages/core` (`@geosimples/core`): framework-free figure model and geometry. Subpath `@geosimples/core/geo` holds element types, default styles, solvers and validations
+- `packages/core` (`@geosimples/core`): framework-free figure model and geometry
+  - `@geosimples/core/figure`: FigureDoc, ops, parser, labels, scene, SVG and TikZ export (used by the editor)
+  - `@geosimples/core/geo`: older solvers from the canvas-tool editor, kept for later constructions
 - Root scripts: `npm run build`, `npm test` (vitest for core), `npm run typecheck`, `npm run lint`
+- Deploy: Vercel, configured in `vercel.json`
 
 Rules for `packages/core`: no React, no DOM, relative imports only (no `@/`). Its tsconfig has no DOM lib, so browser globals are a type error there.
 
@@ -68,15 +63,9 @@ You are an expert frontend developer and UX specialist with deep knowledge of pr
    - Group elements with `<g>` for zoom/rotate transforms
    - Keep Canvas only for static paper texture
 
-6. **SVG Color Constraint** ⚠️
-   - CSS variables (`var(--color-primary)`) **cannot** be used directly in SVG `fill` or `stroke` attributes
-   - Use the `useCssVar` or `useCssVars` hooks from `@/hooks/useCssVar` to convert CSS variables to hex values
-   - Example:
-     ```tsx
-     const primaryColor = useCssVar("--color-primary", "#10b981");
-     return <circle stroke={primaryColor} />;
-     ```
-   - The utility `getCssVarAsHex()` from `@/utils/colors` can be used outside React components
+6. **Print first**
+   - The preview is white paper in every theme. Figure colors are stored as hex or `"ink"` (black in print).
+   - Sizes that should keep their printed size (strokes, marks, labels) are pt, never world units.
 
 ## Color System
 
@@ -102,23 +91,17 @@ Usage: `text-primary/50`, `bg-primary`, `border-destructive`
 
 ## File Conventions
 
-1. **Components**: React functional components with TypeScript interfaces
-2. **Hooks**: `use*` prefix for custom hooks (useCanvas, useExport, useKeyboard)
-3. **Store**: Zustand store in `apps/geosimples/src/store/useEditorStore.ts`
-4. **Types**: element and style types in `packages/core/src/geo/types.ts`; editor state types (tools, selection, preferences) in `apps/geosimples/src/geometry/types.ts`
-5. **Styles**: No inline styles; use Tailwind classes + semantic colors
+1. **Components**: React function components with TypeScript props
+2. **Store**: `apps/geosimples/src/store/figureStore.ts`
+3. **Types**: figure types in `packages/core/src/figure/types.ts`
+4. **Styles**: Tailwind classes and semantic colors. Inline styles only for values that come from data (like color swatches)
+5. **Text**: user-facing text in Brazilian Portuguese, code and comments in English
 
 ## Workflow
 
-When implementing features:
-
-1. **Start with types**: Define the data structures first
-2. **Build the store**: Zustand state with history support
-3. **Create geometry primitives**: Point, Line, Circle, Arc, Polygon
-4. **Implement rendering**: SVG components with proper event handlers
-5. **Add interactions**: Click, drag, hover handlers via hooks
-6. **Style progressively**: Tailwind classes, refine in place
-7. **Test accessibility**: Keyboard nav, focus states, ARIA
+1. Geometry and figure changes go in `packages/core/src/figure` with tests in `figure.test.ts`
+2. The editor only calls core through ops, the scene and the exporters
+3. Check with `npm test`, `npm run typecheck`, `npm run lint` and `npm run build`
 
 ## Agent Files
 

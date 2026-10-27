@@ -21,6 +21,11 @@ export default defineConfig([
     },
   },
   {
+    // Generated shadcn components export their variant helpers next to the component.
+    files: ['apps/*/src/components/ui/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
     // Core is framework-free and must not rely on browser globals.
     files: ['packages/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
