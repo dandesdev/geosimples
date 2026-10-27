@@ -20,6 +20,7 @@ import { SelectionSummary } from "./SelectionSummary";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
 import { parseDraft } from "@/lib/inputContext";
+import { useCommand } from "@/lib/commands";
 
 const PRIMARY = "#10b981";
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
@@ -130,6 +131,9 @@ export function PreviewPanel() {
   const zoomBy = (factor: number) => {
     placeCamera(zoomView(vb, factor, { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 }));
   };
+  useCommand("zoomIn", () => zoomBy(1 / 1.25));
+  useCommand("zoomOut", () => zoomBy(1.25));
+  useCommand("toggleAutoFit", toggleAutoFit);
 
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;

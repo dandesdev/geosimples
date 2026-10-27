@@ -22,14 +22,15 @@ export function ZoomBar({
       aria-orientation="vertical"
       className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
     >
-      <IconButton label="Aproximar" hint="Ou use a roda do mouse." onClick={onZoomIn}>
+      <IconButton label="Aproximar" hint="Ou use a roda do mouse." shortcut="zoomIn" onClick={onZoomIn}>
         <ZoomIn />
       </IconButton>
-      <IconButton label="Afastar" onClick={onZoomOut}>
+      <IconButton label="Afastar" shortcut="zoomOut" onClick={onZoomOut}>
         <ZoomOut />
       </IconButton>
       <IconButton
         label="Enquadrar automaticamente"
+        shortcut="toggleAutoFit"
         hint={
           autoFit
             ? "Ligado: a vista acompanha a figura inteira, com rótulos e marcas. Aproximar ou arrastar a vista desliga."
@@ -43,6 +44,7 @@ export function ZoomBar({
       <IconButton
         label={showGrid ? "Esconder grade" : "Mostrar grade"}
         hint="Grade de 1 em 1 unidade. Não aparece na exportação."
+        shortcut="toggleGrid"
         active={showGrid}
         onClick={() => setSetting("showGrid", !showGrid)}
       >

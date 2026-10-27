@@ -17,6 +17,7 @@ import type {
   Fill,
   FillPattern,
   Id,
+  LabelFont,
   Point,
   Stroke,
 } from "./types";
@@ -59,6 +60,7 @@ export type Prim =
       size: number;
       color: string;
       italic: boolean;
+      font: LabelFont;
     };
 
 /** Shapes the editor uses to pick elements with the mouse. */
@@ -365,6 +367,7 @@ function addLabel(
     size,
     color: resolveColor(color),
     italic: isMathLabel(text),
+    font: el.label.font,
   });
   const w = estimateTextWidth(text, size) / 2;
   box.add(at.x - w, at.y - size * 0.6);

@@ -1,12 +1,4 @@
-import {
-  DEFAULT_ANGLE,
-  DEFAULT_CIRCLE_RADIUS,
-  DEFAULT_FILL,
-  DEFAULT_LABEL,
-  DEFAULT_POINT,
-  DEFAULT_STROKE,
-  LIMITS,
-} from "./defaults";
+import { DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
 import {
   angleArc,
   circumcircle,
@@ -17,7 +9,7 @@ import {
   resolveConstructions,
   signedArea2,
 } from "./geometry";
-import { labelFor, type LabelScheme, withText } from "./labels";
+import { labelFor, type LabelScheme, nextPointNames, withText } from "./labels";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Angle,
@@ -48,6 +40,35 @@ const ok = (doc: FigureDoc, created: Id[] = [], notice?: string): OpResult => ({
   notice,
 });
 const fail = (doc: FigureDoc, error: string): OpResult => ({ doc, created: [], error });
+
+/** Settings shared by the operations that create elements. */
+export interface OpOptions {
+  /** Look of new elements. Default: DEFAULT_STYLES. */
+  styles?: StyleDefaults;
+  /** Name new unnamed points A, B, C… */
+  autoName?: boolean;
+}
+
+const stylesOf = (opts: OpOptions) => opts.styles ?? DEFAULT_STYLES;
+
+/** Builds new points, naming the unnamed ones when autoName is on. */
+function buildPoints(doc: FigureDoc, specs: ParsedPoint[], opts: OpOptions, nextId: (t: ElementType) => Id): Point[] {
+  const styles = stylesOf(opts);
+  const given = specs.flatMap((p) => (p.label ? [p.label] : []));
+  const names = opts.autoName ? nextPointNames(doc, specs.length - given.length, given) : [];
+  let n = 0;
+  return specs.map((p) => {
+    const name = p.label ?? (opts.autoName ? names[n++] : undefined);
+    return {
+      id: nextId("point"),
+      type: "point",
+      x: p.x,
+      y: p.y,
+      ...styles.point,
+      ...(name ? { label: withText(undefined, name.slice(0, LIMITS.labelLength), styles.label) } : {}),
+    };
+  });
+}
 
 const PREFIX: Record<ElementType, string> = {
   point: "p",
@@ -92,18 +113,10 @@ export function selectedOfType<T extends ElementType>(
     .filter((e): e is Extract<Element, { type: T }> => e?.type === type);
 }
 
-export function addPoints(doc: FigureDoc, parsed: ParsedPoint[]): OpResult {
+export function addPoints(doc: FigureDoc, parsed: ParsedPoint[], opts: OpOptions = {}): OpResult {
   if (parsed.length === 0) return ok(doc);
   if (!roomFor(doc, parsed.length)) return fail(doc, LIMIT_ERROR);
-  const nextId = idMaker(doc);
-  const points: Point[] = parsed.map((p) => ({
-    id: nextId("point"),
-    type: "point",
-    x: p.x,
-    y: p.y,
-    ...DEFAULT_POINT,
-    ...(p.label ? { label: withText(undefined, p.label.slice(0, LIMITS.labelLength)) } : {}),
-  }));
+  const points = buildPoints(doc, parsed, opts, idMaker(doc));
   return ok(withElements(doc, [...doc.elements, ...points]), points.map((p) => p.id));
 }
 
@@ -112,38 +125,23 @@ export function addPoints(doc: FigureDoc, parsed: ParsedPoint[]): OpResult {
  * chains in one step. `created` lists the points the input used, in order,
  * so they can be selected for the next action.
  */
-export function applyInput(doc: FigureDoc, parsed: ParsedInput): OpResult {
+export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions = {}): OpResult {
   if (parsed.errors.length > 0) return fail(doc, parsed.errors[0].message);
   if (parsed.nodes.length === 0) return ok(doc);
   const fresh = parsed.nodes.filter((n) => n.kind === "new");
   if (!roomFor(doc, fresh.length + parsed.segments.length)) return fail(doc, LIMIT_ERROR);
 
   const nextId = idMaker(doc);
-  const ids: Id[] = [];
-  const points: Point[] = [];
-  for (const n of parsed.nodes) {
-    if (n.kind === "existing") {
-      ids.push(n.id);
-      continue;
-    }
-    const point: Point = {
-      id: nextId("point"),
-      type: "point",
-      x: n.x,
-      y: n.y,
-      ...DEFAULT_POINT,
-      ...(n.label ? { label: withText(undefined, n.label.slice(0, LIMITS.labelLength)) } : {}),
-    };
-    points.push(point);
-    ids.push(point.id);
-  }
+  const points = buildPoints(doc, fresh, opts, nextId);
+  let k = 0;
+  const ids: Id[] = parsed.nodes.map((n) => (n.kind === "existing" ? n.id : points[k++].id));
 
   let working = withElements(doc, [...doc.elements, ...points]);
   for (const [p, q] of parsed.segments) {
     const a = ids[p];
     const b = ids[q];
     if (a === b || segmentExists(working, a, b)) continue;
-    working = withElements(working, [...working.elements, newSegment(nextId("segment"), a, b)]);
+    working = withElements(working, [...working.elements, newSegment(nextId("segment"), a, b, opts)]);
   }
   return ok(working, [...new Set(ids)]);
 }
@@ -154,12 +152,12 @@ function segmentExists(doc: FigureDoc, a: Id, b: Id): boolean {
   );
 }
 
-function newSegment(id: Id, a: Id, b: Id): Segment {
-  return { id, type: "segment", a, b, stroke: { ...DEFAULT_STROKE }, ticks: 0 };
+function newSegment(id: Id, a: Id, b: Id, opts: OpOptions): Segment {
+  return { id, type: "segment", a, b, stroke: { ...stylesOf(opts).stroke }, ticks: 0 };
 }
 
 /** Joins the selected points in order. `closed` also joins the last to the first. */
-export function connectPoints(doc: FigureDoc, pointIds: Id[], closed: boolean): OpResult {
+export function connectPoints(doc: FigureDoc, pointIds: Id[], closed: boolean, opts: OpOptions = {}): OpResult {
   const pts = pointMap(doc);
   const ids = pointIds.filter((id) => pts.has(id));
   if (ids.length < 2) return fail(doc, "Selecione ao menos dois pontos para ligar.");
@@ -174,7 +172,7 @@ export function connectPoints(doc: FigureDoc, pointIds: Id[], closed: boolean): 
   for (const [a, b] of pairs) {
     if (a === b || segmentExists(working, a, b)) continue;
     if (dist(pts.get(a)!, pts.get(b)!) === 0) continue;
-    const s = newSegment(nextId("segment"), a, b);
+    const s = newSegment(nextId("segment"), a, b, opts);
     created.push(s);
     working = withElements(working, [...working.elements, s]);
   }
@@ -192,16 +190,21 @@ function angleExists(doc: FigureDoc, a: Id, vertex: Id, b: Id): boolean {
   );
 }
 
-function newAngle(id: Id, a: Id, vertex: Id, b: Id, reflex = false): Angle {
+function newAngle(id: Id, a: Id, vertex: Id, b: Id, reflex: boolean, opts: OpOptions): Angle {
+  const styles = stylesOf(opts);
   return {
     id,
     type: "angle",
     a,
     vertex,
     b,
-    ...DEFAULT_ANGLE,
     reflex,
-    stroke: { ...DEFAULT_STROKE },
+    radius: styles.angle.radius,
+    arcs: styles.angle.arcs,
+    ticks: 0,
+    rightMark: styles.angle.rightMark,
+    stroke: { ...styles.stroke },
+    fill: styles.angle.fill ? { ...styles.angle.fill } : null,
   };
 }
 
@@ -209,7 +212,7 @@ function newAngle(id: Id, a: Id, vertex: Id, b: Id, reflex = false): Angle {
  * Marks the angle at every middle point of the selection: with A, B, C
  * selected it marks ∠ABC. A selected polygon gets all its interior angles.
  */
-export function makeAngles(doc: FigureDoc, selection: Id[]): OpResult {
+export function makeAngles(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
   const pts = pointMap(doc);
   const triples: [Id, Id, Id, boolean][] = [];
 
@@ -250,7 +253,7 @@ export function makeAngles(doc: FigureDoc, selection: Id[]): OpResult {
       degenerate++;
       continue;
     }
-    const angle = newAngle(nextId("angle"), a, v, b, reflex);
+    const angle = newAngle(nextId("angle"), a, v, b, reflex, opts);
     created.push(angle);
     working = withElements(working, [...working.elements, angle]);
   }
@@ -268,7 +271,7 @@ export function makeAngles(doc: FigureDoc, selection: Id[]): OpResult {
  * Creates a polygon from the selected points (joining them in order, closing
  * the contour) or from selected segments that form a closed loop.
  */
-export function makePolygon(doc: FigureDoc, selection: Id[]): OpResult {
+export function makePolygon(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
   const pts = pointMap(doc);
   const points = selectedOfType(doc, selection, "point");
   const segments = selectedOfType(doc, selection, "segment");
@@ -279,7 +282,7 @@ export function makePolygon(doc: FigureDoc, selection: Id[]): OpResult {
 
   if (points.length >= 3) {
     vertices = points.map((p) => p.id);
-    const joined = connectPoints(doc, vertices, true);
+    const joined = connectPoints(doc, vertices, true, opts);
     if (!joined.error) {
       working = joined.doc;
       created.push(...joined.created);
@@ -306,7 +309,7 @@ export function makePolygon(doc: FigureDoc, selection: Id[]): OpResult {
     type: "polygon",
     vertices,
     stroke: null,
-    fill: { ...DEFAULT_FILL },
+    fill: stylesOf(opts).polygonFilled ? { ...stylesOf(opts).fill } : null,
   };
   if (!roomFor(working, 1)) return fail(doc, LIMIT_ERROR);
   // The polygon goes first so its fill sits under the segments.
@@ -315,7 +318,8 @@ export function makePolygon(doc: FigureDoc, selection: Id[]): OpResult {
 
 export type CircleMode = "radius" | "through" | "tangent" | "circumcircle";
 
-export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode): OpResult {
+export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode, opts: OpOptions = {}): OpResult {
+  const styles = stylesOf(opts);
   const pts = pointMap(doc);
   const points = selectedOfType(doc, selection, "point");
   const segments = selectedOfType(doc, selection, "segment");
@@ -330,7 +334,7 @@ export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode): O
     case "radius":
       if (points.length < 1) return fail(doc, "Selecione o ponto que será o centro.");
       center = points[0];
-      radius = DEFAULT_CIRCLE_RADIUS;
+      radius = styles.circleRadius;
       construction = { kind: "free" };
       break;
     case "through":
@@ -354,13 +358,7 @@ export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode): O
       const [p, q, r] = points;
       const solved = circumcircle(p, q, r);
       if (!solved) return fail(doc, "Os três pontos estão alinhados, não há circunferência que passe por eles.");
-      center = {
-        id: nextId("point"),
-        type: "point",
-        x: solved.center.x,
-        y: solved.center.y,
-        ...DEFAULT_POINT,
-      };
+      center = buildPoints(doc, [{ x: solved.center.x, y: solved.center.y }], opts, nextId)[0];
       extra.push(center);
       radius = solved.radius;
       construction = { kind: "circumcircle", points: [p.id, q.id, r.id] };
@@ -378,7 +376,7 @@ export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode): O
     construction,
     arc: null,
     radii: false,
-    stroke: { ...DEFAULT_STROKE },
+    stroke: { ...styles.stroke },
     fill: null,
   };
   return ok(withElements(doc, [circle, ...doc.elements, ...extra]), [circle.id, ...extra.map((e) => e.id)]);
@@ -462,6 +460,7 @@ export function pointOnSegment(
   segmentId: Id,
   at: { ratio: number } | { distance: number },
   fromEnd: "a" | "b" = "a",
+  opts: OpOptions = {},
 ): OpResult {
   const seg = doc.elements.find((e): e is Segment => e.id === segmentId && e.type === "segment");
   const pts = pointMap(doc);
@@ -472,14 +471,14 @@ export function pointOnSegment(
   const t = "ratio" in at ? at.ratio : length === 0 ? 0 : at.distance / length;
   if (!(t >= 0 && t <= 1)) return fail(doc, "O ponto ficaria fora do segmento.");
   const p = lerp(a, b, t);
-  return addPoints(doc, [{ x: p.x, y: p.y }]);
+  return addPoints(doc, [{ x: p.x, y: p.y }], opts);
 }
 
 /**
  * Projects the first point onto the line through the other two. With
  * `withHeight`, also draws the perpendicular and marks the right angle.
  */
-export function projectPoint(doc: FigureDoc, pointIds: Id[], withHeight: boolean): OpResult {
+export function projectPoint(doc: FigureDoc, pointIds: Id[], withHeight: boolean, opts: OpOptions = {}): OpResult {
   const pts = pointMap(doc);
   const [p, a, b] = pointIds.map((id) => pts.get(id));
   if (!p || !a || !b) return fail(doc, "Selecione o ponto a projetar e depois dois pontos da reta.");
@@ -487,15 +486,15 @@ export function projectPoint(doc: FigureDoc, pointIds: Id[], withHeight: boolean
   const foot = projectOntoLine(p, a, b);
   if (dist(foot, p) < 1e-9) return fail(doc, "O ponto já está sobre a reta.");
 
-  const added = addPoints(doc, [{ x: foot.x, y: foot.y }]);
+  const added = addPoints(doc, [{ x: foot.x, y: foot.y }], opts);
   if (added.error || !withHeight) return added;
   const footId = added.created[0];
-  const joined = connectPoints(added.doc, [p.id, footId], false);
+  const joined = connectPoints(added.doc, [p.id, footId], false, opts);
   let working = joined.error ? added.doc : joined.doc;
   // The right angle needs an arm that isn't the foot itself.
   const arm = dist(foot, b) > 1e-9 ? b : a;
   const nextId = idMaker(working);
-  const angle = newAngle(nextId("angle"), p.id, footId, arm.id);
+  const angle = newAngle(nextId("angle"), p.id, footId, arm.id, false, opts);
   working = withElements(working, [...working.elements, angle]);
   return ok(working, [footId, ...joined.created, angle.id]);
 }
@@ -509,6 +508,7 @@ export function autoLabel(
   scheme: LabelScheme,
   onlyIds: Id[] | null,
   decimals = 2,
+  opts: OpOptions = {},
 ): OpResult {
   const only = onlyIds ? new Set(onlyIds) : null;
   const targets = doc.elements.filter((e) => e.type === type && (!only || only.has(e.id)));
@@ -520,12 +520,12 @@ export function autoLabel(
   });
   const elements = doc.elements.map((el) => {
     const text = texts.get(el.id);
-    return text === undefined ? el : ({ ...el, label: withText(el.label, text) } as Element);
+    return text === undefined ? el : ({ ...el, label: withText(el.label, text, stylesOf(opts).label) } as Element);
   });
   return ok(withElements(doc, elements));
 }
 
-export function setLabelText(doc: FigureDoc, id: Id, text: string): FigureDoc {
+export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
@@ -533,6 +533,33 @@ export function setLabelText(doc: FigureDoc, id: Id, text: string): FigureDoc {
       delete next.label;
       return next;
     }
-    return { ...el, label: { ...(el.label ?? DEFAULT_LABEL), text: trimmed } } as Element;
+    return { ...el, label: withText(el.label, trimmed, stylesOf(opts).label) } as Element;
   });
+}
+
+/**
+ * The Polígono action: fills the selected circles and polygons that have no
+ * fill, and makes a polygon from selected points or a closed loop of segments.
+ */
+export function fillShapes(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
+  const styles = stylesOf(opts);
+  const shapes = [...selectedOfType(doc, selection, "circle"), ...selectedOfType(doc, selection, "polygon")];
+  const unfilled = shapes.filter((e) => e.fill === null).map((e) => e.id);
+  const wantsPolygon =
+    selectedOfType(doc, selection, "point").length >= 3 || selectedOfType(doc, selection, "segment").length >= 3;
+
+  let working = updateElements(doc, unfilled, (el) =>
+    el.type === "circle" || el.type === "polygon" ? { ...el, fill: { ...styles.fill } } : el,
+  );
+  const created: Id[] = [];
+  if (wantsPolygon || shapes.length === 0) {
+    const poly = makePolygon(working, selection, { ...opts, styles: { ...styles, polygonFilled: true } });
+    if (poly.error && unfilled.length === 0) return fail(doc, poly.error);
+    if (!poly.error) {
+      working = poly.doc;
+      created.push(...poly.created);
+    }
+  }
+  if (working === doc) return fail(doc, "As formas selecionadas já estão preenchidas.");
+  return ok(working, created);
 }

@@ -4,8 +4,10 @@ import type { FigureDoc } from "./types";
 /** Pattern spacing and mark sizes in pt, shared with the TikZ export. */
 export const PATTERN = { distance: 4, lineWidth: 0.4, dotRadius: 0.6 } as const;
 
-export const LABEL_FONT =
-  "'Latin Modern Roman', 'CMU Serif', 'Times New Roman', Times, serif";
+export const LABEL_FONTS = {
+  serif: "'Latin Modern Roman', 'CMU Serif', 'Times New Roman', Times, serif",
+  sans: "'Latin Modern Sans', 'CMU Sans Serif', Helvetica, Arial, sans-serif",
+} as const;
 
 const f = (n: number) => {
   const r = Math.round(n * 1000) / 1000;
@@ -46,7 +48,7 @@ function primMarkup(p: Prim): string {
   if (p.kind === "text") {
     // A baseline offset instead of dominant-baseline, which some editors ignore.
     const y = p.y + p.size * 0.35;
-    const style = p.italic ? ' font-style="italic"' : "";
+    const style = `${p.italic ? ' font-style="italic"' : ""} font-family="${escapeXml(LABEL_FONTS[p.font])}"`;
     return `<text x="${f(p.x)}" y="${f(y)}" font-size="${f(p.size)}" text-anchor="middle" fill="${p.color}"${style}>${escapeXml(p.text)}</text>`;
   }
   const attrs: string[] = [`d="${p.d}"`];
@@ -75,7 +77,7 @@ export function sceneMarkup(scene: Scene): string {
   }
   const defs = patterns.size ? `<defs>${[...patterns.values()].join("")}</defs>` : "";
   const body = scene.prims.map(primMarkup).join("");
-  return `${defs}<g font-family="${escapeXml(LABEL_FONT)}">${body}</g>`;
+  return `${defs}<g>${body}</g>`;
 }
 
 export interface SvgOptions {

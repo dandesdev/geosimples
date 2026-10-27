@@ -1,15 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { applyInput, makeAngles, makePolygon, parseInput } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
+import { opOptions } from "@/store/prefsStore";
 
 const EXAMPLE = "A=(0;0)--B=(4;0)--C=(0;3)--";
 
 function insertExample() {
   useFigureStore.getState().run((doc) => {
-    const added = applyInput(doc, parseInput(EXAMPLE));
+    const opts = opOptions();
+    const added = applyInput(doc, parseInput(EXAMPLE), opts);
     const [a, b, c] = added.created;
-    const poly = makePolygon(added.doc, [a, b, c]);
-    const right = makeAngles(poly.doc, [b, a, c]);
+    const poly = makePolygon(added.doc, [a, b, c], { ...opts, styles: { ...opts.styles!, polygonFilled: true } });
+    const right = makeAngles(poly.doc, [b, a, c], opts);
     return { doc: right.doc, created: [] };
   }, "none");
 }

@@ -27,20 +27,6 @@ const DEFAULT_SETTINGS: Settings = {
   autoFit: true,
 };
 
-function sanitizeSettings(raw: Partial<Settings> | undefined): Settings {
-  const r = raw ?? {};
-  const num = (x: unknown, min: number, max: number, fallback: number) =>
-    typeof x === "number" && Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : fallback;
-  return {
-    scale: num(r.scale, 0.1, 10, DEFAULT_SETTINGS.scale),
-    decimals: Math.round(num(r.decimals, 0, 4, DEFAULT_SETTINGS.decimals)),
-    pngDpi: num(r.pngDpi, 72, 1200, DEFAULT_SETTINGS.pngDpi),
-    pngBackground: r.pngBackground === "transparent" ? "transparent" : "white",
-    showGrid: typeof r.showGrid === "boolean" ? r.showGrid : DEFAULT_SETTINGS.showGrid,
-    autoFit: typeof r.autoFit === "boolean" ? r.autoFit : DEFAULT_SETTINGS.autoFit,
-  };
-}
-
 const HISTORY_LIMIT = 100;
 /** Edits with the same key within this window merge into one undo step. */
 const COALESCE_MS = 1000;
@@ -182,15 +168,12 @@ export const useFigureStore = create<FigureState>()(
       name: "geosimples-v2",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ doc: s.doc, settings: s.settings }),
+      // Settings come from the active profile at startup (see prefsStore).
+      partialize: (s) => ({ doc: s.doc }),
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as { doc?: unknown; settings?: Partial<Settings> };
-        return {
-          ...current,
-          // The loaded figure is the starting point of the undo history.
-          doc: normalizeDoc(p.doc),
-          settings: sanitizeSettings(p.settings),
-        };
+        const p = (persisted ?? {}) as { doc?: unknown };
+        // The loaded figure is the starting point of the undo history.
+        return { ...current, doc: normalizeDoc(p.doc) };
       },
     },
   ),
