@@ -16,6 +16,11 @@ export interface LibraryIndex {
   /** The figure to open on the next start. */
   activeId: string;
   figures: FigureMeta[];
+  /**
+   * Highest N ever given as "Figura N". New figures count up from it, so a
+   * renamed or deleted "Figura 1" doesn't come back.
+   */
+  lastUntitled: number;
 }
 
 /** The part of localStorage the library uses, so tests can pass a Map. */
@@ -32,10 +37,22 @@ export const figureKey = (id: string) => `geosimples-figure:${id}`;
 
 const UNTITLED = "Figura";
 
-/** "Figura 1", "Figura 2"…: the first one not taken. */
-export function untitledName(names: string[]): string {
+/** "Figura N" after the last number used, skipping names that are taken. */
+export function untitledName(names: string[], lastUntitled = 0): string {
   const taken = new Set(names);
-  for (let n = 1; ; n++) if (!taken.has(`${UNTITLED} ${n}`)) return `${UNTITLED} ${n}`;
+  for (let n = lastUntitled + 1; ; n++) if (!taken.has(`${UNTITLED} ${n}`)) return `${UNTITLED} ${n}`;
+}
+
+/** N for a name like "Figura N", else 0. */
+function untitledNumber(name: string): number {
+  const m = new RegExp(`^${UNTITLED} (\\d+)$`).exec(name);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Raises lastUntitled to cover every "Figura N" in the library. */
+function withCounter(index: LibraryIndex): LibraryIndex {
+  const highest = Math.max(index.lastUntitled, ...index.figures.map((f) => untitledNumber(f.name)));
+  return highest === index.lastUntitled ? index : { ...index, lastUntitled: highest };
 }
 
 /** The name itself, or "Name (2)", "Name (3)"… when it is taken. */
@@ -91,7 +108,8 @@ export function readIndex(storage: KeyValueStorage): LibraryIndex | null {
       updatedAt: Math.max(createdAt, time(f.updatedAt)),
     });
   }
-  return { version: 1, activeId: idOk(raw.activeId) ? raw.activeId : "", figures };
+  const lastUntitled = typeof raw.lastUntitled === "number" && raw.lastUntitled >= 0 ? Math.floor(raw.lastUntitled) : 0;
+  return withCounter({ version: 1, activeId: idOk(raw.activeId) ? raw.activeId : "", figures, lastUntitled });
 }
 
 export interface FigureLibrary {
@@ -108,6 +126,8 @@ export interface FigureLibrary {
   save(id: string, doc: FigureDoc): LibraryIndex;
   /** Adds a figure and makes it the active one. */
   create(name: string, doc: FigureDoc): { meta: FigureMeta; index: LibraryIndex };
+  /** The name for a new untitled figure: "Figura N", counting up. */
+  untitled(): string;
   rename(id: string, name: string): LibraryIndex;
   remove(id: string): LibraryIndex;
   setActive(id: string): LibraryIndex;
@@ -118,10 +138,11 @@ export interface FigureLibrary {
  * create leaves nothing behind.
  */
 export function createLibrary(storage: KeyValueStorage, env: { now: () => number; newId: () => string }): FigureLibrary {
-  let last: LibraryIndex = { version: 1, activeId: "", figures: [] };
+  let last: LibraryIndex = { version: 1, activeId: "", figures: [], lastUntitled: 0 };
 
   const current = () => readIndex(storage) ?? last;
-  const write = (index: LibraryIndex) => {
+  const write = (next: LibraryIndex) => {
+    const index = withCounter(next);
     storage.setItem(LIBRARY_KEY, JSON.stringify(index));
     last = index;
     return index;
@@ -147,7 +168,7 @@ export function createLibrary(storage: KeyValueStorage, env: { now: () => number
         const legacy = normalizeDoc(isObj(persisted) && isObj(persisted.state) ? persisted.state.doc : null);
         // A figure left by an older open tab is kept too, unless it's empty.
         if (!stored || legacy.elements.length > 0) {
-          const meta = freshMeta(untitledName(names(index)));
+          const meta = freshMeta(untitledName(names(index), index.lastUntitled));
           storage.setItem(figureKey(meta.id), JSON.stringify(legacy));
           index = { ...index, activeId: stored ? index.activeId : meta.id, figures: [...index.figures, meta] };
         }
@@ -169,6 +190,11 @@ export function createLibrary(storage: KeyValueStorage, env: { now: () => number
     index: current,
     load,
 
+    untitled() {
+      const index = current();
+      return untitledName(names(index), index.lastUntitled);
+    },
+
     save(id, doc) {
       storage.setItem(figureKey(id), JSON.stringify(doc));
       const index = current();
@@ -177,13 +203,13 @@ export function createLibrary(storage: KeyValueStorage, env: { now: () => number
       // Deleted in another tab while open here: keep it rather than lose the edits.
       const figures = known
         ? index.figures.map((f) => (f.id === id ? { ...f, updatedAt: t } : f))
-        : [...index.figures, { id, name: untitledName(names(index)), createdAt: t, updatedAt: t }];
+        : [...index.figures, { id, name: untitledName(names(index), index.lastUntitled), createdAt: t, updatedAt: t }];
       return write({ ...index, figures });
     },
 
     create(name, doc) {
       const index = current();
-      const meta = freshMeta(cleanFigureName(name, untitledName(names(index))));
+      const meta = freshMeta(cleanFigureName(name, untitledName(names(index), index.lastUntitled)));
       storage.setItem(figureKey(meta.id), JSON.stringify(doc));
       try {
         return { meta, index: write({ ...index, activeId: meta.id, figures: [...index.figures, meta] }) };
