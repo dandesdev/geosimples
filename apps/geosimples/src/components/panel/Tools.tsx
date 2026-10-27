@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { selectedOfType, type Element, type LabelScheme, type LabelTarget } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { actions } from "@/lib/actions";
 import { useFigureStore } from "@/store/figureStore";
 import { Choice, Field, NumberInput, RangeField, Section, SwitchField } from "./controls";
@@ -176,13 +177,13 @@ function FreeTextTool() {
           insert();
         }}
       >
-        <input
+        <Input
           value={text}
           maxLength={200}
           placeholder="Ex.: Figura 1"
           aria-label="Texto livre"
           onChange={(e) => setText(e.target.value)}
-          className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="h-8 min-w-0 flex-1 bg-background px-2 sm:text-sm"
         />
         <Button type="submit" size="sm" disabled={text.trim() === ""}>
           Inserir

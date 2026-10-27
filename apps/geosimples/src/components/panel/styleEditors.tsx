@@ -12,6 +12,7 @@ import { MEASURE_NAMES, type LabelChange } from "@/lib/labels";
 import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Choice,
   ColorPicker,
@@ -93,17 +94,19 @@ export function FillEditor({
   onChange,
   defaultFill,
   switchLabel = "Preencher",
+  title = "Preenchimento",
 }: {
   fill: Fill | null;
   onChange: (f: Fill | null, key: string) => void;
   /** Used when the fill is turned on. Default: the profile's fill. */
   defaultFill?: Fill;
   switchLabel?: string;
+  title?: string;
 }) {
   const profileFill = useActivePrefs().styles.fill;
   const startFill = defaultFill ?? profileFill;
   return (
-    <Section title="Preenchimento">
+    <Section title={title}>
       <SwitchField
         label={switchLabel}
         checked={fill !== null}
@@ -153,8 +156,7 @@ export function FillEditor({
   );
 }
 
-const TEXT_INPUT =
-  "h-8 w-full rounded-md border bg-background px-2 text-base sm:text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50";
+const TEXT_INPUT = "h-8 bg-background px-2 sm:text-sm";
 
 export function LabelEditor({
   label,
@@ -234,7 +236,7 @@ export function LabelEditor({
             onChange={(n) => setMeasure({ decimals: n }, "label-decimals")}
           />
           <Field label="Antes">
-            <input
+            <Input
               value={measure.prefix}
               maxLength={40}
               placeholder="Ex.: x = "
@@ -244,7 +246,7 @@ export function LabelEditor({
             />
           </Field>
           <Field label="Depois">
-            <input
+            <Input
               value={measure.suffix}
               maxLength={40}
               placeholder="Ex.:  cm"
@@ -262,7 +264,7 @@ export function LabelEditor({
       ) : (
         <>
           <Field label="Texto">
-            <input
+            <Input
               value={current.text}
               maxLength={200}
               placeholder={placeholder}

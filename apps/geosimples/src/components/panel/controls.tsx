@@ -1,14 +1,16 @@
 import { useId, useState, type ReactNode } from "react";
 import { PALETTE, resolveColor } from "@geosimples/core/figure";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { parseDecimal, show } from "@/lib/format";
 
+/** The label column is 6.5rem; a wider container can set `--field-label` for longer labels. */
 export function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[6.5rem_1fr] items-center gap-2 py-1">
+    <div className="grid grid-cols-[var(--field-label,6.5rem)_1fr] items-center gap-2 py-1">
       <label htmlFor={htmlFor} className="text-xs text-muted-foreground">
         {label}
       </label>
@@ -102,7 +104,7 @@ export function NumberInput({
   };
   return (
     <div className="flex items-center gap-1">
-      <input
+      <Input
         id={id}
         inputMode="decimal"
         aria-label={ariaLabel}
@@ -117,7 +119,7 @@ export function NumberInput({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
         className={cn(
-          "h-8 w-full min-w-0 rounded-md border bg-background px-2 font-mono text-base outline-none sm:text-sm focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50",
+          "h-8 min-w-0 bg-background px-2 font-mono sm:text-sm",
           draft !== null && parseDecimal(draft) === null && "border-destructive",
         )}
       />

@@ -1,3 +1,4 @@
+
 import {
   angleArc,
   dist,
@@ -15,6 +16,7 @@ import {
   type Ticks,
 } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { actions } from "@/lib/actions";
 import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
@@ -252,13 +254,13 @@ export function TextEditor({ el, update, multi }: EditorProps<FreeText>) {
       {!multi && (
         <Section title="Texto">
           <Field label="Texto">
-            <input
+            <Input
               value={el.text}
               maxLength={200}
               aria-label="Texto"
               // An empty text can't be drawn or picked; delete the text to remove it.
               onChange={(e) => e.target.value.trim() !== "" && update((t) => ({ ...t, text: e.target.value }), "text")}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="h-8 bg-background px-2 sm:text-sm"
             />
           </Field>
           <div className="grid grid-cols-2 gap-2">

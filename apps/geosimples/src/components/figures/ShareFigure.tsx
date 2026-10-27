@@ -3,6 +3,7 @@ import { Copy, Download, FolderOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { FIGURE_FILE_EXTENSION, SHARE_LINK_WARN_LENGTH } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Section } from "@/components/panel/controls";
 import { copyText } from "@/lib/exporting";
@@ -62,12 +63,12 @@ export function ShareContent() {
         ) : (
           <>
             <div className="flex gap-2">
-              <input
+              <Input
                 readOnly
                 value={url ?? "Criando o link…"}
                 aria-label="Link da figura"
                 onFocus={(e) => e.currentTarget.select()}
-                className="h-9 min-w-0 flex-1 rounded-md border bg-muted/40 px-2 font-mono text-xs"
+                className="min-w-0 flex-1 bg-muted/40 px-2 font-mono text-xs md:text-xs"
               />
               <Button
                 disabled={!url}
