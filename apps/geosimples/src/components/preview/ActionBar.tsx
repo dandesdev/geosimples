@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useCommand } from "@/lib/commands";
 import { Download, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
@@ -32,6 +33,7 @@ import {
 } from "@/components/icons";
 import { ExportDialog } from "@/components/dialogs/ExportDialog";
 import { actions } from "@/lib/actions";
+import { previewProps, useAvailability, type Availability } from "@/lib/availability";
 import { useFigureStore } from "@/store/figureStore";
 
 const Divider = () => <div className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden="true" />;
@@ -40,31 +42,59 @@ function MenuItem({
   icon,
   title,
   hint,
+  availability,
   onSelect,
 }: {
   icon: React.ReactNode;
   title: string;
   hint: string;
+  availability: Availability;
   onSelect: () => void;
 }) {
+  const reason = availability.reason;
   return (
-    <DropdownMenuItem onSelect={onSelect} className="items-start gap-3 py-2">
+    <DropdownMenuItem
+      onSelect={() => {
+        clearPreview();
+        onSelect();
+      }}
+      // Unavailable items stay in the menu, grayed, with what is missing.
+      disabled={reason !== null}
+      className="items-start gap-3 py-2"
+      {...previewProps(availability)}
+    >
       <span className="mt-0.5 [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
       <span className="flex flex-col">
         <span className="font-medium">{title}</span>
         <span className="text-xs text-muted-foreground">{hint}</span>
+        {reason && <span className="mt-0.5 text-xs text-destructive">{reason}</span>}
       </span>
     </DropdownMenuItem>
   );
 }
+
+const clearPreview = () => useFigureStore.getState().setActionPreview(null);
+
+/** Runs an action after clearing its hover preview, which would be stale afterwards. */
+const act = (fn: () => void) => () => {
+  clearPreview();
+  fn();
+};
 
 export function ActionBar() {
   const canUndo = useFigureStore((s) => s.past.length > 0);
   const canRedo = useFigureStore((s) => s.future.length > 0);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
+  const av = useAvailability();
+  const anyCircle = (["radius", "through", "tangent", "circumcircle"] as const).some((m) => !av[`circle-${m}`].reason);
+  const anyConnect = !av.connect.reason || !av.closeContour.reason;
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const openExport = useCallback(() => {
+    if (useFigureStore.getState().doc.elements.length > 0) setExportOpen(true);
+  }, []);
+  useCommand("export", openExport);
 
   const store = useFigureStore.getState;
 
@@ -79,20 +109,21 @@ export function ActionBar() {
       aria-label="Ações da figura"
       className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b bg-background px-2 py-1.5"
     >
-      <Button size="sm" className="mr-1 shrink-0" onClick={() => setExportOpen(true)} disabled={isEmpty}>
+      <Button size="sm" className="mr-1 shrink-0" onClick={() => setExportOpen(true)} disabled={isEmpty} title="Exportar">
         <Download />
         Exportar
       </Button>
       <Divider />
-      <IconButton label="Desfazer" hint="Ctrl+Z" onClick={() => store().undo()} disabled={!canUndo}>
+      <IconButton label="Desfazer" shortcut="undo" onClick={() => store().undo()} disabled={!canUndo}>
         <Undo2 />
       </IconButton>
-      <IconButton label="Refazer" hint="Ctrl+Y" onClick={() => store().redo()} disabled={!canRedo}>
+      <IconButton label="Refazer" shortcut="redo" onClick={() => store().redo()} disabled={!canRedo}>
         <Redo2 />
       </IconButton>
       <IconButton
         label={hasSelection ? "Apagar selecionados" : "Limpar figura"}
-        hint={hasSelection ? "Delete. Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
+        hint={hasSelection ? "Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
+        shortcut={hasSelection ? "delete" : undefined}
         onClick={onDelete}
         disabled={isEmpty}
       >
@@ -100,9 +131,15 @@ export function ActionBar() {
       </IconButton>
       <Divider />
 
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
         <DropdownMenuTrigger asChild>
-          <IconButton label="Ligar pontos" hint="Cria segmentos entre os pontos selecionados, na ordem da seleção.">
+          <IconButton
+            label="Ligar pontos"
+            shortcut="connect"
+            hint="Cria segmentos entre os pontos selecionados, na ordem da seleção."
+            dimmed={!anyConnect}
+            ready={hasSelection && anyConnect}
+          >
             <ConnectIcon />
           </IconButton>
         </DropdownMenuTrigger>
@@ -112,12 +149,14 @@ export function ActionBar() {
             icon={<ConnectIcon />}
             title="Em sequência"
             hint="A, B, C → segmentos AB e BC"
+            availability={av.connect}
             onSelect={() => actions.connect(false)}
           />
           <MenuItem
             icon={<CloseLoopIcon />}
             title="Fechando o contorno"
             hint="A, B, C → segmentos AB, BC e CA"
+            availability={av.closeContour}
             onSelect={() => actions.connect(true)}
           />
         </DropdownMenuContent>
@@ -125,23 +164,36 @@ export function ActionBar() {
 
       <IconButton
         label="Marcar ângulo"
+        shortcut="angle"
         hint="Selecione A, B, C para marcar o ângulo em B, ou um polígono para marcar todos os seus ângulos."
-        onClick={() => actions.angles()}
+        unavailable={av.angle.reason}
+        ready={hasSelection}
+        onClick={act(actions.angles)}
+        {...previewProps(av.angle)}
       >
         <AngleIcon />
       </IconButton>
 
       <IconButton
-        label="Polígono"
-        hint="Selecione os vértices em ordem (ou os segmentos de um contorno fechado) para preencher a região."
-        onClick={() => actions.polygon()}
+        label="Polígono e preenchimento"
+        shortcut="polygon"
+        hint="Selecione os vértices em ordem, ou os segmentos de um contorno fechado. Circunferências e polígonos selecionados também são preenchidos."
+        unavailable={av.polygon.reason}
+        ready={hasSelection}
+        onClick={act(actions.polygon)}
+        {...previewProps(av.polygon)}
       >
         <PolygonIcon />
       </IconButton>
 
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
         <DropdownMenuTrigger asChild>
-          <IconButton label="Circunferência" hint="Escolha como construir a partir da seleção.">
+          <IconButton
+            label="Circunferência"
+            hint="Escolha como construir a partir da seleção."
+            dimmed={!anyCircle}
+            ready={hasSelection && anyCircle}
+          >
             <CircleThroughIcon />
           </IconButton>
         </DropdownMenuTrigger>
@@ -151,24 +203,28 @@ export function ActionBar() {
             icon={<CircleRadiusIcon />}
             title="Centro e raio 1"
             hint="Selecione o centro. Ajuste o raio depois, em Customização."
+            availability={av["circle-radius"]}
             onSelect={() => actions.circle("radius")}
           />
           <MenuItem
             icon={<CircleThroughIcon />}
             title="Centro e um ponto"
             hint="Selecione o centro e depois um ponto da circunferência."
+            availability={av["circle-through"]}
             onSelect={() => actions.circle("through")}
           />
           <MenuItem
             icon={<CircleTangentIcon />}
             title="Centro e tangente"
             hint="Selecione o centro e um segmento a tangenciar."
+            availability={av["circle-tangent"]}
             onSelect={() => actions.circle("tangent")}
           />
           <MenuItem
             icon={<CircumcircleIcon />}
             title="Por três pontos"
             hint="Selecione três pontos. O centro é criado como um novo ponto."
+            availability={av["circle-circumcircle"]}
             onSelect={() => actions.circle("circumcircle")}
           />
         </DropdownMenuContent>

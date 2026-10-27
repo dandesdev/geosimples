@@ -8,6 +8,8 @@ import {
   connectPoints,
   deleteElements,
   emptyDoc,
+  DEFAULT_STYLES,
+  fillShapes,
   formatNumber,
   labelToLatex,
   makeAngles,
@@ -388,5 +390,55 @@ describe("normalizeDoc", () => {
   it("returns an empty doc for garbage", () => {
     expect(normalizeDoc("nope").elements).toEqual([]);
     expect(normalizeDoc(null).elements).toEqual([]);
+  });
+});
+
+describe("styles and options", () => {
+  it("fills selected circles with the Polígono action", () => {
+    const withCircle = makeCircle(triangle(), ["p1", "p2"], "through").doc;
+    const r = fillShapes(withCircle, ["c1"]);
+    expect(r.error).toBeUndefined();
+    const circle = r.doc.elements.find((e): e is Circle => e.type === "circle")!;
+    expect(circle.fill).toEqual(DEFAULT_STYLES.fill);
+    expect(fillShapes(r.doc, ["c1"]).error).toMatch(/preenchidas/);
+  });
+
+  it("fills a circle and makes a polygon in one go", () => {
+    const withCircle = makeCircle(triangle(), ["p1", "p2"], "through").doc;
+    const r = fillShapes(withCircle, ["p1", "p2", "p3", "c1"]);
+    expect(r.doc.elements.filter((e) => e.type === "polygon")).toHaveLength(1);
+    expect(r.doc.elements.find((e): e is Circle => e.type === "circle")!.fill).not.toBeNull();
+  });
+
+  it("uses the given styles for new elements", () => {
+    const styles = {
+      ...DEFAULT_STYLES,
+      stroke: { ...DEFAULT_STYLES.stroke, width: 2, color: "#d62828" },
+      point: { shape: "ring" as const, size: 3, color: "#1d4ed8" },
+      polygonFilled: false,
+    };
+    let doc = applyInput(emptyDoc(), parseInput("0;0--4;0--0;3--"), { styles }).doc;
+    doc = makePolygon(doc, ["p1", "p2", "p3"], { styles }).doc;
+    expect(doc.elements.find((e) => e.type === "point")).toMatchObject({ shape: "ring", size: 3 });
+    expect(doc.elements.find((e) => e.type === "segment")).toMatchObject({ stroke: { width: 2, color: "#d62828" } });
+    expect(doc.elements.find((e) => e.type === "polygon")).toMatchObject({ fill: null });
+  });
+
+  it("names new points automatically, skipping names in use", () => {
+    const first = applyInput(emptyDoc(), parseInput("A=(0;0) (1;0)"), { autoName: true }).doc;
+    const labels = first.elements.map((e) => e.label?.text);
+    expect(labels).toEqual(["A", "B"]);
+    const more = addPoints(first, [{ x: 2, y: 2 }], { autoName: true }).doc;
+    expect(more.elements.at(-1)?.label?.text).toBe("C");
+  });
+
+  it("writes sans-serif labels in TikZ and SVG", () => {
+    let doc = applyInput(emptyDoc(), parseInput("A=(0;0)"), {
+      styles: { ...DEFAULT_STYLES, label: { ...DEFAULT_STYLES.label, font: "sans" } },
+    }).doc;
+    expect(toTikz(doc)).toContain("font=\\sffamily");
+    expect(toSvg(doc)).toContain("sans-serif");
+    doc = normalizeDoc(JSON.parse(JSON.stringify(doc)));
+    expect(doc.elements[0].label?.font).toBe("sans");
   });
 });

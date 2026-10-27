@@ -5,7 +5,7 @@ import {
   deleteElements,
   makeAngles,
   makeCircle,
-  makePolygon,
+  fillShapes,
   pointMap,
   pointOnSegment,
   projectPoint,
@@ -18,6 +18,7 @@ import {
   type OpResult,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
+import { opOptions } from "@/store/prefsStore";
 
 function perform(
   op: (doc: FigureDoc, selection: Id[]) => OpResult,
@@ -37,13 +38,14 @@ const selectedPoints = (doc: FigureDoc, selection: Id[]) =>
 
 export const actions = {
   connect: (closed: boolean) =>
-    perform((doc, sel) => connectPoints(doc, selectedPoints(doc, sel), closed), "keep"),
+    perform((doc, sel) => connectPoints(doc, selectedPoints(doc, sel), closed, opOptions()), "keep"),
 
-  angles: () => perform((doc, sel) => makeAngles(doc, sel)),
+  angles: () => perform((doc, sel) => makeAngles(doc, sel, opOptions())),
 
-  polygon: () => perform((doc, sel) => makePolygon(doc, sel)),
+  /** Makes a polygon and fills the selected circles and polygons. */
+  polygon: () => perform((doc, sel) => fillShapes(doc, sel, opOptions()), "keep"),
 
-  circle: (mode: CircleMode) => perform((doc, sel) => makeCircle(doc, sel, mode)),
+  circle: (mode: CircleMode) => perform((doc, sel) => makeCircle(doc, sel, mode, opOptions())),
 
   deleteSelected: () => {
     const { selection } = useFigureStore.getState();
@@ -52,15 +54,15 @@ export const actions = {
   },
 
   pointOnSegment: (segmentId: Id, at: { ratio: number } | { distance: number }, from: "a" | "b") =>
-    perform((doc) => pointOnSegment(doc, segmentId, at, from)),
+    perform((doc) => pointOnSegment(doc, segmentId, at, from, opOptions())),
 
   project: (withHeight: boolean) =>
-    perform((doc, sel) => projectPoint(doc, selectedPoints(doc, sel), withHeight)),
+    perform((doc, sel) => projectPoint(doc, selectedPoints(doc, sel), withHeight, opOptions())),
 
   autoLabel: (type: LabelTarget, scheme: LabelScheme, onlySelected: boolean) => {
     const { settings } = useFigureStore.getState();
     return perform(
-      (doc, sel) => autoLabel(doc, type, scheme, onlySelected ? sel : null, settings.decimals),
+      (doc, sel) => autoLabel(doc, type, scheme, onlySelected ? sel : null, settings.decimals, opOptions()),
       "keep",
     );
   },

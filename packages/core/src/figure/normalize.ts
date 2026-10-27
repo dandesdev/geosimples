@@ -60,6 +60,7 @@ function label(x: unknown): Label | undefined {
     distance: num(x.distance, 0, 100, DEFAULT_LABEL.distance),
     size: num(x.size, 4, 72, DEFAULT_LABEL.size),
     color: color(x.color, DEFAULT_LABEL.color),
+    font: x.font === "sans" ? "sans" : "serif",
   };
 }
 

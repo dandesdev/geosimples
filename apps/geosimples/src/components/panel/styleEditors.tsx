@@ -1,12 +1,12 @@
 import {
-  DEFAULT_FILL,
-  DEFAULT_LABEL,
   type Dash,
   type Fill,
   type FillPattern,
   type Label,
+  type LabelFont,
   type Stroke,
 } from "@geosimples/core/figure";
+import { useActivePrefs } from "@/store/useActivePrefs";
 import { Button } from "@/components/ui/button";
 import {
   Choice,
@@ -87,18 +87,23 @@ const ANGLE_OPTIONS = [
 export function FillEditor({
   fill,
   onChange,
-  defaultFill = DEFAULT_FILL,
+  defaultFill,
+  switchLabel = "Preencher",
 }: {
   fill: Fill | null;
   onChange: (f: Fill | null, key: string) => void;
+  /** Used when the fill is turned on. Default: the profile's fill. */
   defaultFill?: Fill;
+  switchLabel?: string;
 }) {
+  const profileFill = useActivePrefs().styles.fill;
+  const startFill = defaultFill ?? profileFill;
   return (
     <Section title="Preenchimento">
       <SwitchField
-        label="Preencher"
+        label={switchLabel}
         checked={fill !== null}
-        onChange={(on) => onChange(on ? { ...defaultFill } : null, "fill-on")}
+        onChange={(on) => onChange(on ? { ...startFill } : null, "fill-on")}
       />
       {fill && (
         <>
@@ -158,7 +163,8 @@ export function LabelEditor({
   /** Several elements are edited at once: style only, since one text for all is rarely wanted. */
   multi?: boolean;
 }) {
-  const current = label ?? DEFAULT_LABEL;
+  const base = useActivePrefs().styles.label;
+  const current: Label = label ?? { ...base, text: "" };
   const set = (patch: Partial<Label>, key: string) => {
     const next = { ...current, ...patch };
     onChange(next.text === "" ? undefined : next, key);
@@ -201,6 +207,15 @@ export function LabelEditor({
       )}
       {label && (
         <>
+          <Choice<LabelFont>
+            label="Fonte"
+            value={current.font}
+            options={[
+              { value: "serif", label: "Serifada", title: "Como a fonte padrão do LaTeX" },
+              { value: "sans", label: "Sem serifa" },
+            ]}
+            onChange={(font) => set({ font }, "label-font")}
+          />
           <RangeField
             label="Tamanho"
             value={current.size}

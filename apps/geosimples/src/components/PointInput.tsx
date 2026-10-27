@@ -5,8 +5,10 @@ import { applyInput, type InputTokenKind, type ParsedInput } from "@geosimples/c
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { parseDraft } from "@/lib/inputContext";
+import { useCommand } from "@/lib/commands";
 import { cn } from "@/lib/utils";
 import { useFigureStore } from "@/store/figureStore";
+import { opOptions } from "@/store/prefsStore";
 
 const TOKEN_CLASS: Record<InputTokenKind, string> = {
   name: "text-primary",
@@ -54,6 +56,7 @@ export function PointInput() {
 
   const parsed = useMemo(() => parseDraft(text, doc, selection), [text, doc, selection]);
   const syncScroll = () => setScroll(inputRef.current?.scrollLeft ?? 0);
+  useCommand("focusInput", () => inputRef.current?.focus());
 
   const submit = () => {
     const { doc, selection, run } = useFigureStore.getState();
@@ -62,7 +65,7 @@ export function PointInput() {
       toast.error(current.errors[0].message);
       return;
     }
-    const result = run((d) => applyInput(d, current), "created");
+    const result = run((d) => applyInput(d, current, opOptions()), "created");
     if (result.error) {
       toast.error(result.error);
       return;

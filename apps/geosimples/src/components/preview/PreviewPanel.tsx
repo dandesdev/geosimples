@@ -11,6 +11,7 @@ import {
   type Id,
   type ParsedInput,
   type Point,
+  type Prim,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { ActionBar } from "./ActionBar";
@@ -20,6 +21,7 @@ import { SelectionSummary } from "./SelectionSummary";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
 import { parseDraft } from "@/lib/inputContext";
+import { useCommand } from "@/lib/commands";
 
 const PRIMARY = "#10b981";
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
@@ -62,6 +64,13 @@ export function PreviewPanel() {
 
   const scene = useMemo(() => buildScene(doc, { scale }), [doc, scale]);
   const markup = useMemo(() => sceneMarkup(scene), [scene]);
+  const actionPreview = useFigureStore((s) => s.actionPreview);
+  const actionMarkup = useMemo(() => {
+    if (!actionPreview || actionPreview.ids.length === 0) return null;
+    const result = buildScene(actionPreview.doc, { scale });
+    const ids = new Set(actionPreview.ids);
+    return sceneMarkup({ ...result, prims: result.prims.filter((p) => ids.has(p.owner)).map(tint) });
+  }, [actionPreview, scale]);
   const k = scene.k;
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -130,6 +139,9 @@ export function PreviewPanel() {
   const zoomBy = (factor: number) => {
     placeCamera(zoomView(vb, factor, { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 }));
   };
+  useCommand("zoomIn", () => zoomBy(1 / 1.25));
+  useCommand("zoomOut", () => zoomBy(1.25));
+  useCommand("toggleAutoFit", toggleAutoFit);
 
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
@@ -244,6 +256,7 @@ export function PreviewPanel() {
         >
           {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
           <g dangerouslySetInnerHTML={{ __html: markup }} />
+          {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
           <Overlay
             hits={scene.hits}
             selection={selection}
@@ -459,4 +472,14 @@ function DraftGhost({ parsed, k, px }: { parsed: ParsedInput; k: number; px: num
       })}
     </g>
   );
+}
+
+/** Draws what an action would add in the accent color, so it reads as a preview. */
+function tint(p: Prim): Prim {
+  if (p.kind === "text") return { ...p, color: PRIMARY };
+  return {
+    ...p,
+    stroke: p.stroke && { ...p.stroke, color: PRIMARY, opacity: Math.max(p.stroke.opacity, 0.8) },
+    fill: p.fill && { ...p.fill, color: PRIMARY, opacity: Math.min(Math.max(p.fill.opacity, 0.2), 0.45) },
+  };
 }

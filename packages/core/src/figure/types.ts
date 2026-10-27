@@ -43,7 +43,11 @@ export interface Label {
   /** Font size in pt. */
   size: number;
   color: Color;
+  /** Serif matches LaTeX's default font; sans is for sans-serif documents. */
+  font: LabelFont;
 }
+
+export type LabelFont = "serif" | "sans";
 
 export type PointShape = "dot" | "ring" | "none";
 
