@@ -52,6 +52,8 @@ interface FigureState {
   past: FigureDoc[];
   future: FigureDoc[];
   mode: CanvasMode;
+  /** Text in the point input. The preview draws what it would create. */
+  inputDraft: string;
   settings: Settings;
 
   commit: (doc: FigureDoc, coalesceKey?: string) => void;
@@ -71,6 +73,7 @@ interface FigureState {
   redo: () => void;
   clear: () => void;
   setMode: (mode: CanvasMode) => void;
+  setInputDraft: (text: string) => void;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }
 
@@ -91,6 +94,7 @@ export const useFigureStore = create<FigureState>()(
       past: [],
       future: [],
       mode: "select",
+      inputDraft: "",
       settings: DEFAULT_SETTINGS,
 
       commit: (doc, coalesceKey) => {
@@ -171,6 +175,7 @@ export const useFigureStore = create<FigureState>()(
         set({ selection: [] });
       },
       setMode: (mode) => set({ mode }),
+      setInputDraft: (inputDraft) => set({ inputDraft }),
       setSetting: (key, value) => set((s) => ({ settings: { ...s.settings, [key]: value } })),
     }),
     {

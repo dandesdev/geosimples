@@ -15,54 +15,155 @@ import {
   makePolygon,
   movePoints,
   normalizeDoc,
-  parsePointInput,
+  parseInput,
+  applyInput,
   pointOnSegment,
   projectPoint,
   toSvg,
   toTikz,
   type Circle,
   type FigureDoc,
+  type ParsedPoint,
   type Point,
 } from "./index";
 
+/** New points of an input, for building test figures. */
+function pts(text: string): ParsedPoint[] {
+  return parseInput(text).nodes.flatMap((n) => (n.kind === "new" ? [{ x: n.x, y: n.y, label: n.label }] : []));
+}
+
 /** A 3-4-5 right triangle: p1 (0,0), p2 (4,0), p3 (0,3). */
 function triangle(): FigureDoc {
-  return addPoints(emptyDoc(), parsePointInput("0;0 4;0 0;3").points).doc;
+  return addPoints(emptyDoc(), pts("0;0 4;0 0;3")).doc;
 }
 
 const ids = (doc: FigureDoc, type: string) => doc.elements.filter((e) => e.type === type).map((e) => e.id);
 
-describe("parsePointInput", () => {
-  it("reads absolute points with comma or dot decimals", () => {
-    const r = parsePointInput("0;0 (2,5;-1) 1.5;2");
+describe("parseInput", () => {
+  const at = (r: ReturnType<typeof parseInput>, i: number) => ({ x: r.nodes[i].x, y: r.nodes[i].y });
+
+  it("reads absolute points with or without parentheses, comma or dot decimals", () => {
+    const r = parseInput("0;0 (2,5;-1) 1.5;2 ( 3 ; 4 )");
     expect(r.errors).toEqual([]);
-    expect(r.points).toEqual([
-      { x: 0, y: 0, label: undefined },
-      { x: 2.5, y: -1, label: undefined },
-      { x: 1.5, y: 2, label: undefined },
+    expect(r.nodes.map((n) => [n.x, n.y])).toEqual([
+      [0, 0],
+      [2.5, -1],
+      [1.5, 2],
+      [3, 4],
+    ]);
+    expect(r.segments).toEqual([]);
+  });
+
+  it("reads names, with spaces around = and separators", () => {
+    const r = parseInput("A = 0 ; 0  B=(4;0)");
+    expect(r.nodes.map((n) => (n.kind === "new" ? n.label : null))).toEqual(["A", "B"]);
+  });
+
+  it("reads polar points from the origin", () => {
+    const r = parseInput("(2:90)");
+    expect(at(r, 0)).toEqual({ x: 0, y: 2 });
+  });
+
+  it("chains displacements from the previous point", () => {
+    const r = parseInput("(1;1) +(2;0) +(2:90) +3;0");
+    expect([1, 2, 3].map((i) => at(r, i))).toEqual([
+      { x: 3, y: 1 },
+      { x: 3, y: 3 },
+      { x: 6, y: 3 },
     ]);
   });
 
-  it("reads names and spaces around separators", () => {
-    const r = parsePointInput("A = 0 ; 0  B=4;0");
-    expect(r.points.map((p) => p.label)).toEqual(["A", "B"]);
+  it("starts a displacement at the selected point, or the figure's last point", () => {
+    expect(at(parseInput("+(1;0)", { points: [], selected: { x: 5, y: 5 } }), 0)).toEqual({ x: 6, y: 5 });
+    expect(at(parseInput("+(1;0)", { points: [{ id: "p1", x: 2, y: 2 }] }), 0)).toEqual({ x: 3, y: 2 });
+    expect(parseInput("+(1;0)").errors).toHaveLength(1);
   });
 
-  it("chains +R:θ from the previous point", () => {
-    const r = parsePointInput("0;0 +2:90 +2:0");
-    expect(r.points[1]).toMatchObject({ x: 0, y: 2 });
-    expect(r.points[2]).toMatchObject({ x: 2, y: 2 });
+  it("joins points with -- and closes with a trailing --", () => {
+    const r = parseInput("A=(0;0)--B=(4;0)--C=(0;3)--");
+    expect(r.errors).toEqual([]);
+    expect(r.segments).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 0],
+    ]);
   });
 
-  it("needs a selected point for R:θ", () => {
-    expect(parsePointInput("3:0").errors).toHaveLength(1);
-    expect(parsePointInput("3:0", { selected: { x: 1, y: 1 } }).points[0]).toMatchObject({ x: 4, y: 1 });
+  it("accepts spaces around --, and a minus right after it", () => {
+    for (const text of ["(1;1)--(-1;2)", "1;1 -- -1;2", "1;1---1;2"]) {
+      const r = parseInput(text);
+      expect(r.errors, text).toEqual([]);
+      expect(at(r, 1), text).toEqual({ x: -1, y: 2 });
+      expect(r.segments, text).toEqual([[0, 1]]);
+    }
   });
 
-  it("reports bad tokens and keeps the good ones", () => {
-    const r = parsePointInput("1;2 abc 3;x");
-    expect(r.points).toHaveLength(1);
-    expect(r.errors).toHaveLength(2);
+  it("keeps chains separated by spaces apart", () => {
+    const r = parseInput("0;0--1;0 5;5--6;5");
+    expect(r.segments).toEqual([
+      [0, 1],
+      [2, 3],
+    ]);
+  });
+
+  it("closes a chain that returns to a name", () => {
+    const r = parseInput("A=(0;0)--B=(4;0)--C=(0;3)--A");
+    expect(r.nodes).toHaveLength(3);
+    expect(r.segments).toContainEqual([2, 0]);
+  });
+
+  it("connects existing points by their labels", () => {
+    const r = parseInput("A--C", {
+      points: [
+        { id: "p1", x: 0, y: 0, label: "A" },
+        { id: "p3", x: 0, y: 3, label: "C" },
+      ],
+    });
+    expect(r.nodes).toEqual([
+      { kind: "existing", id: "p1", x: 0, y: 0 },
+      { kind: "existing", id: "p3", x: 0, y: 3 },
+    ]);
+    expect(r.segments).toEqual([[0, 1]]);
+  });
+
+  it("points errors at the exact text and keeps reading", () => {
+    const text = "1;2 abc 3;x";
+    const r = parseInput(text);
+    expect(r.nodes).toHaveLength(1);
+    expect(r.errors.map((e) => text.slice(e.start, e.end))).toEqual(["abc", "3;x"]);
+  });
+
+  it("refuses to close fewer than three points", () => {
+    expect(parseInput("0;0--1;0--").errors).toHaveLength(1);
+    expect(parseInput("--0;0").errors).toHaveLength(1);
+  });
+
+  it("marks tokens for coloring", () => {
+    const r = parseInput("A=(0;0)--B");
+    expect(r.tokens.map((t) => t.kind)).toEqual(["name", "point", "connector", "error"]);
+  });
+});
+
+describe("applyInput", () => {
+  it("creates points and segments in one step", () => {
+    const r = applyInput(emptyDoc(), parseInput("A=(0;0)--B=(4;0)--C=(0;3)--"));
+    expect(ids(r.doc, "point")).toEqual(["p1", "p2", "p3"]);
+    expect(ids(r.doc, "segment")).toEqual(["s1", "s2", "s3"]);
+    expect(r.created).toEqual(["p1", "p2", "p3"]);
+  });
+
+  it("reuses existing points and skips existing segments", () => {
+    const first = applyInput(emptyDoc(), parseInput("A=(0;0)--B=(4;0)")).doc;
+    const ctx = { points: first.elements.flatMap((e) => (e.type === "point" ? [{ ...e, label: e.label?.text }] : [])) };
+    const r = applyInput(first, parseInput("B--A--C=(0;3)", ctx));
+    expect(ids(r.doc, "point")).toHaveLength(3);
+    expect(ids(r.doc, "segment")).toHaveLength(2);
+  });
+
+  it("adds nothing when the input has errors", () => {
+    const r = applyInput(emptyDoc(), parseInput("0;0 oops"));
+    expect(r.error).toBeDefined();
+    expect(r.doc.elements).toHaveLength(0);
   });
 });
 
@@ -96,7 +197,7 @@ describe("operations", () => {
 
   it("marks the interior angles of a polygon, including a reflex one", () => {
     // An arrowhead: concave at p4.
-    let doc = addPoints(emptyDoc(), parsePointInput("0;0 4;2 0;4 1;2").points).doc;
+    let doc = addPoints(emptyDoc(), pts("0;0 4;2 0;4 1;2")).doc;
     doc = makePolygon(doc, ["p1", "p2", "p3", "p4"]).doc;
     const r = makeAngles(doc, ["g1"]);
     const angles = r.doc.elements.filter((e) => e.type === "angle");
@@ -112,7 +213,7 @@ describe("operations", () => {
   });
 
   it("refuses an angle between collinear points", () => {
-    const doc = addPoints(emptyDoc(), parsePointInput("0;0 1;0 2;0").points).doc;
+    const doc = addPoints(emptyDoc(), pts("0;0 1;0 2;0")).doc;
     expect(makeAngles(doc, ["p1", "p2", "p3"]).error).toMatch(/alinhados/);
   });
 
