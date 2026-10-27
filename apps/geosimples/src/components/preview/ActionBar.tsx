@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Download, Move, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Download, Redo2, Trash2, Undo2 } from "lucide-react";
+import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,7 +63,6 @@ export function ActionBar() {
   const canRedo = useFigureStore((s) => s.future.length > 0);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
-  const moveMode = useFigureStore((s) => s.moveMode);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -175,14 +175,7 @@ export function ActionBar() {
       </DropdownMenu>
 
       <Divider />
-      <IconButton
-        label="Mover pontos"
-        hint={moveMode ? "Ligado: arraste os pontos na prévia." : "Ligue para arrastar pontos na prévia."}
-        active={moveMode}
-        onClick={() => store().setMoveMode(!moveMode)}
-      >
-        <Move />
-      </IconButton>
+      <ModeSwitch />
 
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>

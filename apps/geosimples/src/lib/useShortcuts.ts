@@ -1,13 +1,15 @@
 import { useEffect } from "react";
 import { actions } from "@/lib/actions";
-import { useFigureStore } from "@/store/figureStore";
+import { useFigureStore, type CanvasMode } from "@/store/figureStore";
+
+const MODE_KEYS: Record<string, CanvasMode> = { v: "select", h: "pan", m: "move" };
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-/** Undo, redo, delete, select all and clear selection. Ignored while typing. */
+/** Undo, redo, delete, select all, clear selection and the drag modes. Ignored while typing. */
 export function useShortcuts() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -33,6 +35,8 @@ export function useShortcuts() {
         actions.deleteSelected();
       } else if (!mod && e.key === "Escape") {
         store.clearSelection();
+      } else if (!mod && !e.shiftKey && MODE_KEYS[key]) {
+        store.setMode(MODE_KEYS[key]);
       }
     };
     window.addEventListener("keydown", onKeyDown);

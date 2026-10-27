@@ -51,6 +51,9 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <li>
               <Kbd>Ctrl</Kbd> <Kbd>A</Kbd> selecionar tudo
             </li>
+            <li>
+              <Kbd>V</Kbd> <Kbd>H</Kbd> <Kbd>M</Kbd> selecionar, mover vista, mover pontos
+            </li>
             <li>Roda do mouse: zoom</li>
           </ul>
         </div>
