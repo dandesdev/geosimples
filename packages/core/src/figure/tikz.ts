@@ -133,8 +133,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
             `\\draw${opts(strokeOpts(el.stroke))} ${shifted(vtx, u1)} -- ${shifted(vtx, corner)} -- ${shifted(vtx, u2)};`,
           );
           const dot = polar(el.radius * 0.35 * Math.SQRT2, geo.start + 45);
+          // The dot fades with the square's stroke, like in the SVG.
+          const dotOpts = [color(el.stroke.color)];
+          if (el.stroke.opacity < 1) dotOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
           sections.angle.push(
-            `\\fill[${color(el.stroke.color)}] ${shifted(vtx, dot)} circle[radius=${n(Math.max(0.7, el.stroke.width))}pt];`,
+            `\\fill${opts(dotOpts)} ${shifted(vtx, dot)} circle[radius=${n(Math.max(0.7, el.stroke.width))}pt];`,
           );
           break;
         }
@@ -190,7 +193,8 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       ? "% Preâmbulo: \\usepackage{tikz} e \\usetikzlibrary{patterns.meta}"
       : "% Preâmbulo: \\usepackage{tikz}",
   );
-  lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm]`);
+  // SVG's default miter limit: sharp corners get beveled instead of drawing long spikes.
+  lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
   const order = ["coords", "polygon", "circle", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
@@ -208,6 +212,6 @@ function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string)
   const family = el.label.font === "sans" ? "\\sffamily" : "";
   const sizing = size !== 10 ? `\\fontsize{${n(size)}}{${n(size * 1.2)}}\\selectfont` : "";
   if (family || sizing) o.push(`font=${family}${sizing}`);
-  return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${labelToLatex(text)}};`;
+  return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${labelToLatex(text, el.label.font)}};`;
 }
 

@@ -1,0 +1,44 @@
+# Compiles the export fixtures with real LaTeX engines, so a change to the TikZ
+# export that breaks a teacher's document fails the PR. The PDFs are uploaded
+# as an artifact for a visual check against the SVGs (see compare.html).
+name: LaTeX export
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [pdflatex, lualatex, xelatex]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install TeX Live
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+            texlive-pictures texlive-fonts-recommended texlive-lang-portuguese \
+            texlive-luatex texlive-xetex cm-super-minimal
+      - run: npm run fixtures
+      - run: npm run fixtures:compile -- --engine=${{ matrix.engine }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixtures-${{ matrix.engine }}
+          path: |
+            packages/core/fixtures/out/*.pdf
+            packages/core/fixtures/out/*.svg
+            packages/core/fixtures/out/*.tex
+            packages/core/fixtures/out/*.tikz
+            packages/core/fixtures/out/*.log
+            packages/core/fixtures/out/compare.html

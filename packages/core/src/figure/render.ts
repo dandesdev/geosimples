@@ -8,7 +8,7 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { estimateTextWidth, isMathLabel, labelPlacement } from "./labels";
+import { estimateTextWidth, labelPlacement, labelRuns, type LabelRun } from "./labels";
 import type {
   Dash,
   Element,
@@ -21,7 +21,7 @@ import type {
   Point,
   Stroke,
 } from "./types";
-import { polar, type Vec } from "./vec";
+import { mid, polar, type Vec } from "./vec";
 
 /**
  * A scene is the figure laid out on paper: coordinates in pt with Y pointing
@@ -59,7 +59,8 @@ export type Prim =
       text: string;
       size: number;
       color: string;
-      italic: boolean;
+      /** The text split by style, italic where LaTeX math would be. */
+      runs: LabelRun[];
       font: LabelFont;
     };
 
@@ -218,7 +219,8 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           layers.segment.push({
             kind: "path",
             owner: el.id,
-            d: offsetLines(a, segmentTicks(a, b, el.ticks)),
+            // Tick offsets are relative to the midpoint, like in the TikZ export.
+            d: offsetLines(mid(a, b), segmentTicks(a, b, el.ticks)),
             stroke: solid(stroke),
             fill: null,
           });
@@ -366,7 +368,7 @@ function addLabel(
     text,
     size,
     color: resolveColor(color),
-    italic: isMathLabel(text),
+    runs: labelRuns(text, el.label.font),
     font: el.label.font,
   });
   const w = estimateTextWidth(text, size) / 2;

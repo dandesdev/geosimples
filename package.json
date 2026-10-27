@@ -11,7 +11,9 @@
     "build": "npm run build -w apps/geosimples",
     "test": "npm test -w packages/core",
     "typecheck": "npm run typecheck -w packages/core",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "fixtures": "npm run fixtures -w packages/core",
+    "fixtures:compile": "npm run fixtures:compile -w packages/core --"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

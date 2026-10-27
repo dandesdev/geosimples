@@ -1,6 +1,6 @@
 import { DEFAULT_LABEL } from "./defaults";
 import { angleArc, centroid, pointMap } from "./geometry";
-import type { Element, FigureDoc, Id, Label, Point } from "./types";
+import type { Element, FigureDoc, Id, Label, LabelFont, Point } from "./types";
 import { add, dist, len, mid, perp, polar, scale, sub, unit, type Vec } from "./vec";
 
 /** Formats a number the Brazilian way: decimal comma, no trailing zeros. */
@@ -175,11 +175,6 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
   }
 }
 
-/** Single letters with primes or subscripts are typeset in italic, like $A$ in LaTeX. */
-export function isMathLabel(text: string): boolean {
-  return /^[A-Za-zα-ωΑ-Ω][′'₀-₉]*$/u.test(text);
-}
-
 const GREEK_TEX: Record<string, string> = {
   α: "\\alpha", β: "\\beta", γ: "\\gamma", δ: "\\delta", ε: "\\varepsilon",
   ζ: "\\zeta", η: "\\eta", θ: "\\theta", ι: "\\iota", κ: "\\kappa",
@@ -192,59 +187,139 @@ const GREEK_TEX: Record<string, string> = {
 const SUB = "₀₁₂₃₄₅₆₇₈₉";
 const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 
+/** Geometry symbols a teacher may type. pdflatex stops on them unless they become commands. */
+const SYMBOL_TEX: Record<string, string> = {
+  "∠": "\\angle", "△": "\\triangle", "⊥": "\\perp", "∥": "\\parallel", "≅": "\\cong",
+  "≡": "\\equiv", "∼": "\\sim", "≈": "\\approx", "≠": "\\neq", "≤": "\\leq", "≥": "\\geq",
+  "×": "\\times", "·": "\\cdot", "±": "\\pm", "−": "-", "∞": "\\infty", "→": "\\to",
+  "∈": "\\in", "∩": "\\cap", "∪": "\\cup", "√": "\\surd",
+};
+const SYMBOLS = Object.keys(SYMBOL_TEX).join("");
+/** Signs math mode already puts space around. */
+const OPERATORS = "=+-≅≡∼≈≠≤≥×·±−→∈∩∪⊥∥";
+
+const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()+\\-=\\s${SYMBOLS}]*$`, "u");
+
 /**
- * Converts a plain label to LaTeX. Letters, numbers and measures go in math
- * mode (A', A₁, 3,5, 60°). Anything else is escaped text.
+ * How a label is typeset. Names and numbers (A', A₁, x², 3,5, 60°) are math,
+ * like $A$ in LaTeX. Words ("2,5 cm", "setor") and sans-serif labels are text,
+ * because math mode would set words in italic and ignore \sffamily.
  */
-export function labelToLatex(text: string): string {
-  const mathSafe = /^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()+\-=\s]*$/u;
-  if (!mathSafe.test(text)) return escapeLatex(text);
+export function labelMode(text: string, font: LabelFont = "serif"): "math" | "text" {
+  if (font === "sans") return "text";
+  return MATH_SAFE.test(text) && !/[a-z]{2}/.test(text) ? "math" : "text";
+}
+
+/** A piece of label text with one style, for the SVG. */
+export interface LabelRun {
+  text: string;
+  italic: boolean;
+}
+
+/**
+ * Splits a label the way LaTeX sets it: in math, Latin letters and lowercase
+ * Greek are italic, while digits, signs and uppercase Greek stay upright.
+ */
+export function labelRuns(text: string, font: LabelFont = "serif"): LabelRun[] {
+  if (labelMode(text, font) === "text") return [{ text, italic: false }];
+  const runs: LabelRun[] = [];
+  for (const ch of Array.from(text)) {
+    const italic = /[A-Za-zα-ω]/u.test(ch);
+    const last = runs[runs.length - 1];
+    if (last && last.italic === italic) last.text += ch;
+    else runs.push({ text: ch, italic });
+  }
+  return runs;
+}
+
+/** Converts a plain label to LaTeX, in math or text mode as labelMode decides. */
+export function labelToLatex(text: string, font: LabelFont = "serif"): string {
+  return labelMode(text, font) === "math" ? `$${mathLatex(text)}$` : textLatex(text);
+}
+
+/** Reads a run of subscript or superscript digits starting at i. */
+function scriptDigits(chars: string[], i: number, set: string): string {
+  let digits = "";
+  while (i < chars.length && set.includes(chars[i])) digits += set.indexOf(chars[i++]);
+  return digits;
+}
+
+function mathLatex(text: string): string {
   let out = "";
   const chars = Array.from(text);
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i];
-    if (GREEK_TEX[ch]) {
-      out += GREEK_TEX[ch] + (/[A-Za-z]/.test(chars[i + 1] ?? "") ? " " : "");
-    } else if (SUB.includes(ch)) {
-      let digits = "";
-      while (i < chars.length && SUB.includes(chars[i])) digits += SUB.indexOf(chars[i++]);
-      i--;
-      out += `_{${digits}}`;
-    } else if (SUP.includes(ch)) {
-      let digits = "";
-      while (i < chars.length && SUP.includes(chars[i])) digits += SUP.indexOf(chars[i++]);
-      i--;
-      out += `^{${digits}}`;
+    const command = GREEK_TEX[ch] ?? SYMBOL_TEX[ch];
+    if (command) {
+      // The space ends the command name (\pi r) and math mode ignores it.
+      out += command + (i < chars.length - 1 ? " " : "");
+    } else if (SUB.includes(ch) || SUP.includes(ch)) {
+      const set = SUB.includes(ch) ? SUB : SUP;
+      const digits = scriptDigits(chars, i, set);
+      i += digits.length - 1;
+      out += `${set === SUB ? "_" : "^"}{${digits}}`;
     } else if (ch === "°") {
       out += "^\\circ";
     } else if (ch === "′") {
       out += "'";
-    } else if (ch === ",") {
-      // A decimal comma needs braces in math mode to avoid extra space.
-      out += /\d/.test(chars[i + 1] ?? "") ? "{,}" : ",";
+    } else if (ch === "," || ch === ";" || ch === ":") {
+      // Braces stop math from adding its own space after punctuation, so 3,5
+      // and (1; 2) are spaced as typed.
+      out += `{${ch}}`;
     } else if (ch === " ") {
-      out += "\\ ";
+      // Math already spaces relations and signs (=, +, ≅) like a typed space would.
+      if (!OPERATORS.includes(chars[i - 1] ?? "") && !OPERATORS.includes(chars[i + 1] ?? "")) out += "\\ ";
     } else {
       out += ch;
     }
   }
-  return `$${out}$`;
+  return out;
 }
 
-function escapeLatex(text: string): string {
-  return text.replace(/[\\{}#$%&_^~]/g, (ch) => {
-    switch (ch) {
-      case "\\":
-        return "\\textbackslash{}";
-      case "^":
-        return "\\textasciicircum{}";
-      case "~":
-        return "\\textasciitilde{}";
-      default:
-        return `\\${ch}`;
+function textLatex(text: string): string {
+  let out = "";
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const command = GREEK_TEX[ch] ?? SYMBOL_TEX[ch];
+    if (command) {
+      out += `$${command}$`;
+    } else if (SUB.includes(ch) || SUP.includes(ch)) {
+      const set = SUB.includes(ch) ? SUB : SUP;
+      const digits = scriptDigits(chars, i, set);
+      i += digits.length - 1;
+      out += `\\text${set === SUB ? "sub" : "super"}script{${digits}}`;
+    } else if (ch === "°") {
+      out += "$^\\circ$";
+    } else if (ch === "′") {
+      out += "'";
+    } else if (ch === '"') {
+      // Straight quotes become `` and '', which also keeps babel's " shorthands out.
+      const prev = chars[i - 1];
+      out += prev === undefined || /[\s([{]/.test(prev) ? "``" : "''";
+    } else {
+      out += TEXT_ESCAPES[ch] ?? ch;
     }
-  });
+  }
+  return out;
 }
+
+/** Characters that are LaTeX commands, or print as other glyphs in its default OT1 encoding (< as ¡). */
+const TEXT_ESCAPES: Record<string, string> = {
+  "\\": "\\textbackslash{}",
+  "^": "\\textasciicircum{}",
+  "~": "$\\sim$",
+  "<": "\\textless{}",
+  ">": "\\textgreater{}",
+  "|": "\\textbar{}",
+  "{": "\\{",
+  "}": "\\}",
+  "#": "\\#",
+  $: "\\$",
+  "%": "\\%",
+  "&": "\\&",
+  _: "\\_",
+};
 
 /** Rough text width in pt, used to size the figure around labels. */
 export function estimateTextWidth(text: string, size: number): number {
