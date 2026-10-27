@@ -247,6 +247,24 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     chainLength = 0;
   };
 
+  /**
+   * A -- with no point after it closes the contour: at the end of the input,
+   * or right before a free text ("…--C=(0;3)-- "Figura 1"@(3;-1)").
+   */
+  const closeContour = () => {
+    if (!pendingConnector) return;
+    const c: { start: number; end: number } = pendingConnector;
+    pendingConnector = null;
+    if (chainStart === null || last === null || chainLength < 3) {
+      errors.push({ message: "Um -- sem ponto depois fecha o contorno: ligue ao menos três pontos antes.", ...c });
+      tokens.push({ kind: "error", ...c });
+    } else if (last !== chainStart) {
+      segments.push([last, chainStart]);
+    }
+    chainStart = null;
+    chainLength = 0;
+  };
+
   for (;;) {
     skipSpaces();
     if (i >= text.length) break;
@@ -265,12 +283,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     }
 
     if (text[i] === '"' || text[i] === "“") {
-      if (pendingConnector) {
-        const c: { start: number; end: number } = pendingConnector;
-        errors.push({ message: "Depois de -- vem um ponto.", ...c });
-        tokens.push({ kind: "error", ...c });
-        pendingConnector = null;
-      }
+      closeContour();
       readText();
       continue;
     }
@@ -288,15 +301,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     last = index;
   }
 
-  if (pendingConnector) {
-    const c: { start: number; end: number } = pendingConnector;
-    if (chainStart === null || last === null || chainLength < 3) {
-      errors.push({ message: "Um -- no fim fecha o contorno: ligue ao menos três pontos antes.", ...c });
-      tokens.push({ kind: "error", ...c });
-    } else if (last !== chainStart) {
-      segments.push([last, chainStart]);
-    }
-  }
+  closeContour();
 
   // Drop segments that would have no length.
   const kept = segments.filter(([p, q]) => dist(position(p), position(q)) > 0);

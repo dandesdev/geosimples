@@ -139,6 +139,13 @@ describe("parseInput", () => {
     expect(r.errors.map((e) => text.slice(e.start, e.end))).toEqual(["abc", "3;x"]);
   });
 
+  it("closes a contour with -- right before a free text", () => {
+    const r = parseInput('A=(0;0)--B=(4;0)--C=(0;3)-- "Figura 1"@(1;-1)');
+    expect(r.errors).toEqual([]);
+    expect(r.segments).toContainEqual([2, 0]);
+    expect(r.texts).toHaveLength(1);
+  });
+
   it("refuses to close fewer than three points", () => {
     expect(parseInput("0;0--1;0--").errors).toHaveLength(1);
     expect(parseInput("--0;0").errors).toHaveLength(1);
