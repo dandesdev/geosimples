@@ -1,98 +1,246 @@
 import { LIMITS } from "./defaults";
-import { add, polar, type Vec } from "./vec";
+import type { Id } from "./types";
+import { add, dist, polar, type Vec } from "./vec";
 
+/** A point to create. */
 export interface ParsedPoint {
   x: number;
   y: number;
   label?: string;
 }
 
-export interface ParseResult {
-  points: ParsedPoint[];
-  errors: string[];
+/**
+ * A point the input refers to: a new one, or an existing point named in the
+ * figure. Segments refer to nodes by index.
+ */
+export type InputNode = ({ kind: "new" } & ParsedPoint) | { kind: "existing"; id: Id; x: number; y: number };
+
+export type InputTokenKind = "name" | "point" | "ref" | "connector" | "error";
+
+/** A span of the input text, used to color it as the teacher types. */
+export interface InputToken {
+  kind: InputTokenKind;
+  start: number;
+  end: number;
 }
 
-export interface ParseContext {
-  /** Last selected point, used by R:θ. */
+export interface InputError {
+  message: string;
+  start: number;
+  end: number;
+}
+
+export interface ParsedInput {
+  nodes: InputNode[];
+  /** Pairs of node indices to join with a segment. */
+  segments: [number, number][];
+  tokens: InputToken[];
+  errors: InputError[];
+}
+
+export interface InputContext {
+  /** Points already in the figure, in figure order. Their labels can be used as names. */
+  points: { id: Id; x: number; y: number; label?: string }[];
+  /** Last selected point: where a +displacement starts when nothing comes before it. */
   selected?: Vec;
-  /** Last point in the figure, the fallback for +R:θ at the start of the input. */
-  last?: Vec;
 }
 
-/** Accepts 1.5 and 1,5 (Brazilian decimal comma). */
-function parseNumber(text: string): number | null {
-  const t = text.trim().replace(",", ".");
-  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
-  const n = Number(t);
-  return Number.isFinite(n) && Math.abs(n) <= LIMITS.coordinate ? n : null;
-}
+const NAME = /[A-Za-zα-ωΑ-Ω][A-Za-z0-9′'₀-₉]*/uy;
+const NUMBER = /[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)/y;
 
-const NAME = /^([A-Za-zα-ωΑ-Ω][A-Za-z0-9′'₀-₉]*)=(.+)$/u;
+const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
 
 /**
- * Parses the point input bar. Points are separated by spaces:
+ * Parses the point input bar.
  *
- * - `X;Y` absolute coordinates, e.g. `0;0` or `(2,5;-1)`
- * - `+R:θ` R units at θ degrees from the previous point
- * - `R:θ` R units at θ degrees from the last selected point
- * - an optional name in front: `A=0;0`
+ * - `(X;Y)` or `X;Y`: absolute point. Decimal comma or dot.
+ * - `(R:θ)`: polar, R units at θ degrees from the origin.
+ * - `+(X;Y)` and `+(R:θ)`: displacement from the previous point. At the
+ *   start, from the selected point, or else the last point of the figure.
+ * - `Nome=` before a point names it. A bare name refers to an existing point.
+ * - `--` joins its neighbors with a segment, with or without spaces.
+ *   A `--` at the very end closes the contour.
+ * - Spaces without `--` separate independent points or chains.
  */
-export function parsePointInput(input: string, ctx: ParseContext = {}): ParseResult {
-  const points: ParsedPoint[] = [];
-  const errors: string[] = [];
-  const normalized = input.replace(/\s*([=;:])\s*/g, "$1").trim();
-  if (normalized === "") return { points, errors };
+export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
+  const nodes: InputNode[] = [];
+  const segments: [number, number][] = [];
+  const tokens: InputToken[] = [];
+  const errors: InputError[] = [];
 
-  for (const raw of normalized.split(/\s+/)) {
-    let token = raw;
+  const names = new Map<string, number | { id: Id; x: number; y: number }>();
+  for (const p of ctx.points) if (p.label) names.set(p.label, { id: p.id, x: p.x, y: p.y });
+
+  let i = 0;
+  let chainStart: number | null = null;
+  let chainLength = 0;
+  let last: number | null = null;
+  let pendingConnector: { start: number; end: number } | null = null;
+
+  const skipSpaces = () => {
+    while (isSpace(text[i])) i++;
+  };
+
+  const fail = (start: number, message: string) => {
+    // Resume after the broken piece: at the next space or connector.
+    let end = Math.max(i, start + 1);
+    while (end < text.length && !isSpace(text[end]) && !text.startsWith("--", end)) end++;
+    errors.push({ message, start, end });
+    tokens.push({ kind: "error", start, end });
+    i = end;
+    chainStart = null;
+    chainLength = 0;
+    pendingConnector = null;
+  };
+
+  const readNumber = (): number | null => {
+    NUMBER.lastIndex = i;
+    const m = NUMBER.exec(text);
+    if (!m) return null;
+    const n = Number(m[0].replace(",", "."));
+    if (!Number.isFinite(n) || Math.abs(n) > LIMITS.coordinate) return null;
+    i += m[0].length;
+    return n;
+  };
+
+  const position = (index: number): Vec => {
+    const n = nodes[index];
+    return { x: n.x, y: n.y };
+  };
+
+  const origin = (): Vec | undefined => {
+    if (last !== null) return position(last);
+    if (ctx.selected) return ctx.selected;
+    const p = ctx.points[ctx.points.length - 1];
+    return p ? { x: p.x, y: p.y } : undefined;
+  };
+
+  /** Reads one point or name. Returns the node index, or null after reporting an error. */
+  const readItem = (): number | null => {
+    const start = i;
     let label: string | undefined;
-    const named = NAME.exec(token);
-    if (named) {
-      label = named[1];
-      token = named[2];
-    }
-    const relative = token.startsWith("+");
-    if (relative) token = token.slice(1);
-    token = token.replace(/^\((.*)\)$/, "$1");
 
-    if (token.includes(";")) {
-      if (relative) {
-        errors.push(`"${raw}": use + apenas com R:θ, como +3:60.`);
+    NAME.lastIndex = i;
+    const name = NAME.exec(text);
+    if (name) {
+      const afterName = i + name[0].length;
+      let j = afterName;
+      while (isSpace(text[j])) j++;
+      if (text[j] === "=") {
+        label = name[0];
+        tokens.push({ kind: "name", start, end: j + 1 });
+        i = j + 1;
+        skipSpaces();
+      } else {
+        i = afterName;
+        const target = names.get(name[0]);
+        if (target === undefined) {
+          fail(start, `Não há ponto chamado "${name[0]}". Para criar, use ${name[0]}=(x;y).`);
+          return null;
+        }
+        tokens.push({ kind: "ref", start, end: i });
+        if (typeof target === "number") return target;
+        nodes.push({ kind: "existing", ...target });
+        names.set(name[0], nodes.length - 1);
+        return nodes.length - 1;
+      }
+    }
+
+    const pointStart = i;
+    // A leading + makes it a displacement: +(1;2), +1;2, +(3:60).
+    const isRelative = text[i] === "+";
+    if (isRelative) {
+      i++;
+      skipSpaces();
+    }
+    const paren = text[i] === "(";
+    if (paren) {
+      i++;
+      skipSpaces();
+    }
+    const a = readNumber();
+    skipSpaces();
+    const sep = text[i];
+    if (a === null || (sep !== ";" && sep !== ":")) {
+      fail(start, label ? `Depois de ${label}= vem um ponto, como (2;3).` : "Use (x;y), (R:θ), +(x;y) ou +(R:θ).");
+      return null;
+    }
+    i++;
+    skipSpaces();
+    const b = readNumber();
+    skipSpaces();
+    if (b === null) {
+      fail(start, sep === ";" ? "Falta a coordenada y. Exemplo: (2;3)." : "Falta o ângulo θ, em graus. Exemplo: (3:60).");
+      return null;
+    }
+    if (paren) {
+      if (text[i] !== ")") {
+        fail(start, "Falta fechar o parêntese.");
+        return null;
+      }
+      i++;
+    }
+    tokens.push({ kind: "point", start: pointStart, end: i });
+
+    let p: Vec = sep === ";" ? { x: a, y: b } : polar(a, b);
+    if (isRelative) {
+      const from = origin();
+      if (!from) {
+        errors.push({ message: "Não há ponto anterior para o deslocamento partir.", start: pointStart, end: i });
+        tokens.push({ kind: "error", start: pointStart, end: i });
+        return null;
+      }
+      p = add(from, p);
+    }
+    nodes.push({ kind: "new", x: roundTiny(p.x), y: roundTiny(p.y), ...(label ? { label } : {}) });
+    const index = nodes.length - 1;
+    if (label) names.set(label, index);
+    return index;
+  };
+
+  for (;;) {
+    skipSpaces();
+    if (i >= text.length) break;
+
+    if (text.startsWith("--", i)) {
+      const start = i;
+      i += 2;
+      if (last === null || chainStart === null || pendingConnector) {
+        errors.push({ message: "Coloque um ponto antes de --.", start, end: i });
+        tokens.push({ kind: "error", start, end: i });
         continue;
       }
-      const parts = token.split(";");
-      const x = parts.length === 2 ? parseNumber(parts[0]) : null;
-      const y = parts.length === 2 ? parseNumber(parts[1]) : null;
-      if (x === null || y === null) {
-        errors.push(`"${raw}" não é um ponto X;Y válido. Exemplo: 2;3 ou 1,5;-2.`);
-        continue;
-      }
-      points.push({ x, y, label });
-    } else if (token.includes(":")) {
-      const parts = token.split(":");
-      const r = parts.length === 2 ? parseNumber(parts[0]) : null;
-      const theta = parts.length === 2 ? parseNumber(parts[1]) : null;
-      if (r === null || theta === null) {
-        errors.push(`"${raw}" não é um ponto R:θ válido. Exemplo: +3:60.`);
-        continue;
-      }
-      const prev = points[points.length - 1];
-      const origin = relative ? (prev ?? ctx.selected ?? ctx.last) : ctx.selected;
-      if (!origin) {
-        errors.push(
-          relative
-            ? `"${raw}": não há ponto anterior para partir.`
-            : `"${raw}": selecione um ponto para usar R:θ, ou use +R:θ a partir do ponto anterior.`,
-        );
-        continue;
-      }
-      const p = add(origin, polar(r, theta));
-      points.push({ x: roundTiny(p.x), y: roundTiny(p.y), label });
+      pendingConnector = { start, end: i };
+      tokens.push({ kind: "connector", start, end: i });
+      continue;
+    }
+
+    const index = readItem();
+    if (index === null) continue;
+    if (pendingConnector && last !== null) {
+      if (last !== index) segments.push([last, index]);
+      chainLength++;
     } else {
-      errors.push(`"${raw}" não foi entendido. Use X;Y, +R:θ ou R:θ.`);
+      chainStart = index;
+      chainLength = 1;
+    }
+    pendingConnector = null;
+    last = index;
+  }
+
+  if (pendingConnector) {
+    const c: { start: number; end: number } = pendingConnector;
+    if (chainStart === null || last === null || chainLength < 3) {
+      errors.push({ message: "Um -- no fim fecha o contorno: ligue ao menos três pontos antes.", ...c });
+      tokens.push({ kind: "error", ...c });
+    } else if (last !== chainStart) {
+      segments.push([last, chainStart]);
     }
   }
-  return { points, errors };
+
+  // Drop segments that would have no length.
+  const kept = segments.filter(([p, q]) => dist(position(p), position(q)) > 0);
+  return { nodes, segments: kept, tokens: tokens.sort((x, y) => x.start - y.start), errors };
 }
 
 /** Removes floating point noise like 2.9999999999999996. */

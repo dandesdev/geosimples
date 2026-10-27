@@ -9,6 +9,7 @@ import {
   type FigureDoc,
   type Hit,
   type Id,
+  type ParsedInput,
   type Point,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
@@ -18,6 +19,7 @@ import { EmptyState } from "./EmptyState";
 import { SelectionSummary } from "./SelectionSummary";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
+import { parseDraft } from "@/lib/inputContext";
 
 const PRIMARY = "#10b981";
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
@@ -72,7 +74,15 @@ export function PreviewPanel() {
   const [box, setBox] = useState<Box | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
 
-  const fitted = useMemo(() => fitView(scene.box, k), [scene.box, k]);
+  const draft = useFigureStore((s) => s.inputDraft);
+  const ghost = useMemo(() => {
+    if (draft.trim() === "") return null;
+    const parsed = parseDraft(draft, doc, selection);
+    // Parts typed correctly show even while a later part is unfinished.
+    return parsed.nodes.length > 0 ? parsed : null;
+  }, [draft, doc, selection]);
+
+  const fitted = useMemo(() => fitView(unionBox(scene.box, ghost && ghostBox(ghost, k)), k), [scene.box, ghost, k]);
   const vb = frozen ?? (autoFit ? fitted : (view ?? fitted));
   const unitsPerPx = Math.max(vb.w / Math.max(size.w, 1), vb.h / Math.max(size.h, 1));
   const vbRef = useRef(vb);
@@ -125,8 +135,15 @@ export function PreviewPanel() {
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
 
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.button !== 0) return;
     const svg = svgRef.current!;
+    // The middle button always moves the view, whatever the mode.
+    if (e.button === 1) {
+      e.preventDefault();
+      svg.setPointerCapture(e.pointerId);
+      gesture.current = { kind: "pan", x: e.clientX, y: e.clientY, view: vb };
+      return;
+    }
+    if (e.button !== 0) return;
     svg.setPointerCapture(e.pointerId);
     const owner = ownerAt(e.target);
     const store = useFigureStore.getState();
@@ -221,6 +238,9 @@ export function PreviewPanel() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          // Stops the browser's autoscroll from starting on a middle click.
+          onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+          onAuxClick={(e) => e.preventDefault()}
         >
           {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
           <g dangerouslySetInnerHTML={{ __html: markup }} />
@@ -232,6 +252,7 @@ export function PreviewPanel() {
             moveMode={mode === "move"}
             doc={doc}
           />
+          {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
           {box && (
             <rect
               x={box.minX}
@@ -248,7 +269,7 @@ export function PreviewPanel() {
             />
           )}
         </svg>
-        {doc.elements.length === 0 && <EmptyState />}
+        {doc.elements.length === 0 && draft.trim() === "" && <EmptyState />}
         <ZoomBar
           onZoomIn={() => zoomBy(1 / 1.25)}
           onZoomOut={() => zoomBy(1.25)}
@@ -378,6 +399,64 @@ function Overlay({
             </g>
           );
         })}
+    </g>
+  );
+}
+
+function ghostBox(parsed: ParsedInput, k: number): Box | null {
+  if (parsed.nodes.length === 0) return null;
+  const xs = parsed.nodes.map((n) => n.x * k);
+  const ys = parsed.nodes.map((n) => -n.y * k);
+  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+}
+
+function unionBox(a: Box | null, b: Box | null): Box | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
+/** Dashed preview of what the point input would add. */
+function DraftGhost({ parsed, k, px }: { parsed: ParsedInput; k: number; px: number }) {
+  const at = (i: number) => ({ x: parsed.nodes[i].x * k, y: -parsed.nodes[i].y * k });
+  return (
+    <g pointerEvents="none">
+      {parsed.segments.map(([p, q], i) => {
+        const a = at(p);
+        const b = at(q);
+        return (
+          <line
+            key={i}
+            x1={a.x}
+            y1={a.y}
+            x2={b.x}
+            y2={b.y}
+            stroke={PRIMARY}
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+      {parsed.nodes.map((n, i) => {
+        if (n.kind !== "new") return null;
+        const c = at(i);
+        return (
+          <g key={i}>
+            <circle cx={c.x} cy={c.y} r={4 * px} fill="white" stroke={PRIMARY} strokeWidth={1.5 * px} />
+            {n.label && (
+              <text x={c.x + 7 * px} y={c.y - 7 * px} fontSize={12 * px} fill={PRIMARY} fontFamily="Inter, system-ui, sans-serif">
+                {n.label}
+              </text>
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 }

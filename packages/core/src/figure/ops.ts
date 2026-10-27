@@ -18,7 +18,7 @@ import {
   signedArea2,
 } from "./geometry";
 import { labelFor, type LabelScheme, withText } from "./labels";
-import type { ParsedPoint } from "./parse";
+import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Angle,
   Circle,
@@ -105,6 +105,47 @@ export function addPoints(doc: FigureDoc, parsed: ParsedPoint[]): OpResult {
     ...(p.label ? { label: withText(undefined, p.label.slice(0, LIMITS.labelLength)) } : {}),
   }));
   return ok(withElements(doc, [...doc.elements, ...points]), points.map((p) => p.id));
+}
+
+/**
+ * Applies the point input: creates the new points and the segments of its
+ * chains in one step. `created` lists the points the input used, in order,
+ * so they can be selected for the next action.
+ */
+export function applyInput(doc: FigureDoc, parsed: ParsedInput): OpResult {
+  if (parsed.errors.length > 0) return fail(doc, parsed.errors[0].message);
+  if (parsed.nodes.length === 0) return ok(doc);
+  const fresh = parsed.nodes.filter((n) => n.kind === "new");
+  if (!roomFor(doc, fresh.length + parsed.segments.length)) return fail(doc, LIMIT_ERROR);
+
+  const nextId = idMaker(doc);
+  const ids: Id[] = [];
+  const points: Point[] = [];
+  for (const n of parsed.nodes) {
+    if (n.kind === "existing") {
+      ids.push(n.id);
+      continue;
+    }
+    const point: Point = {
+      id: nextId("point"),
+      type: "point",
+      x: n.x,
+      y: n.y,
+      ...DEFAULT_POINT,
+      ...(n.label ? { label: withText(undefined, n.label.slice(0, LIMITS.labelLength)) } : {}),
+    };
+    points.push(point);
+    ids.push(point.id);
+  }
+
+  let working = withElements(doc, [...doc.elements, ...points]);
+  for (const [p, q] of parsed.segments) {
+    const a = ids[p];
+    const b = ids[q];
+    if (a === b || segmentExists(working, a, b)) continue;
+    working = withElements(working, [...working.elements, newSegment(nextId("segment"), a, b)]);
+  }
+  return ok(working, [...new Set(ids)]);
 }
 
 function segmentExists(doc: FigureDoc, a: Id, b: Id): boolean {

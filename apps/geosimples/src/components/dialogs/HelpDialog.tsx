@@ -13,12 +13,13 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
         </DialogHeader>
         <ol className="list-decimal space-y-2 pl-5 text-sm">
           <li>
-            <b>Pontos.</b> Digite na barra abaixo da prévia, separados por espaço: <code>A=0;0 B=4;0 C=0;3</code>. Também
-            vale <code>+R:θ</code> (R unidades a θ graus do ponto anterior).
+            <b>Pontos.</b> Digite na barra abaixo da prévia: <code>A=(0;0)--B=(4;0)--C=(0;3)--</code> cria o triângulo
+            ABC. <code>--</code> liga pontos, e no fim fecha o contorno. <code>+(4;0)</code> e <code>+(3:90)</code> partem
+            do ponto anterior. O ícone de ajuda ao lado da barra mostra tudo.
           </li>
           <li>
-            <b>Seleção.</b> Clique nos objetos da prévia. A ordem importa: os números verdes mostram a ordem dos pontos
-            selecionados.
+            <b>Seleção.</b> Clique nos objetos da prévia, ou arraste uma caixa em volta deles. A ordem importa: os
+            números verdes mostram a ordem dos pontos selecionados. Arrastar com o botão do meio move a vista.
           </li>
           <li>
             <b>Construir.</b> Com pontos selecionados, use a barra acima da prévia: ligar pontos, marcar ângulo (A, B, C
