@@ -14,6 +14,7 @@ const TOKEN_CLASS: Record<InputTokenKind, string> = {
   name: "text-primary",
   point: "rounded-sm bg-primary/10",
   ref: "text-sky-700",
+  text: "text-amber-700",
   // The text stays "--" but shows as a connector line, so it can't be mistaken for a minus.
   connector:
     "relative text-transparent after:absolute after:inset-x-px after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
@@ -43,7 +44,9 @@ function summary(parsed: ParsedInput): string {
   if (parsed.segments.length) {
     parts.push(`${parsed.segments.length} ${parsed.segments.length === 1 ? "segmento" : "segmentos"}`);
   }
-  return parts.length ? `${parts.join(" e ")}. Enter para adicionar.` : "";
+  if (parsed.texts.length) parts.push(`${parsed.texts.length} ${parsed.texts.length === 1 ? "texto" : "textos"}`);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} e ${parts[parts.length - 1]}` : parts[0];
+  return list ? `${list}. Enter para adicionar.` : "";
 }
 
 export function PointInput() {
@@ -148,6 +151,9 @@ export function PointInput() {
             </p>
             <p>
               Espaço sem <b>--</b> separa pontos soltos. <code>A--C</code> liga pontos que já existem.
+            </p>
+            <p>
+              <b>"texto"@(X;Y)</b> escreve um texto solto centrado no ponto: <code>"Figura 1"@(2;-1)</code>
             </p>
           </TooltipContent>
         </Tooltip>

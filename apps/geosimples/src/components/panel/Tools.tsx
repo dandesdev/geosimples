@@ -123,6 +123,9 @@ function AutoLabelTool() {
         }}
       />
       <Choice label="Nomes" value={scheme} options={SCHEMES[target]} onChange={setScheme} />
+      {(scheme === "length" || scheme === "measure") && (
+        <p className="mb-1 text-xs text-muted-foreground">A medida atualiza sozinha quando os pontos se movem.</p>
+      )}
       <Choice
         label="Quais"
         value={onlySelected ? "selected" : "all"}
@@ -155,10 +158,45 @@ function AutoLabelTool() {
   );
 }
 
+function FreeTextTool() {
+  const [text, setText] = useState("");
+  const insert = () => {
+    if (actions.addText(text)) setText("");
+  };
+  return (
+    <Section title="Texto livre">
+      <p className="mb-1 text-xs text-muted-foreground">
+        Um texto solto, como "Figura 1" ou "não está em escala". Ele entra abaixo da figura; arraste no modo Mover
+        pontos. Na barra de pontos também dá: <code>"Figura 1"@(2;-1)</code>.
+      </p>
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          insert();
+        }}
+      >
+        <input
+          value={text}
+          maxLength={200}
+          placeholder="Ex.: Figura 1"
+          aria-label="Texto livre"
+          onChange={(e) => setText(e.target.value)}
+          className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        />
+        <Button type="submit" size="sm" disabled={text.trim() === ""}>
+          Inserir
+        </Button>
+      </form>
+    </Section>
+  );
+}
+
 export function Tools() {
   return (
     <div className="space-y-3">
       <AutoLabelTool />
+      <FreeTextTool />
       <PointOnSegmentTool />
       <ProjectionTool />
     </div>

@@ -1,4 +1,5 @@
 import { DEFAULT_LABEL, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
+import { MEASURES } from "./labels";
 import type {
   Angle,
   Circle,
@@ -8,7 +9,10 @@ import type {
   FigureDoc,
   Fill,
   FillPattern,
+  FreeText,
   Label,
+  LabelMeasure,
+  MeasureKind,
   Point,
   Polygon,
   Segment,
@@ -50,10 +54,25 @@ function fill(x: unknown): Fill | null {
   };
 }
 
-function label(x: unknown): Label | undefined {
+/** Longest prefix or suffix of a live measure. */
+const AFFIX_LENGTH = 40;
+
+function measure(x: unknown, kinds: readonly MeasureKind[]): LabelMeasure | undefined {
+  if (!isObj(x) || !kinds.includes(x.kind as MeasureKind)) return undefined;
+  return {
+    kind: x.kind as MeasureKind,
+    decimals: Math.round(num(x.decimals, 0, 4, 2)),
+    prefix: str(x.prefix)?.slice(0, AFFIX_LENGTH) ?? "",
+    suffix: str(x.suffix)?.slice(0, AFFIX_LENGTH) ?? "",
+  };
+}
+
+function label(x: unknown, kinds: readonly MeasureKind[]): Label | undefined {
   if (!isObj(x)) return undefined;
   const text = str(x.text)?.slice(0, LIMITS.labelLength) ?? "";
-  if (text === "") return undefined;
+  // A measure the element can't have is dropped; its last text still shows.
+  const m = measure(x.measure, kinds);
+  if (text === "" && !m) return undefined;
   return {
     text,
     angle: x.angle === null ? null : typeof x.angle === "number" && Number.isFinite(x.angle) ? x.angle : null,
@@ -61,11 +80,12 @@ function label(x: unknown): Label | undefined {
     size: num(x.size, 4, 72, DEFAULT_LABEL.size),
     color: color(x.color, DEFAULT_LABEL.color),
     font: x.font === "sans" ? "sans" : "serif",
+    ...(m ? { measure: m } : {}),
   };
 }
 
 function withLabel<T extends Element>(el: T, raw: Raw): T {
-  const l = label(raw.label);
+  const l = label(raw.label, MEASURES[el.type]);
   return l ? { ...el, label: l } : el;
 }
 
@@ -199,6 +219,25 @@ export function normalizeDoc(input: unknown): FigureDoc {
           fill: fill(r.fill),
         };
         out.push(withLabel(poly, r));
+        break;
+      }
+      case "text": {
+        const x = coord(r.x);
+        const y = coord(r.y);
+        const text = str(r.text)?.slice(0, LIMITS.labelLength) ?? "";
+        if (ids.has(id) || x === null || y === null || text.trim() === "") break;
+        ids.add(id);
+        const t: FreeText = {
+          id,
+          type: "text",
+          x,
+          y,
+          text,
+          size: num(r.size, 4, 72, DEFAULT_LABEL.size),
+          color: color(r.color, DEFAULT_LABEL.color),
+          font: r.font === "sans" ? "sans" : "serif",
+        };
+        out.push(t);
         break;
       }
     }

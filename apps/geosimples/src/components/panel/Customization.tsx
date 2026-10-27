@@ -1,14 +1,26 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { updateElements, type Element } from "@geosimples/core/figure";
+import { labelText, updateElements, type Element, type FigureDoc } from "@geosimples/core/figure";
 import { Switch } from "@/components/ui/switch";
+import { changeLabel, type LabelChange } from "@/lib/labels";
 import { TYPE_NAMES } from "@/lib/names";
 import { useFigureStore } from "@/store/figureStore";
-import { AngleEditor, CircleEditor, PointEditor, PolygonEditor, SegmentEditor, type Update } from "./elementEditors";
+import { useActivePrefs } from "@/store/useActivePrefs";
+import {
+  AngleEditor,
+  CircleEditor,
+  PointEditor,
+  PolygonEditor,
+  SegmentEditor,
+  TextEditor,
+  type Update,
+} from "./elementEditors";
 
-function describe(el: Element): string {
+function describe(doc: FigureDoc, el: Element): string {
   const name = TYPE_NAMES[el.type].title;
-  return el.label?.text ? `${name} ${el.label.text}` : `${name} ${el.id}`;
+  if (el.type === "text") return `${name} "${el.text}"`;
+  const text = labelText(doc, el);
+  return text ? `${name} ${text}` : `${name} ${el.id}`;
 }
 
 export function Customization() {
@@ -16,6 +28,7 @@ export function Customization() {
   const selection = useFigureStore((s) => s.selection);
   const [index, setIndex] = useState(0);
   const [applyAll, setApplyAll] = useState(true);
+  const labelBase = useActivePrefs().styles.label;
 
   const byId = new Map(doc.elements.map((e) => [e.id, e]));
   const selected = selection.map((id) => byId.get(id)).filter((e): e is Element => !!e);
@@ -40,13 +53,16 @@ export function Customization() {
     store.commit(updateElements(store.doc, targets, change), `${keyBase}:${key}`);
   };
 
-  const props = { update: update as never, multi, doc };
+  const updateLabel = (change: LabelChange, key: string) =>
+    update((e) => changeLabel(useFigureStore.getState().doc, e, change, labelBase), key);
+
+  const props = { update: update as never, updateLabel, multi, doc };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium" title={describe(el)}>
-          {describe(el)}
+        <span className="truncate text-sm font-medium" title={describe(doc, el)}>
+          {describe(doc, el)}
         </span>
         {selected.length > 1 && (
           <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
@@ -87,6 +103,7 @@ export function Customization() {
       {el.type === "angle" && <AngleEditor el={el} {...props} />}
       {el.type === "circle" && <CircleEditor el={el} {...props} />}
       {el.type === "polygon" && <PolygonEditor el={el} {...props} />}
+      {el.type === "text" && <TextEditor el={el} {...props} />}
     </div>
   );
 }
