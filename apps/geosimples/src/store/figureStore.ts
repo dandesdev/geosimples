@@ -1,6 +1,20 @@
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import { emptyDoc, normalizeDoc, type FigureDoc, type Id, type OpResult } from "@geosimples/core/figure";
+import { create, type StateCreator } from "zustand";
+import { toast } from "sonner";
+import {
+  copyName,
+  createLibrary,
+  emptyDoc,
+  latestFigure,
+  LIBRARY_KEY,
+  uniqueName,
+  untitledName,
+  type FigureDoc,
+  type FigureFile,
+  type FigureMeta,
+  type Id,
+  type KeyValueStorage,
+  type OpResult,
+} from "@geosimples/core/figure";
 
 export interface Settings {
   /** cm per world unit in every export. */
@@ -37,7 +51,7 @@ const HISTORY_LIMIT = 100;
 /** Edits with the same key within this window merge into one undo step. */
 const COALESCE_MS = 1000;
 
-interface FigureState {
+interface FigureState extends LibrarySlice {
   doc: FigureDoc;
   /** Selected ids in the order they were picked. Order matters for connect and angles. */
   selection: Id[];
@@ -72,6 +86,22 @@ interface FigureState {
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }
 
+/** The figures on this machine and the actions that switch between them. */
+interface LibrarySlice {
+  /** The open figure in the library. */
+  figureId: string;
+  /** Every figure saved on this machine. */
+  figures: FigureMeta[];
+  newFigure: () => void;
+  openFigure: (id: string) => void;
+  /** Copies a figure and opens the copy. */
+  duplicateFigure: (id: string) => void;
+  renameFigure: (id: string, name: string) => void;
+  deleteFigure: (id: string) => void;
+  /** Adds a figure from a file or link as a new entry and opens it. */
+  importFigure: (file: FigureFile) => void;
+}
+
 let lastCommit: { key: string; at: number } | null = null;
 let transientBase: FigureDoc | null = null;
 
@@ -81,8 +111,177 @@ const pruneSelection = (doc: FigureDoc, selection: Id[]) => {
   return kept.length === selection.length ? selection : kept;
 };
 
+// --- Library persistence ---------------------------------------------------
+
+/** localStorage, or memory when the browser blocks it (some private modes). */
+function browserStorage(): KeyValueStorage {
+  try {
+    const probe = "geosimples-probe";
+    localStorage.setItem(probe, probe);
+    localStorage.removeItem(probe);
+    return localStorage;
+  } catch {
+    const data = new Map<string, string>();
+    return {
+      getItem: (k) => data.get(k) ?? null,
+      setItem: (k, v) => void data.set(k, v),
+      removeItem: (k) => void data.delete(k),
+    };
+  }
+}
+
+const newFigureId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+const library = createLibrary(browserStorage(), { now: Date.now, newId: newFigureId });
+
+let storageWarned = false;
+/** Runs a library write. A full storage shows one warning instead of breaking the editor. */
+function tryWrite<T>(write: () => T): T | null {
+  try {
+    const result = write();
+    storageWarned = false;
+    return result;
+  } catch {
+    if (!storageWarned) {
+      storageWarned = true;
+      toast.error("Não foi possível salvar neste navegador: o espaço acabou.", {
+        description: "Baixe o arquivo da figura ou exclua figuras antigas.",
+        duration: 10000,
+      });
+    }
+    return null;
+  }
+}
+
+function openLibrary() {
+  const opened = tryWrite(() => library.open());
+  if (opened) return opened;
+  // Storage is full or broken: edit in memory. An old single figure stays where it was.
+  const now = Date.now();
+  const meta: FigureMeta = { id: newFigureId(), name: untitledName([]), createdAt: now, updatedAt: now };
+  return { index: { version: 1 as const, activeId: meta.id, figures: [meta] }, doc: emptyDoc() };
+}
+
+const opened = openLibrary();
+
+/** The doc last written for the open figure. Saving skips it. */
+let savedDoc: FigureDoc = opened.doc;
+let saveTimer: number | undefined;
+/** Saves wait for a pause, so a drag doesn't write on every frame. */
+const SAVE_DELAY_MS = 300;
+
+function flushSave() {
+  window.clearTimeout(saveTimer);
+  saveTimer = undefined;
+  const { doc, figureId } = useFigureStore.getState();
+  if (doc === savedDoc) return;
+  savedDoc = doc;
+  const index = tryWrite(() => library.save(figureId, doc));
+  if (index) useFigureStore.setState({ figures: index.figures });
+}
+
+/** A stored figure's doc, for thumbnails and downloads. The open one comes from the store. */
+export function loadFigureDoc(id: string): FigureDoc {
+  const state = useFigureStore.getState();
+  return id === state.figureId ? state.doc : (library.load(id) ?? emptyDoc());
+}
+
+/**
+ * Adds the library to the store: the open figure comes from it, with an
+ * empty undo history, and the library actions switch figures.
+ */
+function withLibrary(
+  init: StateCreator<FigureState, [], [], Omit<FigureState, keyof LibrarySlice>>,
+): StateCreator<FigureState> {
+  return (set, get, api) => {
+    /** Shows another figure. Its undo history starts from it. */
+    const show = (figureId: string, doc: FigureDoc, figures: FigureMeta[]) => {
+      lastCommit = null;
+      transientBase = null;
+      savedDoc = doc;
+      set((s) => ({
+        figureId,
+        figures,
+        doc,
+        past: [],
+        future: [],
+        selection: [],
+        inputDraft: "",
+        actionPreview: null,
+        // A camera placed for the previous figure means nothing for this one.
+        settings: { ...s.settings, autoFit: true },
+      }));
+    };
+
+    /** Adds a figure and opens it. When it can't be stored it isn't opened, so nothing is lost silently. */
+    const addAndOpen = (name: string, doc: FigureDoc) => {
+      flushSave();
+      const created = tryWrite(() => library.create(name, doc));
+      if (created) show(created.meta.id, doc, created.index.figures);
+      return created !== null;
+    };
+
+    const names = () => get().figures.map((f) => f.name);
+
+    return {
+      ...init(set, get, api),
+      figureId: opened.index.activeId,
+      figures: opened.index.figures,
+      // The loaded figure is the starting point of the undo history.
+      doc: opened.doc,
+
+      newFigure: () => {
+        addAndOpen(untitledName(names()), emptyDoc());
+      },
+      openFigure: (id) => {
+        if (id === get().figureId) return;
+        flushSave();
+        const doc = library.load(id);
+        if (!doc) {
+          toast.error("Essa figura não está mais salva neste navegador.");
+          set({ figures: library.index().figures });
+          return;
+        }
+        const index = tryWrite(() => library.setActive(id));
+        show(id, doc, index?.figures ?? get().figures);
+      },
+      duplicateFigure: (id) => {
+        const source = get().figures.find((f) => f.id === id);
+        if (!source) return;
+        if (addAndOpen(copyName(source.name, names()), loadFigureDoc(id))) toast.success("Cópia criada e aberta");
+      },
+      renameFigure: (id, name) => {
+        const index = tryWrite(() => library.rename(id, name));
+        if (index) set({ figures: index.figures });
+      },
+      deleteFigure: (id) => {
+        const index = tryWrite(() => library.remove(id));
+        if (!index) return;
+        if (id !== get().figureId) {
+          set({ figures: index.figures });
+          return;
+        }
+        // The open figure is gone, so its pending save must not bring it back.
+        window.clearTimeout(saveTimer);
+        savedDoc = get().doc;
+        const next = latestFigure(index.figures);
+        const doc = next && library.load(next.id);
+        if (next && doc) {
+          tryWrite(() => library.setActive(next.id));
+          show(next.id, doc, index.figures);
+        } else {
+          set({ figures: index.figures });
+          addAndOpen(untitledName([]), emptyDoc());
+        }
+      },
+      importFigure: (file) => {
+        addAndOpen(uniqueName(file.name, names()), file.doc);
+      },
+    };
+  };
+}
+
 export const useFigureStore = create<FigureState>()(
-  persist(
+  withLibrary(
     (set, get) => ({
       doc: emptyDoc(),
       selection: [],
@@ -175,17 +374,22 @@ export const useFigureStore = create<FigureState>()(
       setActionPreview: (actionPreview) => set({ actionPreview }),
       setSetting: (key, value) => set((s) => ({ settings: { ...s.settings, [key]: value } })),
     }),
-    {
-      name: "geosimples-v2",
-      version: 1,
-      storage: createJSONStorage(() => localStorage),
-      // Settings come from the active profile at startup (see prefsStore).
-      partialize: (s) => ({ doc: s.doc }),
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as { doc?: unknown };
-        // The loaded figure is the starting point of the undo history.
-        return { ...current, doc: normalizeDoc(p.doc) };
-      },
-    },
   ),
 );
+
+useFigureStore.subscribe((state, prev) => {
+  if (state.doc === prev.doc || state.doc === savedDoc) return;
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(flushSave, SAVE_DELAY_MS);
+});
+
+// Closing or hiding the tab must not lose the last edit.
+window.addEventListener("pagehide", flushSave);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushSave();
+});
+
+// Figures added, renamed or deleted in another tab.
+window.addEventListener("storage", (e) => {
+  if (e.key === LIBRARY_KEY) useFigureStore.setState({ figures: library.index().figures });
+});

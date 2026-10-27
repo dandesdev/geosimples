@@ -3,14 +3,12 @@ import {
   buildScene,
   movePoints,
   paddedBox,
-  pointMap,
   sceneMarkup,
   type Box,
   type FigureDoc,
   type Hit,
   type Id,
   type ParsedInput,
-  type Point,
   type Prim,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
@@ -35,6 +33,13 @@ type Gesture =
   | { kind: "drag"; owner: Id; ids: Id[]; base: FigureDoc; start: { x: number; y: number }; moved: boolean }
   | { kind: "pan"; x: number; y: number; view: View }
   | { kind: "box"; start: { x: number; y: number }; end: { x: number; y: number }; shift: boolean };
+
+/** Elements that "Mover pontos" drags: points and free texts. */
+function movables(doc: FigureDoc): Map<Id, { id: Id; x: number; y: number }> {
+  const map = new Map<Id, { id: Id; x: number; y: number }>();
+  for (const el of doc.elements) if (el.type === "point" || el.type === "text") map.set(el.id, el);
+  return map;
+}
 
 function fitView(box: Box | null, k: number): View {
   const b =
@@ -88,7 +93,7 @@ export function PreviewPanel() {
     if (draft.trim() === "") return null;
     const parsed = parseDraft(draft, doc, selection);
     // Parts typed correctly show even while a later part is unfinished.
-    return parsed.nodes.length > 0 ? parsed : null;
+    return parsed.nodes.length > 0 || parsed.texts.length > 0 ? parsed : null;
   }, [draft, doc, selection]);
 
   const fitted = useMemo(() => fitView(unionBox(scene.box, ghost && ghostBox(ghost, k)), k), [scene.box, ghost, k]);
@@ -159,10 +164,10 @@ export function PreviewPanel() {
     svg.setPointerCapture(e.pointerId);
     const owner = ownerAt(e.target);
     const store = useFigureStore.getState();
-    const pts = pointMap(store.doc);
-    if (mode === "move" && owner && pts.has(owner)) {
-      const selectedPoints = store.selection.filter((id) => pts.has(id));
-      const ids = store.selection.includes(owner) ? selectedPoints : [owner];
+    const movable = movables(store.doc);
+    if (mode === "move" && owner && movable.has(owner)) {
+      const selectedMovable = store.selection.filter((id) => movable.has(id));
+      const ids = store.selection.includes(owner) ? selectedMovable : [owner];
       store.beginTransient();
       setFrozen(vb);
       gesture.current = { kind: "drag", owner, ids, base: store.doc, start: toUser(svg, e.clientX, e.clientY), moved: false };
@@ -180,11 +185,11 @@ export function PreviewPanel() {
       const dy = -(p.y - g.start.y) / k;
       if (!g.moved && Math.hypot(dx, dy) * k < 2 * unitsPerPx) return;
       g.moved = true;
-      const pts = pointMap(g.base);
+      const movable = movables(g.base);
       const moves = g.ids
-        .map((id) => pts.get(id))
-        .filter((pt): pt is Point => pt !== undefined)
-        .map((pt) => ({ id: pt.id, x: round2(pt.x + dx), y: round2(pt.y + dy) }));
+        .map((id) => movable.get(id))
+        .filter((m) => m !== undefined)
+        .map((m) => ({ id: m.id, x: round2(m.x + dx), y: round2(m.y + dy) }));
       useFigureStore.getState().setTransient(movePoints(g.base, moves));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > 4) {
       if (mode === "pan") {
@@ -372,7 +377,7 @@ function Overlay({
           );
         }
         return (
-          <g key={h.owner} data-owner={h.owner} className="cursor-pointer">
+          <g key={h.owner} data-owner={h.owner} className={moveMode && h.type === "text" ? "cursor-move" : "cursor-pointer"}>
             {isSel && (
               <path
                 d={h.d}
@@ -417,9 +422,10 @@ function Overlay({
 }
 
 function ghostBox(parsed: ParsedInput, k: number): Box | null {
-  if (parsed.nodes.length === 0) return null;
-  const xs = parsed.nodes.map((n) => n.x * k);
-  const ys = parsed.nodes.map((n) => -n.y * k);
+  const spots = [...parsed.nodes, ...parsed.texts];
+  if (spots.length === 0) return null;
+  const xs = spots.map((n) => n.x * k);
+  const ys = spots.map((n) => -n.y * k);
   return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
 }
 
@@ -470,6 +476,19 @@ function DraftGhost({ parsed, k, px }: { parsed: ParsedInput; k: number; px: num
           </g>
         );
       })}
+      {parsed.texts.map((t, i) => (
+        <text
+          key={`text-${i}`}
+          x={t.x * k}
+          y={-t.y * k + 4 * px}
+          fontSize={12 * px}
+          textAnchor="middle"
+          fill={PRIMARY}
+          fontFamily="Inter, system-ui, sans-serif"
+        >
+          {t.text}
+        </text>
+      ))}
     </g>
   );
 }

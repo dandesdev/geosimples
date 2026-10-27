@@ -1,6 +1,10 @@
 import { expect, type Page } from "@playwright/test";
 
-/** The figure as the app saves it in localStorage (zustand persist, key "geosimples-v2"). */
+/**
+ * The open figure as the app saves it: the library index ("geosimples-library")
+ * names the active figure, whose doc is under "geosimples-figure:<id>".
+ * Saving is debounced, so read it through expect.poll.
+ */
 interface SavedFigure {
   elements: { id: string; type: string }[];
 }
@@ -9,8 +13,10 @@ export const TRIANGLE = "A=(0;0)--B=(4;0)--C=(0;3)--";
 
 export async function savedFigure(page: Page): Promise<SavedFigure | null> {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("geosimples-v2");
-    return raw ? (JSON.parse(raw).state?.doc ?? null) : null;
+    const index = localStorage.getItem("geosimples-library");
+    const id = index ? JSON.parse(index).activeId : null;
+    const raw = id ? localStorage.getItem(`geosimples-figure:${id}`) : null;
+    return raw ? JSON.parse(raw) : null;
   });
 }
 

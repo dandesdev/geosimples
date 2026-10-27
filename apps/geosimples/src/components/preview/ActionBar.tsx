@@ -22,19 +22,27 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  AltitudeIcon,
   AngleIcon,
+  BisectorIcon,
   CircleRadiusIcon,
   CircleTangentIcon,
   CircleThroughIcon,
   CircumcircleIcon,
   CloseLoopIcon,
   ConnectIcon,
+  ConstructionsIcon,
+  IntersectionIcon,
+  MedianIcon,
+  MidpointIcon,
+  PerpendicularBisectorIcon,
   PolygonIcon,
 } from "@/components/icons";
 import { LazyExportDialog } from "@/components/dialogs/lazy";
 import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { actions } from "@/lib/actions";
-import { previewProps, useAvailability, type Availability } from "@/lib/availability";
+import { CONSTRUCTION_KINDS, previewProps, useAvailability, type Availability } from "@/lib/availability";
+import type { ConstructionKind } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 
 const Divider = () => <div className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden="true" />;
@@ -74,6 +82,39 @@ function MenuItem({
   );
 }
 
+const CONSTRUCTIONS: Record<ConstructionKind, { icon: React.ReactNode; title: string; hint: string }> = {
+  midpoint: {
+    icon: <MidpointIcon />,
+    title: "Ponto médio",
+    hint: "Divide um segmento, ou o caminho entre dois pontos, ao meio.",
+  },
+  altitude: {
+    icon: <AltitudeIcon />,
+    title: "Altura",
+    hint: "Do vértice até a reta do lado oposto, com ângulo reto. Com um triângulo, traça as três.",
+  },
+  median: {
+    icon: <MedianIcon />,
+    title: "Mediana",
+    hint: "Do vértice até o ponto médio do lado oposto. Com um triângulo, traça as três.",
+  },
+  bisector: {
+    icon: <BisectorIcon />,
+    title: "Bissetriz",
+    hint: "Divide o ângulo ao meio. Em um triângulo, vai até o lado oposto.",
+  },
+  perpendicularBisector: {
+    icon: <PerpendicularBisectorIcon />,
+    title: "Mediatriz",
+    hint: "Perpendicular ao segmento pelo seu ponto médio, com marca de ângulo reto (dá para apagar).",
+  },
+  intersection: {
+    icon: <IntersectionIcon />,
+    title: "Interseção",
+    hint: "Marca onde segmentos e circunferências selecionados se cruzam.",
+  },
+};
+
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
 /** Runs an action after clearing its hover preview, which would be stale afterwards. */
@@ -90,6 +131,7 @@ export function ActionBar() {
   const av = useAvailability();
   const anyCircle = (["radius", "through", "tangent", "circumcircle"] as const).some((m) => !av[`circle-${m}`].reason);
   const anyConnect = !av.connect.reason || !av.closeContour.reason;
+  const anyConstruction = CONSTRUCTION_KINDS.some((kind) => !av[`construct-${kind}`].reason);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const openExport = useCallback(() => {
@@ -228,6 +270,30 @@ export function ActionBar() {
             availability={av["circle-circumcircle"]}
             onSelect={() => actions.circle("circumcircle")}
           />
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label="Construções"
+            hint="Ponto médio, altura, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
+            dimmed={!anyConstruction}
+            ready={hasSelection && anyConstruction}
+          >
+            <ConstructionsIcon />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-80">
+          <DropdownMenuLabel>Construções</DropdownMenuLabel>
+          {CONSTRUCTION_KINDS.map((kind) => (
+            <MenuItem
+              key={kind}
+              {...CONSTRUCTIONS[kind]}
+              availability={av[`construct-${kind}`]}
+              onSelect={() => actions.construct(kind)}
+            />
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -8,7 +8,7 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { estimateTextWidth, isMathLabel, labelPlacement } from "./labels";
+import { estimateTextWidth, isMathLabel, labelPlacement, labelText } from "./labels";
 import type {
   Dash,
   Element,
@@ -145,6 +145,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     angle: [],
     segment: [],
     point: [],
+    text: [],
   };
 
   /** World point to paper. */
@@ -328,6 +329,17 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         hits.polygon.push({ owner: el.id, type: "polygon", d, area: true });
         break;
       }
+      case "text": {
+        const at = P(el);
+        const r = textRect(layers.label, el.id, at, el.text, el.size, el.color, el.font, box);
+        hits.text.push({
+          owner: el.id,
+          type: "text",
+          d: `M${f(r.minX)} ${f(r.minY)}H${f(r.maxX)}V${f(r.maxY)}H${f(r.minX)}Z`,
+          area: true,
+        });
+        break;
+      }
     }
     addLabel(doc, el, layers.label, box, O);
   }
@@ -341,7 +353,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...layers.point,
       ...layers.label,
     ],
-    hits: [...hits.polygon, ...hits.circle, ...hits.angle, ...hits.segment, ...hits.point],
+    hits: [...hits.polygon, ...hits.circle, ...hits.angle, ...hits.segment, ...hits.text, ...hits.point],
     box: box.box,
     k,
   };
@@ -354,22 +366,38 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
+  if (el.type === "text") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
-  const { text, size, color } = el.label;
-  const at = O(placement.anchor, placement.offset);
+  const { size, color, font } = el.label;
+  textRect(out, el.id, O(placement.anchor, placement.offset), labelText(doc, el), size, color, font, box);
+}
+
+/** Draws text centered on a paper point and returns the box it takes. */
+function textRect(
+  out: Prim[],
+  owner: Id,
+  at: Vec,
+  text: string,
+  size: number,
+  color: string,
+  font: LabelFont,
+  box: BoxBuilder,
+): Box {
   out.push({
     kind: "text",
-    owner: el.id,
+    owner,
     x: at.x,
     y: at.y,
     text,
     size,
     color: resolveColor(color),
     italic: isMathLabel(text),
-    font: el.label.font,
+    font,
   });
   const w = estimateTextWidth(text, size) / 2;
-  box.add(at.x - w, at.y - size * 0.6);
-  box.add(at.x + w, at.y + size * 0.6);
+  const r = { minX: at.x - w, minY: at.y - size * 0.6, maxX: at.x + w, maxY: at.y + size * 0.6 };
+  box.add(r.minX, r.minY);
+  box.add(r.maxX, r.maxY);
+  return r;
 }
