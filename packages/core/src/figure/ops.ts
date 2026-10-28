@@ -608,10 +608,13 @@ function labelRadii(doc: FigureDoc, circles: Circle[], decimals: number, opts: O
   const base = stylesOf(opts).label;
   const onSegment = new Set<Id>();
   const onCircle = new Set<Id>();
+  const moved = new Set<Id>();
   for (const c of circles) {
     const drawn = radiusSegments(doc, c)[0];
-    if (drawn) onSegment.add(drawn.id);
-    else onCircle.add(c.id);
+    if (drawn) {
+      onSegment.add(drawn.id);
+      moved.add(c.id);
+    } else onCircle.add(c.id);
   }
   const elements = doc.elements.map((el): Element => {
     if (el.type === "segment" && onSegment.has(el.id)) {
@@ -621,6 +624,12 @@ function labelRadii(doc: FigureDoc, circles: Circle[], decimals: number, opts: O
     if (el.type === "circle" && onCircle.has(el.id)) {
       const text = labelFor("radius", 0, el, doc, decimals) ?? "";
       return { ...el, label: { ...withText(el.label, text, base), measure: newMeasure(el, decimals, "radius")! } };
+    }
+    // A radius measure labeled before the radius was drawn would show twice.
+    if (el.type === "circle" && moved.has(el.id) && el.label?.measure?.kind === "radius") {
+      const bare = { ...el };
+      delete bare.label;
+      return bare;
     }
     return el;
   });

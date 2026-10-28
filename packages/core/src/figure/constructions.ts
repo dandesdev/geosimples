@@ -582,7 +582,8 @@ export function setSectorRadii(doc: FigureDoc, ids: Id[], on: boolean, opts: OpO
     const center = pts.get(c.center)!;
     for (const end of [0, 1] as const) {
       const at = add(center, polar(c.radius, end === 0 ? c.arc!.start : c.arc!.end));
-      d.segment(c.center, d.point(at, { kind: "arcEnd", circle: c.id, end }, true));
+      // Radii drawn by an older figure kept the arc's look; keep it when they become segments.
+      d.segment(c.center, d.point(at, { kind: "arcEnd", circle: c.id, end }, true), c.radii ? c.stroke : {});
     }
   }
   const result = d.result("Esse setor já tem raios.");

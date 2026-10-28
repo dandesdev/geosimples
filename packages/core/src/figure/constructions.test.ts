@@ -306,7 +306,7 @@ describe("sector radii", () => {
     expect(setSectorRadii(r.doc, [circle.id], true).error).toMatch(/já tem/);
     // The radii export as ordinary segments to the arc's ends.
     const tikz = toTikz(r.doc);
-    expect(tikz).toContain(`\coordinate (${first.b})`);
+    expect(tikz).toContain(`\\coordinate (${first.b})`);
     expect(tikz).toContain(`(${first.a}) -- (${first.b})`);
   });
 
@@ -319,6 +319,9 @@ describe("sector radii", () => {
     expect(labeled.elements.find((e) => e.id === circle.id)?.label).toBeUndefined();
     const plain = autoLabel(doc, "circle", "radius", null).doc;
     expect(plain.elements.find((e) => e.id === circle.id)?.label?.measure?.kind).toBe("radius");
+    // Labeled before the radii were drawn: the label moves instead of showing twice.
+    const again = autoLabel(setSectorRadii(plain, [circle.id], true).doc, "circle", "radius", null).doc;
+    expect(again.elements.find((e) => e.id === circle.id)?.label).toBeUndefined();
   });
 
   it("removes the radii when switched off, with the arc, or with the circle", () => {
@@ -332,10 +335,13 @@ describe("sector radii", () => {
 
   it("turns the old drawn-in radii into segments", () => {
     const { doc, circle } = sector();
-    const old = updateElements(doc, [circle.id], (c) => (c.type === "circle" ? { ...c, radii: true } : c));
+    const red = { ...circle.stroke, color: "#dc2626" };
+    const old = updateElements(doc, [circle.id], (c) => (c.type === "circle" ? { ...c, radii: true, stroke: red } : c));
     const r = setSectorRadii(old, [circle.id], true);
     expect(r.doc.elements.find((e): e is Circle => e.id === circle.id)?.radii).toBe(false);
-    expect(sectorRadii(r.doc, circle)).toHaveLength(2);
+    const radii = sectorRadii(r.doc, circle);
+    expect(radii).toHaveLength(2);
+    expect(radii[0].stroke.color).toBe("#dc2626");
   });
 });
 
