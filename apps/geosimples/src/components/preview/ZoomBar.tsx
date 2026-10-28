@@ -1,30 +1,40 @@
 import { Grid3x3, Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { useFigureStore } from "@/store/figureStore";
-import { useCoarsePointer, useMediaQuery } from "@/lib/useMediaQuery";
+import { useCoarsePointer } from "@/lib/useMediaQuery";
 
+export interface ZoomControls {
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  autoFit: boolean;
+  onToggleAutoFit: () => void;
+}
+
+/**
+ * Zoom, auto-fit and grid. On wider screens a column over the right edge of
+ * the preview; on phones, where anything over the small preview covers the
+ * figure, a row in the action bar instead.
+ */
 export function ZoomBar({
   onZoomIn,
   onZoomOut,
   autoFit,
   onToggleAutoFit,
-}: {
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  autoFit: boolean;
-  onToggleAutoFit: () => void;
-}) {
+  placement,
+}: ZoomControls & { placement: "overlay" | "toolbar" }) {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const setSetting = useFigureStore((s) => s.setSetting);
-  // On phones a column in the middle of the right edge covers the figure, so it becomes a row in the corner.
-  const vertical = useMediaQuery("(min-width: 640px)");
   const coarse = useCoarsePointer();
   return (
     <div
       role="toolbar"
       aria-label="Visualização"
-      aria-orientation={vertical ? "vertical" : "horizontal"}
-      className="absolute right-2 top-2 flex gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm sm:top-1/2 sm:-translate-y-1/2 sm:flex-col"
+      aria-orientation={placement === "overlay" ? "vertical" : "horizontal"}
+      className={
+        placement === "overlay"
+          ? "absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
+          : "ml-auto flex gap-0.5"
+      }
     >
       <IconButton
         label="Aproximar"

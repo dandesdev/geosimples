@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { createContext, useContext, useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { PALETTE, resolveColor } from "@geosimples/core/figure";
 import { Input } from "@/components/ui/input";
@@ -21,21 +21,19 @@ export function Field({ label, htmlFor, children }: { label: string; htmlFor?: s
   );
 }
 
+const OpenSections = createContext(false);
+
+/** Sections inside stay open with a plain title, as dialogs want: they show everything at once. */
+export function SectionsStayOpen({ children }: { children: ReactNode }) {
+  return <OpenSections.Provider value>{children}</OpenSections.Provider>;
+}
+
 /**
  * A titled group of fields. In the side panel it opens and closes from its
- * title, and stays as the teacher left it. `fixed` keeps it always open, for dialogs.
+ * title, and stays as the teacher left it. Inside SectionsStayOpen it is always open.
  */
-export function Section({
-  title,
-  children,
-  aside,
-  fixed = false,
-}: {
-  title: string;
-  children: ReactNode;
-  aside?: ReactNode;
-  fixed?: boolean;
-}) {
+export function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+  const fixed = useContext(OpenSections);
   const closed = usePanelStore((s) => !fixed && !!s.closed[title]);
   const toggle = usePanelStore((s) => s.toggle);
   const bodyId = useId();

@@ -15,7 +15,11 @@ const TOUCH_HINTS = {
   move: "Arraste um ponto, ou selecione vários e arraste um deles. Use dois dedos para mover a vista.",
 } as const;
 
-export function SelectionSummary() {
+/**
+ * What is selected, or how to select. Over the bottom of the preview on wider
+ * screens; below it on phones, where it would cover the figure.
+ */
+export function SelectionSummary({ placement }: { placement: "overlay" | "below" }) {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
   const mode = useFigureStore((s) => s.mode);
@@ -37,8 +41,11 @@ export function SelectionSummary() {
   return (
     <p
       aria-live="polite"
-      // Phones have the zoom bar at the top, so the text can use the whole width and wrap.
-      className="pointer-events-none absolute bottom-2 left-2 right-2 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground sm:right-14 sm:truncate"
+      className={
+        placement === "overlay"
+          ? "pointer-events-none absolute bottom-2 left-2 right-14 truncate rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground"
+          : "-mt-1.5 px-1 text-xs text-muted-foreground"
+      }
     >
       {text}
     </p>

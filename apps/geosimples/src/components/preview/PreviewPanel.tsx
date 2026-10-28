@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
 import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camera";
-import { useCoarsePointer } from "@/lib/useMediaQuery";
+import { useCoarsePointer, useRoomyPreview } from "@/lib/useMediaQuery";
 
 const PRIMARY = "#10b981";
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
@@ -314,70 +314,77 @@ export function PreviewPanel() {
 
   const pointOrder = selection.filter((id) => scene.hits.some((h) => h.type === "point" && h.owner === id));
 
+  const empty = doc.elements.length === 0 && draft.trim() === "";
+  const roomy = useRoomyPreview();
+  // Nothing to zoom yet, and on phones the bar would cover the welcome card.
+  const zoom = empty
+    ? null
+    : { onZoomIn: () => zoomBy(1 / 1.25), onZoomOut: () => zoomBy(1.25), autoFit, onToggleAutoFit: toggleAutoFit };
+
   return (
-    <section
-      aria-label="Prévia da figura"
-      className="relative flex min-h-[55dvh] flex-1 flex-col overflow-hidden rounded-lg border bg-card lg:min-h-0"
-    >
-      <ActionBar />
-      <div ref={containerRef} className="relative min-h-0 flex-1">
-        <svg
-          ref={svgRef}
-          className={cn(
-            // touch-none keeps the browser from scrolling or zooming the page under the fingers.
-            "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
-            mode === "pan" && "cursor-grab active:cursor-grabbing",
-            mode === "select" && "cursor-crosshair",
-          )}
-          viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-          preserveAspectRatio="xMidYMid meet"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-          // Stops the browser's autoscroll from starting on a middle click.
-          onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-          onAuxClick={(e) => e.preventDefault()}
-        >
-          {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
-          <g dangerouslySetInnerHTML={{ __html: markup }} />
-          {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
-          <Overlay
-            hits={scene.hits}
-            selection={selection}
-            pointOrder={pointOrder}
-            unitsPerPx={unitsPerPx}
-            moveMode={mode === "move"}
-            doc={doc}
-            hit={coarse ? HIT_COARSE : HIT_FINE}
-          />
-          {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
-          {box && (
-            <rect
-              x={box.minX}
-              y={box.minY}
-              width={box.maxX - box.minX}
-              height={box.maxY - box.minY}
-              fill={PRIMARY}
-              fillOpacity={0.08}
-              stroke={PRIMARY}
-              strokeWidth={1}
-              strokeDasharray="4 3"
-              vectorEffect="non-scaling-stroke"
-              pointerEvents="none"
+    <>
+      <section
+        aria-label="Prévia da figura"
+        // A sideways phone is short: the 18rem floor keeps the figure readable, and the page scrolls.
+        className="relative flex min-h-[max(55dvh,18rem)] flex-1 flex-col overflow-hidden rounded-lg border bg-card lg:min-h-0"
+      >
+        <ActionBar zoom={roomy ? null : zoom} />
+        <div ref={containerRef} className="relative min-h-0 flex-1">
+          <svg
+            ref={svgRef}
+            className={cn(
+              // touch-none keeps the browser from scrolling or zooming the page under the fingers.
+              "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
+              mode === "pan" && "cursor-grab active:cursor-grabbing",
+              mode === "select" && "cursor-crosshair",
+            )}
+            viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+            preserveAspectRatio="xMidYMid meet"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
+            // Stops the browser's autoscroll from starting on a middle click.
+            onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+            onAuxClick={(e) => e.preventDefault()}
+          >
+            {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
+            <g dangerouslySetInnerHTML={{ __html: markup }} />
+            {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
+            <Overlay
+              hits={scene.hits}
+              selection={selection}
+              pointOrder={pointOrder}
+              unitsPerPx={unitsPerPx}
+              moveMode={mode === "move"}
+              doc={doc}
+              hit={coarse ? HIT_COARSE : HIT_FINE}
             />
-          )}
-        </svg>
-        {doc.elements.length === 0 && draft.trim() === "" && <EmptyState />}
-        <ZoomBar
-          onZoomIn={() => zoomBy(1 / 1.25)}
-          onZoomOut={() => zoomBy(1.25)}
-          autoFit={autoFit}
-          onToggleAutoFit={toggleAutoFit}
-        />
-        <SelectionSummary />
-      </div>
-    </section>
+            {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
+            {box && (
+              <rect
+                x={box.minX}
+                y={box.minY}
+                width={box.maxX - box.minX}
+                height={box.maxY - box.minY}
+                fill={PRIMARY}
+                fillOpacity={0.08}
+                stroke={PRIMARY}
+                strokeWidth={1}
+                strokeDasharray="4 3"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+          </svg>
+          {empty && <EmptyState />}
+          {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
+          {roomy && <SelectionSummary placement="overlay" />}
+        </div>
+      </section>
+      {/* Phones have no room to float the hint over the figure, so it goes below the preview. */}
+      {!roomy && <SelectionSummary placement="below" />}
+    </>
   );
 }
 

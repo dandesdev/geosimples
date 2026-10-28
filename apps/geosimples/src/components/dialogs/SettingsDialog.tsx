@@ -19,7 +19,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Choice, ColorPicker, Field, NumberInput, RangeField, Section, SwitchField } from "@/components/panel/controls";
+import {
+  Choice,
+  ColorPicker,
+  Field,
+  NumberInput,
+  RangeField,
+  Section,
+  SectionsStayOpen,
+  SwitchField,
+} from "@/components/panel/controls";
 import { FillEditor, StrokeEditor } from "@/components/panel/styleEditors";
 import { AUTO_LABEL, toggleKind } from "@/lib/autoLabel";
 import { pt } from "@/lib/format";
@@ -54,7 +63,11 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           if (document.activeElement?.hasAttribute(OWN_ESCAPE)) e.preventDefault();
         }}
       >
-        {open && <SettingsBody />}
+        {open && (
+          <SectionsStayOpen>
+            <SettingsBody />
+          </SectionsStayOpen>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -75,7 +88,7 @@ function Card({ children }: { children: ReactNode }) {
 
 /** A row of tabs on narrow windows, a side column from md up. */
 const TAB_LIST =
-  "w-full shrink-0 justify-start overflow-x-auto md:h-auto md:w-44 md:self-start md:flex-col md:items-stretch md:gap-1 md:overflow-visible";
+  "grid h-auto w-full shrink-0 grid-cols-2 gap-1 sm:flex sm:justify-start md:w-44 md:self-start md:flex-col md:items-stretch";
 
 const TAB = "flex-1 px-2.5 text-xs sm:text-sm md:flex-none md:justify-start md:py-1.5";
 
@@ -137,7 +150,7 @@ function SettingsBody() {
           <TabBody>
             <div className="columns-1 gap-3 lg:columns-2 2xl:columns-3">
               <Card>
-                <Section fixed title="Pontos">
+                <Section title="Pontos">
                   <Choice<PointShape>
                     label="Destaque"
                     value={prefs.styles.point.shape}
@@ -174,7 +187,7 @@ function SettingsBody() {
                 />
               </Card>
               <Card>
-                <Section fixed title="Rótulos">
+                <Section title="Rótulos">
                   <Choice
                     label="Fonte"
                     value={prefs.styles.label.font}
@@ -223,7 +236,7 @@ function SettingsBody() {
                 />
               </Card>
               <Card>
-                <Section fixed title="Ângulos">
+                <Section title="Ângulos">
                   <RangeField
                     label="Raio"
                     value={prefs.styles.angle.radius}
@@ -260,7 +273,7 @@ function SettingsBody() {
                 />
               </Card>
               <Card>
-                <Section fixed title="Circunferências">
+                <Section title="Circunferências">
                   <Field label="Raio inicial">
                     <div className="w-36">
                       <NumberInput
@@ -310,7 +323,7 @@ function SettingsBody() {
               format={(n) => String(n)}
               onChange={(decimals) => behavior({ decimals })}
             />
-            <Section fixed title="Rotular automaticamente começa com">
+            <Section title="Rotular automaticamente começa com">
               {AUTO_LABEL_KINDS.map((k) => (
                 <SwitchField
                   key={k}

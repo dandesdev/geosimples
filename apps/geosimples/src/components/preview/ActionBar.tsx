@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { useCommand } from "@/lib/commands";
 import { Download, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
@@ -132,7 +133,8 @@ const act = (fn: () => void) => () => {
   fn();
 };
 
-export function ActionBar() {
+/** `zoom` adds the zoom controls at the end on phones, where they don't fit over the preview. */
+export function ActionBar({ zoom }: { zoom: ZoomControls | null }) {
   const canUndo = useFigureStore((s) => s.past.length > 0);
   const canRedo = useFigureStore((s) => s.future.length > 0);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
@@ -316,6 +318,7 @@ export function ActionBar() {
 
       <Divider className="hidden sm:block" />
       <ModeSwitch />
+      {zoom && <ZoomBar {...zoom} placement="toolbar" />}
 
       <MountOnFirstOpen open={exportOpen}>
         <LazyExportDialog open={exportOpen} onOpenChange={setExportOpen} />

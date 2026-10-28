@@ -13,5 +13,11 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
+/**
+ * True when the preview has room for controls floating over it. Phones,
+ * upright or sideways, get them around the preview instead.
+ */
+export const useRoomyPreview = () => useMediaQuery("(min-width: 640px) and (min-height: 500px)");
+
 /** True when the main pointer is a finger, so targets need to be bigger. */
 export const useCoarsePointer = () => useMediaQuery("(pointer: coarse)");
