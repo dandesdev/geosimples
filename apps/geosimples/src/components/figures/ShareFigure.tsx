@@ -36,7 +36,7 @@ export function ShareContent() {
 
   return (
     <div className="space-y-4">
-      <Section title="Arquivo">
+      <Section fixed title="Arquivo">
         <p className="mb-2 text-sm text-muted-foreground">
           Guarde a figura num arquivo {FIGURE_FILE_EXTENSION} para enviar ou abrir em outro computador. Para abri-lo,
           use Abrir arquivo ou arraste-o para a figura.
@@ -53,7 +53,7 @@ export function ShareContent() {
         </div>
       </Section>
 
-      <Section title="Link">
+      <Section fixed title="Link">
         <p className="mb-2 text-sm text-muted-foreground">
           Quem abrir o link recebe uma cópia da figura. A figura vai dentro do próprio link: nada é enviado a um
           servidor.

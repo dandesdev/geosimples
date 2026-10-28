@@ -461,6 +461,12 @@ export function constructedPosition(
       const all = crossings(first, second, pts);
       return (all.find((x) => x.index === c.index) ?? all[0])?.point ?? null;
     }
+    case "arcEnd": {
+      const circle = circles.get(c.circle);
+      const center = circle && pts.get(circle.center);
+      if (!circle?.arc || !center) return null;
+      return add(center, polar(circle.radius, c.end === 0 ? circle.arc.start : circle.arc.end));
+    }
   }
 }
 
@@ -476,5 +482,7 @@ export function constructionParents(c: PointConstruction): Id[] {
       return [...c.angle, ...(c.line ?? [])];
     case "intersection":
       return c.of;
+    case "arcEnd":
+      return [c.circle];
   }
 }

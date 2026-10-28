@@ -93,7 +93,9 @@ export type PointConstruction =
    * Where two segments or circles cross. With two crossings, `index` 0 is the
    * one nearer the first end of a segment, or left of center-to-center for two circles.
    */
-  | { kind: "intersection"; of: [Id, Id]; index: 0 | 1 };
+  | { kind: "intersection"; of: [Id, Id]; index: 0 | 1 }
+  /** An end of a circle's arc: its start (0) or its end (1). Outer ends of a sector's radii. */
+  | { kind: "arcEnd"; circle: Id; end: 0 | 1 };
 
 export interface Point {
   id: Id;
@@ -160,7 +162,11 @@ export interface Circle {
   construction: CircleConstruction;
   /** Degrees, counterclockwise from the positive x axis. null draws the full circle. */
   arc: { start: number; end: number } | null;
-  /** Draw the two radii that close an arc into a sector. */
+  /**
+   * Draw the two radii that close an arc into a sector, in the arc's style.
+   * The editor now draws them as two segments to arcEnd points instead, so
+   * they can be styled and labeled on their own; this stays for older figures.
+   */
   radii: boolean;
   stroke: Stroke;
   fill: Fill | null;

@@ -315,7 +315,8 @@ export const useFigureStore = create<FigureState>()(
         const result = op(doc, selection);
         if (result.error) return result;
         commit(result.doc);
-        if (select === "created" && result.created.length > 0) set({ selection: result.created });
+        const picked = result.selected ?? result.created;
+        if (select === "created" && picked.length > 0) set({ selection: picked });
         else if (select === "none") set({ selection: [] });
         return result;
       },

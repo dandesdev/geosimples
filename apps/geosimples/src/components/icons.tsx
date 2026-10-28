@@ -115,6 +115,16 @@ export const AltitudeIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const ProjectionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 18 L21 18" />
+    <path d="M12 6 L12 18" strokeDasharray="2 2" />
+    <path d="M12 15.5 L14.5 15.5 L14.5 18" strokeWidth={1.1} />
+    <Dot cx={12} cy={6} />
+    <Dot cx={12} cy={18} />
+  </Icon>
+);
+
 export const MedianIcon = (p: IconProps) => (
   <Icon {...p}>
     <Tri />

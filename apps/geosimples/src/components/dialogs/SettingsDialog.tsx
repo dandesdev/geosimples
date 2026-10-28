@@ -137,7 +137,7 @@ function SettingsBody() {
           <TabBody>
             <div className="columns-1 gap-3 lg:columns-2 2xl:columns-3">
               <Card>
-                <Section title="Pontos">
+                <Section fixed title="Pontos">
                   <Choice<PointShape>
                     label="Destaque"
                     value={prefs.styles.point.shape}
@@ -174,7 +174,7 @@ function SettingsBody() {
                 />
               </Card>
               <Card>
-                <Section title="Rótulos">
+                <Section fixed title="Rótulos">
                   <Choice
                     label="Fonte"
                     value={prefs.styles.label.font}
@@ -223,7 +223,7 @@ function SettingsBody() {
                 />
               </Card>
               <Card>
-                <Section title="Ângulos">
+                <Section fixed title="Ângulos">
                   <RangeField
                     label="Raio"
                     value={prefs.styles.angle.radius}
@@ -260,7 +260,7 @@ function SettingsBody() {
                 />
               </Card>
               <Card>
-                <Section title="Circunferências">
+                <Section fixed title="Circunferências">
                   <Field label="Raio inicial">
                     <div className="w-36">
                       <NumberInput
@@ -310,7 +310,7 @@ function SettingsBody() {
               format={(n) => String(n)}
               onChange={(decimals) => behavior({ decimals })}
             />
-            <Section title="Rotular automaticamente começa com">
+            <Section fixed title="Rotular automaticamente começa com">
               {AUTO_LABEL_KINDS.map((k) => (
                 <SwitchField
                   key={k}

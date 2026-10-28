@@ -14,6 +14,7 @@ import {
   angleExists,
   deleteElements,
   idMaker,
+  radiusSegments,
   LIMIT_ERROR,
   newAngle,
   newSegment,
@@ -24,12 +25,13 @@ import {
   type OpResult,
 } from "./ops";
 import type { Circle, Element, FigureDoc, Id, Point, PointConstruction, Segment, Stroke } from "./types";
-import { add, dist, dot, mid, perp, scale, sub, type Vec } from "./vec";
+import { add, dist, dot, mid, perp, polar, scale, sub, type Vec } from "./vec";
 
 /** The classic constructions, as offered by the editor's Construções menu. */
 export type ConstructionKind =
   | "midpoint"
   | "altitude"
+  | "projection"
   | "median"
   | "bisector"
   | "perpendicularBisector"
@@ -41,6 +43,8 @@ export function construct(doc: FigureDoc, selection: Id[], kind: ConstructionKin
       return makeMidpoint(doc, selection, opts);
     case "altitude":
       return makeAltitude(doc, selection, opts);
+    case "projection":
+      return makeProjection(doc, selection, opts);
     case "median":
       return makeMedian(doc, selection, opts);
     case "bisector":
@@ -53,6 +57,7 @@ export function construct(doc: FigureDoc, selection: Id[], kind: ConstructionKin
 }
 
 const fail = (doc: FigureDoc, error: string): OpResult => ({ doc, created: [], error });
+const ok = (doc: FigureDoc): OpResult => ({ doc, created: [] });
 
 /** Two points closer than this are the same point. */
 const SAME = 1e-9;
@@ -238,8 +243,48 @@ export function makeMidpoint(doc: FigureDoc, selection: Id[], opts: OpOptions = 
 export function makeAltitude(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
   const found = vertexAndSide(doc, selection);
   if ("error" in found) return fail(doc, found.error);
-  const pts = pointMap(doc);
   const d = draft(doc, opts);
+  dropPerpendiculars(doc, d, found, "solid");
+  return d.result(found.length > 1 ? "Essas alturas já existem." : "Essa altura já existe.");
+}
+
+const PROJECTION_HINT = "Selecione o ponto e um segmento, ou o ponto e depois dois pontos da reta.";
+
+/**
+ * Orthogonal projection of a point onto a line: the foot, a dashed
+ * perpendicular to it and the right-angle mark. The line is a selected
+ * segment, or the second and third of three selected points.
+ */
+export function makeProjection(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
+  const pts = pointMap(doc);
+  const points = selectedOfType(doc, selection, "point");
+  const segments = selectedOfType(doc, selection, "segment");
+  let found: VertexSide;
+  if (points.length >= 1 && segments.length >= 1) {
+    const vertex = points[0].id;
+    const side = segments.find((g) => g.a !== vertex && g.b !== vertex);
+    if (!side) return fail(doc, "O ponto é uma ponta do segmento: ele já está sobre a reta.");
+    found = { vertex, side: [side.a, side.b] };
+  } else if (points.length === 3 && segments.length === 0) {
+    found = { vertex: points[0].id, side: [points[1].id, points[2].id] };
+  } else {
+    return fail(doc, PROJECTION_HINT);
+  }
+  const [v, a, b] = [found.vertex, ...found.side].map((id) => pts.get(id)!);
+  if (dist(a, b) < SAME) return fail(doc, "Os dois pontos da reta coincidem.");
+  if (distanceToLine(v, a, b) < SAME) return fail(doc, "O ponto já está sobre a reta.");
+  const d = draft(doc, opts);
+  dropPerpendiculars(doc, d, [found], "dashed");
+  return d.result("Essa projeção já existe.");
+}
+
+/**
+ * From each vertex to the line of its side: the foot, the perpendicular and
+ * its right-angle mark. When the foot falls outside the side, a dashed
+ * extension of the side reaches it.
+ */
+function dropPerpendiculars(doc: FigureDoc, d: ReturnType<typeof draft>, found: VertexSide[], dash: Stroke["dash"]) {
+  const pts = pointMap(doc);
   for (const { vertex, side } of found) {
     const [a, b] = side;
     const v = pts.get(vertex)!;
@@ -253,7 +298,7 @@ export function makeAltitude(doc: FigureDoc, selection: Id[], opts: OpOptions = 
         : dist(foot, pb) < SAME
           ? b
           : d.point(foot, { kind: "foot", point: vertex, line: [a, b] });
-    d.segment(vertex, footId);
+    d.segment(vertex, footId, { dash });
     const ab = sub(pb, pa);
     const t = dot(sub(foot, pa), ab) / dot(ab, ab);
     if (t < 0 && footId !== a) d.segment(a, footId, { dash: "dashed" });
@@ -261,7 +306,6 @@ export function makeAltitude(doc: FigureDoc, selection: Id[], opts: OpOptions = 
     const arm = footId === a ? b : footId === b ? a : dist(foot, pa) > dist(foot, pb) ? a : b;
     d.rightAngle(vertex, footId, arm);
   }
-  return d.result(found.length > 1 ? "Essas alturas já existem." : "Essa altura já existe.");
 }
 
 /** Medians: the segment from a vertex to the midpoint of the opposite side. */
@@ -498,6 +542,73 @@ export function markPerpendicularBisector(doc: FigureDoc, id: Id, on: boolean, o
   const top = across(el.a) > 0 ? el.a : el.b;
   d.rightAngle(top, m, info.points[1]);
   return d.result("A mediatriz já tem marca.");
+}
+
+/** The radii drawn as segments to the ends of a circle's arc, start first. */
+export function sectorRadii(doc: FigureDoc, circle: Circle): Segment[] {
+  const pts = pointMap(doc);
+  const endOf = (s: Segment) => {
+    const tip = pts.get(s.a === circle.center ? s.b : s.a)?.construction;
+    return tip?.kind === "arcEnd" && tip.circle === circle.id ? tip.end : null;
+  };
+  return radiusSegments(doc, circle)
+    .filter((s) => endOf(s) !== null)
+    .sort((x, y) => endOf(x)! - endOf(y)!);
+}
+
+/**
+ * Draws or removes the two radii that close the arcs of the given circles
+ * into sectors. They are segments to hidden points at the arc's ends, so each
+ * can be selected, styled and labeled apart from the arc, and they follow
+ * the arc when it changes.
+ */
+export function setSectorRadii(doc: FigureDoc, ids: Id[], on: boolean, opts: OpOptions = {}): OpResult {
+  const circles = selectedOfType(doc, ids, "circle").filter((c) => c.arc);
+  if (circles.length === 0) return fail(doc, "Selecione um arco de circunferência.");
+  // Older figures draw the radii as part of the circle: switch them to segments.
+  const plain = updateElements(
+    doc,
+    circles.map((c) => c.id),
+    (c) => (c.type === "circle" && c.radii ? { ...c, radii: false } : c),
+  );
+  if (!on) {
+    const radii = circles.flatMap((c) => sectorRadii(plain, c).map((s) => s.id));
+    if (radii.length === 0) return plain === doc ? fail(doc, "Esse arco não tem raios.") : ok(plain);
+    return deleteElements(plain, radii);
+  }
+  const pts = pointMap(plain);
+  const d = draft(plain, opts);
+  for (const c of circles) {
+    const center = pts.get(c.center)!;
+    for (const end of [0, 1] as const) {
+      const at = add(center, polar(c.radius, end === 0 ? c.arc!.start : c.arc!.end));
+      // Radii drawn by an older figure kept the arc's look; keep it when they become segments.
+      d.segment(c.center, d.point(at, { kind: "arcEnd", circle: c.id, end }, true), c.radii ? c.stroke : {});
+    }
+  }
+  const result = d.result("Esse setor já tem raios.");
+  return result.error && plain !== doc ? ok(plain) : result;
+}
+
+/**
+ * Draws whole circles or only arcs. Back to a whole circle, the sector's
+ * radii go too, since they would no longer close anything.
+ */
+export function setCircleArc(doc: FigureDoc, ids: Id[], on: boolean): OpResult {
+  const circles = selectedOfType(doc, ids, "circle");
+  if (circles.length === 0) return fail(doc, "Selecione uma circunferência.");
+  const radii = on ? [] : circles.flatMap((c) => sectorRadii(doc, c).map((s) => s.id));
+  const pruned = radii.length > 0 ? deleteElements(doc, radii).doc : doc;
+  const next = updateElements(
+    pruned,
+    circles.map((c) => c.id),
+    (c) => {
+      if (c.type !== "circle") return c;
+      if (on) return c.arc ? c : { ...c, arc: { start: 0, end: 180 } };
+      return { ...c, arc: null, radii: false };
+    },
+  );
+  return ok(next);
 }
 
 /** Most segments and circles the intersection action compares pairwise. */

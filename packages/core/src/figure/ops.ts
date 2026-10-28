@@ -6,7 +6,6 @@ import {
   distanceToLine,
   loopFromSegments,
   pointMap,
-  projectOntoLine,
   resolveConstructions,
   signedArea2,
 } from "./geometry";
@@ -22,7 +21,6 @@ import type {
   FreeText,
   Id,
   Point,
-  PointConstruction,
   Polygon,
   Segment,
 } from "./types";
@@ -35,6 +33,8 @@ export interface OpResult {
   error?: string;
   /** Non-blocking notes, such as items that were skipped. */
   notice?: string;
+  /** What the editor selects afterwards, when not just `created`. */
+  selected?: Id[];
 }
 
 const ok = (doc: FigureDoc, created: Id[] = [], notice?: string): OpResult => ({
@@ -191,13 +191,17 @@ export function connectPoints(doc: FigureDoc, pointIds: Id[], closed: boolean, o
   return ok(working, created.map((s) => s.id));
 }
 
-export function angleExists(doc: FigureDoc, a: Id, vertex: Id, b: Id): boolean {
-  return doc.elements.some(
-    (e) =>
+function findAngle(doc: FigureDoc, a: Id, vertex: Id, b: Id): Angle | undefined {
+  return doc.elements.find(
+    (e): e is Angle =>
       e.type === "angle" &&
       e.vertex === vertex &&
       ((e.a === a && e.b === b) || (e.a === b && e.b === a)),
   );
+}
+
+export function angleExists(doc: FigureDoc, a: Id, vertex: Id, b: Id): boolean {
+  return findAngle(doc, a, vertex, b) !== undefined;
 }
 
 export function newAngle(id: Id, a: Id, vertex: Id, b: Id, reflex: boolean, opts: OpOptions): Angle {
@@ -254,10 +258,16 @@ export function makeAngles(doc: FigureDoc, selection: Id[], opts: OpOptions = {}
 
   const nextId = idMaker(doc);
   const created: Angle[] = [];
+  // Angles asked for that were already marked, like a right angle marked on its own.
+  const marked: Id[] = [];
   let working = doc;
   let degenerate = 0;
   for (const [a, v, b, reflex] of triples) {
-    if (angleExists(working, a, v, b)) continue;
+    const existing = findAngle(working, a, v, b);
+    if (existing) {
+      marked.push(existing.id);
+      continue;
+    }
     const arc = angleArc(pts.get(a)!, pts.get(v)!, pts.get(b)!, false);
     if (!arc || arc.measure < 1e-6 || Math.abs(arc.measure - 180) < 1e-6) {
       degenerate++;
@@ -265,6 +275,7 @@ export function makeAngles(doc: FigureDoc, selection: Id[], opts: OpOptions = {}
     }
     const angle = newAngle(nextId("angle"), a, v, b, reflex, opts);
     created.push(angle);
+    marked.push(angle.id);
     working = withElements(working, [...working.elements, angle]);
   }
   if (created.length === 0) {
@@ -274,7 +285,7 @@ export function makeAngles(doc: FigureDoc, selection: Id[], opts: OpOptions = {}
     );
   }
   if (!roomFor(doc, created.length)) return fail(doc, LIMIT_ERROR);
-  return ok(working, created.map((a) => a.id));
+  return { ...ok(working, created.map((a) => a.id)), selected: [...new Set(marked)] };
 }
 
 /**
@@ -424,7 +435,7 @@ function referencedPoints(el: Element): Id[] {
  */
 export function deleteElements(doc: FigureDoc, ids: Id[]): OpResult {
   if (ids.length === 0) return ok(doc);
-  const gone = withOrphanHelpers(doc, cascadeIds(doc, ids));
+  const gone = withOrphanHelpers(doc, cascadeIds(doc, withLostHelpers(doc, ids)));
   const elements = doc.elements
     .filter((el) => !gone.has(el.id))
     .map((el): Element => {
@@ -438,6 +449,24 @@ export function deleteElements(doc: FigureDoc, ids: Id[]): OpResult {
       return lost ? { ...el, construction: { kind: "free" } } : el;
     });
   return ok(withElements(doc, elements));
+}
+
+/**
+ * Adds the hidden, unnamed points built on deleted circles, the outer ends of
+ * a sector's radii, so the radii go with the circle instead of staying as
+ * stray segments.
+ */
+function withLostHelpers(doc: FigureDoc, ids: Id[]): Id[] {
+  const gone = new Set(ids);
+  const helpers = doc.elements.filter(
+    (el) =>
+      el.type === "point" &&
+      el.construction?.kind === "arcEnd" &&
+      el.shape === "none" &&
+      !el.label &&
+      gone.has(el.construction.circle),
+  );
+  return [...ids, ...helpers.map((el) => el.id)];
 }
 
 function freedPoint(p: Point, gone: Set<Id>): Point {
@@ -516,38 +545,6 @@ export function pointOnSegment(
   return addPoints(doc, [{ x: p.x, y: p.y }], opts);
 }
 
-/**
- * Projects the first point onto the line through the other two. With
- * `withHeight`, also draws the perpendicular and marks the right angle.
- */
-export function projectPoint(doc: FigureDoc, pointIds: Id[], withHeight: boolean, opts: OpOptions = {}): OpResult {
-  const pts = pointMap(doc);
-  const [p, a, b] = pointIds.map((id) => pts.get(id));
-  if (!p || !a || !b) return fail(doc, "Selecione o ponto a projetar e depois dois pontos da reta.");
-  if (dist(a, b) === 0) return fail(doc, "Os dois pontos da reta coincidem.");
-  const foot = projectOntoLine(p, a, b);
-  if (dist(foot, p) < 1e-9) return fail(doc, "O ponto já está sobre a reta.");
-
-  const added = addPoints(doc, [{ x: foot.x, y: foot.y }], opts);
-  if (added.error) return added;
-  const footId = added.created[0];
-  // The foot follows the point and the line when they move.
-  const construction: PointConstruction = { kind: "foot", point: p.id, line: [a.id, b.id] };
-  const placed = withElements(
-    added.doc,
-    added.doc.elements.map((e) => (e.id === footId && e.type === "point" ? { ...e, construction } : e)),
-  );
-  if (!withHeight) return ok(placed, [footId]);
-  const joined = connectPoints(placed, [p.id, footId], false, opts);
-  let working = joined.error ? placed : joined.doc;
-  // The right angle needs an arm that isn't the foot itself.
-  const arm = dist(foot, b) > 1e-9 ? b : a;
-  const nextId = idMaker(working);
-  const angle = newAngle(nextId("angle"), p.id, footId, arm.id, false, opts);
-  working = withElements(working, [...working.elements, angle]);
-  return ok(working, [footId, ...joined.created, angle.id]);
-}
-
 export type LabelTarget = "point" | "segment" | "angle" | "circle" | "polygon";
 
 /** Schemes that become live measure labels, which follow the points. */
@@ -565,6 +562,7 @@ export function autoLabel(
   const only = onlyIds ? new Set(onlyIds) : null;
   const targets = doc.elements.filter((e) => e.type === type && (!only || only.has(e.id)));
   if (targets.length === 0) return fail(doc, "Não há elementos para etiquetar.");
+  if (type === "circle" && scheme === "radius") return labelRadii(doc, targets as Circle[], decimals, opts);
   const texts = new Map<Id, string>();
   targets.forEach((el, i) => {
     const text = labelFor(scheme, i, el, doc, decimals);
@@ -580,6 +578,92 @@ export function autoLabel(
     const measure = live ? newMeasure(el, el.type === "angle" ? Math.min(decimals, 1) : decimals, kind) : null;
     return { ...el, label: measure ? { ...label, measure } : label } as Element;
   });
+  return ok(withElements(doc, elements));
+}
+
+/**
+ * Segments that draw a radius of the circle: from its center to a point on
+ * it, like the sides of a sector.
+ */
+export function radiusSegments(doc: FigureDoc, circle: Circle): Segment[] {
+  const pts = pointMap(doc);
+  const center = pts.get(circle.center);
+  if (!center) return [];
+  const onCircle = (id: Id) => {
+    const p = pts.get(id);
+    return !!p && Math.abs(dist(center, p) - circle.radius) < 1e-6 * Math.max(1, circle.radius);
+  };
+  return doc.elements.filter(
+    (e): e is Segment =>
+      e.type === "segment" && ((e.a === circle.center && onCircle(e.b)) || (e.b === circle.center && onCircle(e.a))),
+  );
+}
+
+/**
+ * Labels each circle's radius with its live measure. A radius already drawn,
+ * like a side of a sector, gets the label on that segment, where it reads
+ * clearly; circles without one get it beside the circle.
+ */
+function labelRadii(doc: FigureDoc, circles: Circle[], decimals: number, opts: OpOptions): OpResult {
+  const base = stylesOf(opts).label;
+  const onSegment = new Set<Id>();
+  const onCircle = new Set<Id>();
+  const moved = new Set<Id>();
+  for (const c of circles) {
+    const drawn = radiusSegments(doc, c)[0];
+    if (drawn) {
+      onSegment.add(drawn.id);
+      moved.add(c.id);
+    } else onCircle.add(c.id);
+  }
+  const elements = doc.elements.map((el): Element => {
+    if (el.type === "segment" && onSegment.has(el.id)) {
+      const text = labelFor("length", 0, el, doc, decimals) ?? "";
+      return { ...el, label: { ...withText(el.label, text, base), measure: newMeasure(el, decimals)! } };
+    }
+    if (el.type === "circle" && onCircle.has(el.id)) {
+      const text = labelFor("radius", 0, el, doc, decimals) ?? "";
+      return { ...el, label: { ...withText(el.label, text, base), measure: newMeasure(el, decimals, "radius")! } };
+    }
+    // A radius measure labeled before the radius was drawn would show twice.
+    if (el.type === "circle" && moved.has(el.id) && el.label?.measure?.kind === "radius") {
+      const bare = { ...el };
+      delete bare.label;
+      return bare;
+    }
+    return el;
+  });
+  return ok(withElements(doc, elements));
+}
+
+/**
+ * Removes the labels auto-label jobs would write, on all elements of their
+ * types or only the given ones. Radii also clear the segments that draw them.
+ */
+export function clearLabels(doc: FigureDoc, jobs: AutoLabelJob[], onlyIds: Id[] | null): OpResult {
+  const only = onlyIds ? new Set(onlyIds) : null;
+  const types = new Set<ElementType>(jobs.map((j) => j.type));
+  const ids = new Set<Id>();
+  for (const el of doc.elements) {
+    if (!types.has(el.type) || (only && !only.has(el.id))) continue;
+    ids.add(el.id);
+    if (el.type === "circle") for (const s of radiusSegments(doc, el)) ids.add(s.id);
+  }
+  return removeLabels(doc, [...ids]);
+}
+
+/** Removes the labels of the given elements. */
+export function removeLabels(doc: FigureDoc, ids: Id[]): OpResult {
+  const set = new Set(ids);
+  let removed = 0;
+  const elements = doc.elements.map((el) => {
+    if (!set.has(el.id) || el.type === "text" || !el.label) return el;
+    removed++;
+    const bare = { ...el };
+    delete bare.label;
+    return bare;
+  });
+  if (removed === 0) return fail(doc, "Não há rótulos para apagar.");
   return ok(withElements(doc, elements));
 }
 
