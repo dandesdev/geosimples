@@ -15,6 +15,8 @@ import {
   fillShapes,
   pointMap,
   pointOnSegment,
+  quickFigureStep,
+  NO_QUICK_FIGURE,
   resizePerpendicularBisector,
   selectedOfType,
   setCircleArc,
@@ -27,7 +29,7 @@ import {
   type OpResult,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
-import { opOptions } from "@/store/prefsStore";
+import { activePrefs, opOptions } from "@/store/prefsStore";
 
 function perform(
   op: (doc: FigureDoc, selection: Id[]) => OpResult,
@@ -68,7 +70,7 @@ export const actions = {
     return perform((doc, sel) => deleteElements(doc, sel), "none");
   },
 
-  /** A free point where the preview was clicked, added to the end of the selection. */
+  /** A free point where the preview was clicked. It joins the selection only when the profile asks. */
   addPointAt: (at: { x: number; y: number }) => {
     const store = useFigureStore.getState();
     const before = store.selection;
@@ -77,7 +79,22 @@ export const actions = {
       toast.error(result.error);
       return false;
     }
-    store.select([...before, ...result.created]);
+    if (activePrefs().behavior.selectAdded) store.select([...before, ...result.created]);
+    return true;
+  },
+
+  /** One click of Figura rápida, at a spot or on an existing point. */
+  quickFigureAt: (next: { x: number; y: number } | Id) => {
+    const store = useFigureStore.getState();
+    const before = store.selection;
+    const step = quickFigureStep(store.doc, store.quickFigure, next, opOptions());
+    if (step.error) {
+      toast.error(step.error);
+      return false;
+    }
+    store.commit(step.doc);
+    store.setQuickFigure(step.figure ?? NO_QUICK_FIGURE);
+    if (activePrefs().behavior.selectAdded) store.select([...before, ...step.created]);
     return true;
   },
 

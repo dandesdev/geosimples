@@ -1,6 +1,7 @@
 import { createContext, useContext, useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { PALETTE, resolveColor } from "@geosimples/core/figure";
+import { HelpTip } from "@/components/HelpTip";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -235,15 +236,21 @@ export function SwitchField({
   label,
   checked,
   onChange,
+  help,
 }: {
   label: string;
   checked: boolean;
   onChange: (on: boolean) => void;
+  /** What the switch does, behind a "?" next to it. */
+  help?: ReactNode;
 }) {
   const id = useId();
   return (
     <Field label={label} htmlFor={id}>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+      <div className="flex items-center gap-1">
+        <Switch id={id} checked={checked} onCheckedChange={onChange} />
+        {help && <HelpTip label={`Sobre ${label}`}>{help}</HelpTip>}
+      </div>
     </Field>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { NO_QUICK_FIGURE } from "@geosimples/core/figure";
 import { actions } from "@/lib/actions";
 import { emitCommand } from "@/lib/commands";
 import { comboFromEvent } from "@/lib/keys";
@@ -28,6 +29,8 @@ export function runAction(id: ActionId): boolean {
       return true;
     case "clearSelection":
       store.clearSelection();
+      // Esc also finishes the figure Figura rápida is drawing.
+      store.setQuickFigure(NO_QUICK_FIGURE);
       return true;
     case "modeSelect":
       store.setMode("select");
@@ -40,6 +43,12 @@ export function runAction(id: ActionId): boolean {
       return true;
     case "modeAdd":
       store.setMode("add");
+      return true;
+    case "modeFigure":
+      store.setMode("figure");
+      return true;
+    case "toggleMultiSelect":
+      store.setMultiSelect(!store.multiSelect);
       return true;
     case "connect":
       actions.connect(false);

@@ -24,7 +24,7 @@ import type {
   Polygon,
   Segment,
 } from "./types";
-import { dist, heading, lerp, normDeg, sub } from "./vec";
+import { dist, heading, lerp, normDeg, sub, type Vec } from "./vec";
 
 /** Result of an editing operation. On error the doc is returned unchanged. */
 export interface OpResult {
@@ -743,4 +743,83 @@ export function fillShapes(doc: FigureDoc, selection: Id[], opts: OpOptions = {}
   }
   if (working === doc) return fail(doc, "As formas selecionadas já estão preenchidas.");
   return ok(working, created);
+}
+
+/**
+ * A figure being drawn with Figura rápida: its vertices in click order, and
+ * what closes it now (the last side, the polygon and its angles), which the
+ * next vertex rebuilds.
+ */
+export interface QuickFigure {
+  points: Id[];
+  closing: Id[];
+}
+
+export const NO_QUICK_FIGURE: QuickFigure = { points: [], closing: [] };
+
+/**
+ * One click of Figura rápida: a new point at `next` (or an existing point,
+ * by id), joined to the previous vertex. From three vertices not all on a
+ * line, the figure closes into a filled polygon with its angles marked.
+ * Picking the first vertex again finishes the figure. `figure` is null when
+ * it is done, and the next click starts another.
+ */
+export function quickFigureStep(
+  doc: FigureDoc,
+  figure: QuickFigure,
+  next: Vec | Id,
+  opts: OpOptions = {},
+): OpResult & { figure: QuickFigure | null } {
+  const pts = pointMap(doc);
+  // An undo can take vertices away: then the figure is over, and this click starts a new one.
+  const current = figure.points.every((id) => pts.has(id)) ? figure : NO_QUICK_FIGURE;
+  const done = (r: OpResult, f: QuickFigure | null) => ({ ...r, figure: f });
+
+  if (typeof next === "string") {
+    if (!pts.has(next)) return done(fail(doc, "Esse ponto não existe mais."), current);
+    if (next === current.points[0] && current.points.length >= 3) return done(ok(doc), null);
+    if (current.points.includes(next)) return done(ok(doc), current);
+  }
+
+  let working = deleteElements(doc, current.closing.filter((id) => doc.elements.some((e) => e.id === id))).doc;
+  let vertex: Id;
+  const created: Id[] = [];
+  if (typeof next === "string") {
+    vertex = next;
+  } else {
+    const added = addPoints(working, [{ x: next.x, y: next.y }], opts);
+    if (added.error) return done(fail(doc, added.error), current);
+    working = added.doc;
+    vertex = added.created[0];
+    created.push(vertex);
+  }
+
+  const points = [...current.points, vertex];
+  const last = current.points[current.points.length - 1];
+  if (last !== undefined) {
+    const side = connectPoints(working, [last, vertex], false, opts);
+    if (!side.error) working = side.doc;
+  }
+
+  const closing: Id[] = [];
+  const at = pointMap(working);
+  if (points.length >= 3 && !onOneLine(points.map((id) => at.get(id)!))) {
+    const filled: OpOptions = { ...opts, styles: { ...stylesOf(opts), polygonFilled: true } };
+    const polygon = makePolygon(working, points, filled);
+    if (!polygon.error) {
+      working = polygon.doc;
+      closing.push(...polygon.created);
+      const angles = makeAngles(working, [polygon.created[0]], opts);
+      if (!angles.error) {
+        working = angles.doc;
+        closing.push(...angles.created);
+      }
+    }
+  }
+  return done(ok(working, created), { points, closing });
+}
+
+function onOneLine(vs: Vec[]): boolean {
+  const [a, b] = vs;
+  return vs.every((p) => Math.abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) < 1e-9);
 }

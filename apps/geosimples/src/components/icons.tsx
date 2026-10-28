@@ -31,6 +31,16 @@ export const AddPointIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const QuickFigureIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 19 L10 7 L16 19 Z" fill="currentColor" fillOpacity={0.2} />
+    <Dot cx={4} cy={19} />
+    <Dot cx={10} cy={7} />
+    <Dot cx={16} cy={19} />
+    <path d="M19 3 L19 9 M16 6 L22 6" />
+  </Icon>
+);
+
 export const ConnectIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M5 17 L12 7 L19 15" />
