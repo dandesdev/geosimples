@@ -48,8 +48,13 @@ function primMarkup(p: Prim): string {
   if (p.kind === "text") {
     // A baseline offset instead of dominant-baseline, which some editors ignore.
     const y = p.y + p.size * 0.35;
-    const style = `${p.italic ? ' font-style="italic"' : ""} font-family="${escapeXml(LABEL_FONTS[p.font])}"`;
-    return `<text x="${f(p.x)}" y="${f(y)}" font-size="${f(p.size)}" text-anchor="middle" fill="${p.color}"${style}>${escapeXml(p.text)}</text>`;
+    const italic = ' font-style="italic"';
+    const single = p.runs.length <= 1;
+    const body = single
+      ? escapeXml(p.text)
+      : p.runs.map((r) => (r.italic ? `<tspan${italic}>${escapeXml(r.text)}</tspan>` : escapeXml(r.text))).join("");
+    const style = `${single && p.runs[0]?.italic ? italic : ""} font-family="${escapeXml(LABEL_FONTS[p.font])}"`;
+    return `<text x="${f(p.x)}" y="${f(y)}" font-size="${f(p.size)}" text-anchor="middle" fill="${p.color}"${style}>${body}</text>`;
   }
   const attrs: string[] = [`d="${p.d}"`];
   if (p.fill) {

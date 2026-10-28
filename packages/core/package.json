@@ -12,7 +12,9 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "fixtures": "vitest run --config fixtures/vitest.config.ts",
+    "fixtures:compile": "node fixtures/compile.mjs"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

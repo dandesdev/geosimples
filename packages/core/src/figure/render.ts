@@ -8,7 +8,7 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { estimateTextWidth, isMathLabel, labelPlacement, labelText } from "./labels";
+import { estimateTextWidth, labelPlacement, labelRuns, labelText, measureNumber, measureRuns, type LabelRun } from "./labels";
 import type {
   Dash,
   Element,
@@ -21,7 +21,7 @@ import type {
   Point,
   Stroke,
 } from "./types";
-import { polar, type Vec } from "./vec";
+import { mid, polar, type Vec } from "./vec";
 
 /**
  * A scene is the figure laid out on paper: coordinates in pt with Y pointing
@@ -59,7 +59,8 @@ export type Prim =
       text: string;
       size: number;
       color: string;
-      italic: boolean;
+      /** The text split by style, italic where LaTeX math would be. */
+      runs: LabelRun[];
       font: LabelFont;
     };
 
@@ -219,7 +220,8 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           layers.segment.push({
             kind: "path",
             owner: el.id,
-            d: offsetLines(a, segmentTicks(a, b, el.ticks)),
+            // Tick offsets are relative to the midpoint, like in the TikZ export.
+            d: offsetLines(mid(a, b), segmentTicks(a, b, el.ticks)),
             stroke: solid(stroke),
             fill: null,
           });
@@ -331,7 +333,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       }
       case "text": {
         const at = P(el);
-        const r = textRect(layers.label, el.id, at, el.text, el.size, el.color, el.font, box);
+        const r = textRect(layers.label, el.id, at, el.text, labelRuns(el.text, el.font), el.size, el.color, el.font, box);
         hits.text.push({
           owner: el.id,
           type: "text",
@@ -369,8 +371,11 @@ function addLabel(
   if (el.type === "text") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
-  const { size, color, font } = el.label;
-  textRect(out, el.id, O(placement.anchor, placement.offset), labelText(doc, el), size, color, font, box);
+  const { size, color, font, measure } = el.label;
+  const text = labelText(doc, el);
+  const number = measure ? measureNumber(doc, el, measure) : null;
+  const runs = measure && number !== null ? measureRuns(measure, number, font) : labelRuns(text, font);
+  textRect(out, el.id, O(placement.anchor, placement.offset), text, runs, size, color, font, box);
 }
 
 /** Draws text centered on a paper point and returns the box it takes. */
@@ -379,6 +384,7 @@ function textRect(
   owner: Id,
   at: Vec,
   text: string,
+  runs: LabelRun[],
   size: number,
   color: string,
   font: LabelFont,
@@ -392,7 +398,7 @@ function textRect(
     text,
     size,
     color: resolveColor(color),
-    italic: isMathLabel(text),
+    runs,
     font,
   });
   const w = estimateTextWidth(text, size) / 2;

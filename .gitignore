@@ -32,6 +32,9 @@ dist-ssr
 # TypeScript
 *.tsbuildinfo
 
+# Export fixtures written by `npm run fixtures`
+packages/core/fixtures/out/
+
 # Playwright
 test-results/
 playwright-report/

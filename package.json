@@ -13,7 +13,9 @@
     "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w apps/geosimples && tsc -p e2e",
     "lint": "eslint .",
     "e2e": "npm run build && playwright test",
-    "e2e:run": "playwright test"
+    "e2e:run": "playwright test",
+    "fixtures": "npm run fixtures -w packages/core",
+    "fixtures:compile": "npm run fixtures:compile -w packages/core --"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

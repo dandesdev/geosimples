@@ -8,7 +8,7 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex, textToLatex } from "./labels";
+import { labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
 import { PATTERN } from "./svg";
 import type { Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
@@ -133,8 +133,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
             `\\draw${opts(strokeOpts(el.stroke))} ${shifted(vtx, u1)} -- ${shifted(vtx, corner)} -- ${shifted(vtx, u2)};`,
           );
           const dot = polar(el.radius * 0.35 * Math.SQRT2, geo.start + 45);
+          // The dot fades with the square's stroke, like in the SVG.
+          const dotOpts = [color(el.stroke.color)];
+          if (el.stroke.opacity < 1) dotOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
           sections.angle.push(
-            `\\fill[${color(el.stroke.color)}] ${shifted(vtx, dot)} circle[radius=${n(Math.max(0.7, el.stroke.width))}pt];`,
+            `\\fill${opts(dotOpts)} ${shifted(vtx, dot)} circle[radius=${n(Math.max(0.7, el.stroke.width))}pt];`,
           );
           break;
         }
@@ -180,7 +183,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       }
       case "text":
         sections.label.push(
-          `\\node${opts(textOptions(el.color, el.size, el.font, color))} at (${at(el)}) {${textToLatex(el.text)}};`,
+          `\\node${opts(textOptions(el.color, el.size, el.font, color))} at (${at(el)}) {${labelToLatex(el.text, el.font)}};`,
         );
         break;
     }
@@ -195,7 +198,8 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       ? "% Preâmbulo: \\usepackage{tikz} e \\usetikzlibrary{patterns.meta}"
       : "% Preâmbulo: \\usepackage{tikz}",
   );
-  lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm]`);
+  // SVG's default miter limit: sharp corners get beveled instead of drawing long spikes.
+  lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
   const order = ["coords", "polygon", "circle", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
@@ -221,7 +225,7 @@ function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string)
   const o = textOptions(el.label.color, size, el.label.font, color);
   // A live measure is written with the value it has at export time.
   const number = measure ? measureNumber(doc, el, measure) : null;
-  const latex = measure && number !== null ? measureToLatex(measure, number) : labelToLatex(labelText(doc, el));
+  const latex = measure && number !== null ? measureToLatex(measure, number, el.label.font) : labelToLatex(labelText(doc, el), el.label.font);
   return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${latex}};`;
 }
 

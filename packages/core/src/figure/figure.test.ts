@@ -9,11 +9,18 @@ import {
   connectPoints,
   deleteElements,
   emptyDoc,
+  DEFAULT_ANGLE,
+  DEFAULT_LABEL,
+  DEFAULT_POINT,
+  DEFAULT_STROKE,
   DEFAULT_STYLES,
   fillShapes,
   formatNumber,
+  labelRuns,
   labelText,
   labelToLatex,
+  measureRuns,
+  measureToLatex,
   makeAngles,
   makeCircle,
   makePolygon,
@@ -32,6 +39,7 @@ import {
   type ParsedPoint,
   type Point,
 } from "./index";
+import { FIXTURES } from "../../fixtures/figures";
 
 /** New points of an input, for building test figures. */
 function pts(text: string): ParsedPoint[] {
@@ -317,6 +325,39 @@ describe("labels", () => {
     expect(labelToLatex("x²")).toBe("$x^{2}$");
     expect(labelToLatex("50% & mais")).toBe("50\\% \\& mais");
   });
+
+  it("keeps words, sans labels and OT1-unsafe characters out of math mode", () => {
+    // Math mode would set "cm" in italic and ignore \sffamily.
+    expect(labelToLatex("2,5 cm")).toBe("2,5 cm");
+    expect(labelToLatex("A", "sans")).toBe("A");
+    expect(labelToLatex("M₂", "sans")).toBe("M\\textsubscript{2}");
+    expect(labelToLatex("α área")).toBe("$\\alpha$ área");
+    // pdflatex's default OT1 encoding prints < > | as ¡ ¿ —.
+    expect(labelToLatex('"aspas" x < 2 | y > 1')).toBe("``aspas'' x \\textless{} 2 \\textbar{} y \\textgreater{} 1");
+    expect(labelToLatex("a ~ b")).toBe("a $\\sim$ b");
+  });
+
+  it("writes geometry symbols as commands pdflatex can typeset", () => {
+    expect(labelToLatex("∠ABC ≅ ∠DEF")).toBe("$\\angle ABC\\cong \\angle DEF$");
+    expect(labelToLatex("AB ⊥ CD")).toBe("$AB\\perp CD$");
+    expect(labelToLatex("r ∥ s, área")).toBe("r $\\parallel$ s, área");
+    expect(labelToLatex("(1,5; 2)")).toBe("$(1{,}5{;}\\ 2)$");
+  });
+
+  it("splits labels into italic and upright runs like LaTeX math", () => {
+    expect(labelRuns("A′")).toEqual([
+      { text: "A", italic: true },
+      { text: "′", italic: false },
+    ]);
+    expect(labelRuns("Δ")).toEqual([{ text: "Δ", italic: false }]);
+    expect(labelRuns("2x²")).toEqual([
+      { text: "2", italic: false },
+      { text: "x", italic: true },
+      { text: "²", italic: false },
+    ]);
+    expect(labelRuns("2,5 cm")).toEqual([{ text: "2,5 cm", italic: false }]);
+    expect(labelRuns("A", "sans")).toEqual([{ text: "A", italic: false }]);
+  });
 });
 
 describe("exports", () => {
@@ -330,7 +371,7 @@ describe("exports", () => {
   it("writes TikZ with named coordinates and a right-angle square", () => {
     const tikz = toTikz(sample());
     expect(tikz).toContain("\\coordinate (p1) at (0,0);");
-    expect(tikz).toContain("\\begin{tikzpicture}[x=1cm, y=1cm]");
+    expect(tikz).toContain("\\begin{tikzpicture}[x=1cm, y=1cm, miter limit=4]");
     expect(tikz).toContain("(p1) -- (p2) -- (p3) -- cycle");
     expect(tikz).toMatch(/\\node\[text=black\] at \(\[shift=\{\(-?[\d.]+pt,-?[\d.]+pt\)\}\]p1\) \{\$A\$\};/);
     expect(tikz).not.toContain('"solid"');
@@ -355,7 +396,7 @@ describe("exports", () => {
 
   it("scales coordinates but not line widths", () => {
     const tikz = toTikz(sample(), { scale: 2 });
-    expect(tikz).toContain("[x=2cm, y=2cm]");
+    expect(tikz).toContain("[x=2cm, y=2cm, miter limit=4]");
     expect(tikz).toContain("line width=0.8pt");
   });
 
@@ -457,6 +498,61 @@ describe("styles and options", () => {
   });
 });
 
+describe("export fidelity", () => {
+  function doc(elements: FigureDoc["elements"]): FigureDoc {
+    return { kind: "geo", version: 1, elements };
+  }
+  const point = (id: string, x: number, y: number): Point => ({ id, type: "point", x, y, ...DEFAULT_POINT });
+  const stroke = { ...DEFAULT_STROKE };
+
+  it("draws segment ticks at the midpoint in the scene, like the TikZ export", () => {
+    const d = doc([
+      point("p1", 0, 0),
+      point("p2", 4, 0),
+      { id: "s1", type: "segment", a: "p1", b: "p2", stroke, ticks: 1 },
+    ]);
+    const scene = buildScene(d);
+    const tick = scene.prims.filter((p) => p.kind === "path" && p.owner === "s1")[1];
+    const xs = tick.kind === "path" ? [...tick.d.matchAll(/[ML](-?[\d.]+) /g)].map((m) => Number(m[1])) : [];
+    expect(xs).toHaveLength(2);
+    for (const x of xs) expect(x).toBeCloseTo(2 * scene.k, 3);
+    expect(toTikz(d)).toContain("([shift={(0pt,3.5pt)}]2,0) -- ([shift={(0pt,-3.5pt)}]2,0)");
+  });
+
+  it("fades the right-angle dot with the stroke in TikZ, like in the SVG", () => {
+    const d = doc([
+      point("p1", 0, 0),
+      point("p2", 1, 0),
+      point("p3", 0, 1),
+      { id: "a1", type: "angle", a: "p2", vertex: "p1", b: "p3", ...DEFAULT_ANGLE, stroke: { ...stroke, opacity: 0.4 } },
+    ]);
+    expect(toTikz(d)).toMatch(/\\fill\[black, fill opacity=0\.4\] .* circle/);
+    expect(toSvg(d)).toMatch(/fill="#000000" fill-opacity="0\.4"/);
+  });
+
+  it("bevels sharp corners in TikZ at the SVG miter limit", () => {
+    expect(toTikz(emptyDoc())).toContain("miter limit=4]");
+  });
+
+  it("styles SVG label text per run", () => {
+    const d = doc([{ ...point("p1", 0, 0), label: { ...DEFAULT_LABEL, text: "2x" } }]);
+    expect(toSvg(d)).toContain('>2<tspan font-style="italic">x</tspan></text>');
+    const single = doc([{ ...point("p1", 0, 0), label: { ...DEFAULT_LABEL, text: "A" } }]);
+    expect(toSvg(single)).toMatch(/font-style="italic"[^>]*>A<\/text>/);
+  });
+
+  it("writes only characters pdflatex reads for every fixture", () => {
+    for (const { name, doc: d, scale } of FIXTURES) {
+      const body = toTikz(d, { scale })
+        .split("\n")
+        .filter((l) => !l.startsWith("%"));
+      // ASCII plus Latin-1 letters (á, ç), which LaTeX reads as UTF-8 since 2018.
+      const bad = body.filter((l) => !/^[\x20-\x7e\u00c0-\u00ff]*$/.test(l));
+      expect(bad, name).toEqual([]);
+    }
+  });
+});
+
 describe("live measure labels", () => {
   /** Triangle with its sides labeled by live lengths: s1 = 4, s2 = 5, s3 = 3. */
   function measured(): FigureDoc {
@@ -520,8 +616,18 @@ describe("live measure labels", () => {
     };
     doc = movePoints(doc, [{ id: "p2", x: 1.5, y: 0 }]);
     const tikz = toTikz(doc);
-    expect(tikz).toContain("{$x\\ =\\ 1{,}5\\textrm{ cm}$};");
+    // Math mode spaces the = itself.
+    expect(tikz).toContain("{$x=1{,}5\\textrm{ cm}$};");
     expect(tikz).toContain("{$3$};");
+    // The SVG sets the prefix like LaTeX math and keeps the unit upright.
+    expect(toSvg(doc)).toContain('<tspan font-style="italic">x</tspan> = 1,5 cm</text>');
+  });
+
+  it("writes word prefixes and sans-serif measures as text", () => {
+    const m = { kind: "length" as const, decimals: 2, prefix: "lado ", suffix: " cm" };
+    expect(measureToLatex(m, "2,5")).toBe("lado $2{,}5\\textrm{ cm}$");
+    expect(measureToLatex({ ...m, prefix: "" }, "2,5", "sans")).toBe("2,5 cm");
+    expect(measureRuns(m, "2,5")).toEqual([{ text: "lado 2,5 cm", italic: false }]);
   });
 
   it("keeps measures through normalizeDoc and drops ones the element can't have", () => {
