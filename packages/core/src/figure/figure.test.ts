@@ -30,6 +30,9 @@ import {
   parseInput,
   applyInput,
   pointOnSegment,
+  quickFigureStep,
+  NO_QUICK_FIGURE,
+  type QuickFigure,
   removeLabels,
   clearLabels,
   toSvg,
@@ -303,6 +306,69 @@ describe("operations", () => {
     doc = autoLabel(doc, "segment", "length", null).doc;
     const labels = doc.elements.map((e) => e.label?.text);
     expect(labels).toEqual(["A", "B", "C", "4", "5", "3"]);
+  });
+});
+
+describe("quick figure", () => {
+  const clicks = (at: ({ x: number; y: number } | string)[], from: FigureDoc = emptyDoc()) => {
+    let doc = from;
+    let figure: QuickFigure | null = NO_QUICK_FIGURE;
+    for (const next of at) {
+      const r = quickFigureStep(doc, figure ?? NO_QUICK_FIGURE, next);
+      expect(r.error).toBeUndefined();
+      doc = r.doc;
+      figure = r.figure;
+    }
+    return { doc, figure };
+  };
+  const count = (doc: FigureDoc) => {
+    const out: Record<string, number> = {};
+    for (const e of doc.elements) out[e.type] = (out[e.type] ?? 0) + 1;
+    return out;
+  };
+
+  it("adds a point, then a side, then closes a filled polygon with its angles", () => {
+    expect(count(clicks([{ x: 0, y: 0 }]).doc)).toEqual({ point: 1 });
+    expect(count(clicks([{ x: 0, y: 0 }, { x: 4, y: 0 }]).doc)).toEqual({ point: 2, segment: 1 });
+    const { doc } = clicks([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 3 }]);
+    expect(count(doc)).toEqual({ point: 3, segment: 3, polygon: 1, angle: 3 });
+    const polygon = doc.elements.find((e) => e.type === "polygon");
+    expect(polygon?.type === "polygon" && polygon.fill).toBeTruthy();
+  });
+
+  it("keeps an open chain while the points are on one line", () => {
+    const { doc } = clicks([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }]);
+    expect(count(doc)).toEqual({ point: 3, segment: 2 });
+  });
+
+  it("a fourth vertex rebuilds the closing side, the polygon and the angles", () => {
+    const { doc, figure } = clicks([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }]);
+    expect(count(doc)).toEqual({ point: 4, segment: 4, polygon: 1, angle: 4 });
+    const polygon = doc.elements.find((e) => e.type === "polygon");
+    expect(polygon?.type === "polygon" && polygon.vertices).toEqual(figure?.points);
+  });
+
+  it("picking the first vertex finishes the figure, and the next click starts another", () => {
+    const first = clicks([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 3 }]);
+    const p1 = first.figure!.points[0];
+    const finished = quickFigureStep(first.doc, first.figure!, p1);
+    expect(finished.figure).toBeNull();
+    expect(finished.doc).toBe(first.doc);
+    const again = quickFigureStep(finished.doc, NO_QUICK_FIGURE, { x: 9, y: 9 });
+    expect(count(again.doc)).toEqual({ point: 4, segment: 3, polygon: 1, angle: 3 });
+  });
+
+  it("uses an existing point as a vertex", () => {
+    const { doc } = clicks(["p1", { x: 5, y: 5 }], triangle());
+    expect(count(doc)).toEqual({ point: 4, segment: 1 });
+  });
+
+  it("starts over when an undo took a vertex away", () => {
+    const two = clicks([{ x: 0, y: 0 }, { x: 4, y: 0 }]);
+    const undone = deleteElements(two.doc, [two.figure!.points[1]]).doc;
+    const r = quickFigureStep(undone, two.figure!, { x: 0, y: 3 });
+    expect(r.figure?.points).toHaveLength(1);
+    expect(count(r.doc)).toEqual({ point: 2 });
   });
 });
 

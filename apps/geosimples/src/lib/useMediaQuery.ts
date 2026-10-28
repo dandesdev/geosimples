@@ -19,5 +19,8 @@ export function useMediaQuery(query: string): boolean {
  */
 export const useRoomyPreview = () => useMediaQuery("(min-width: 640px) and (min-height: 500px)");
 
+/** True when the side panel sits beside the preview; narrower, it stacks below the page fold. */
+export const useSidePanelBeside = () => useMediaQuery("(min-width: 1024px)");
+
 /** True when the main pointer is a finger, so targets need to be bigger. */
 export const useCoarsePointer = () => useMediaQuery("(pointer: coarse)");

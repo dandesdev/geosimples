@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildScene,
+  formatNumber,
   movePoints,
   paddedBox,
+  pointMap,
   sceneMarkup,
   type Box,
   type FigureDoc,
@@ -10,8 +12,11 @@ import {
   type Id,
   type ParsedInput,
   type Prim,
+  type Vec,
 } from "@geosimples/core/figure";
+import { actions } from "@/lib/actions";
 import { useFigureStore } from "@/store/figureStore";
+import { useActivePrefs } from "@/store/useActivePrefs";
 import { ActionBar } from "./ActionBar";
 import { ZoomBar } from "./ZoomBar";
 import { EmptyState } from "./EmptyState";
@@ -33,11 +38,24 @@ const HIT_COARSE = { point: 16, stroke: 28 };
 
 type Gesture =
   | { kind: "none" }
-  /** `slop` is how far (px) the pointer may wander before a press becomes a drag. */
-  | { kind: "press"; owner: Id | null; x: number; y: number; shift: boolean; slop: number }
-  | { kind: "drag"; owner: Id; ids: Id[]; base: FigureDoc; start: { x: number; y: number }; moved: boolean; slop: number }
+  /**
+   * `slop` is how far (px) the pointer may wander before a press becomes a drag.
+   * `additive`: the click adds to the selection (Shift, Ctrl or Seleção múltipla);
+   * `keys`: Shift, Ctrl or Cmd was held, so a click on nothing keeps the selection.
+   */
+  | { kind: "press"; owner: Id | null; x: number; y: number; additive: boolean; keys: boolean; slop: number }
+  | {
+      kind: "drag";
+      owner: Id;
+      ids: Id[];
+      base: FigureDoc;
+      start: { x: number; y: number };
+      moved: boolean;
+      slop: number;
+      additive: boolean;
+    }
   | { kind: "pan"; x: number; y: number; view: View }
-  | { kind: "box"; start: { x: number; y: number }; end: { x: number; y: number }; shift: boolean }
+  | { kind: "box"; start: { x: number; y: number }; end: { x: number; y: number }; additive: boolean }
   /** Two fingers: pinch to zoom and drag to pan, in any mode. */
   | { kind: "pinch"; ids: [number, number]; from: Pinch; at: { x: number; y: number }; view: View; unitsPerPx: number }
   /** A finger left a pinch: the rest are ignored until all are up, so nothing gets selected by accident. */
@@ -75,6 +93,10 @@ export function PreviewPanel() {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const autoFit = useFigureStore((s) => s.settings.autoFit);
   const setSetting = useFigureStore((s) => s.setSetting);
+  const quickFigure = useFigureStore((s) => s.quickFigure);
+  const snap = useActivePrefs().behavior.snapToGrid;
+  /** Modes where a click puts a point down. */
+  const placing = mode === "add" || mode === "figure";
 
   const scene = useMemo(() => buildScene(doc, { scale }), [doc, scale]);
   const markup = useMemo(() => sceneMarkup(scene), [scene]);
@@ -95,6 +117,8 @@ export function PreviewPanel() {
   /** Holds the camera still while a point is dragged. */
   const [frozen, setFrozen] = useState<View | null>(null);
   const [box, setBox] = useState<Box | null>(null);
+  /** Where a click would put a point in add mode, under the mouse. */
+  const [addAt, setAddAt] = useState<Vec | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -160,6 +184,21 @@ export function PreviewPanel() {
   useCommand("zoomOut", () => zoomBy(1.25));
   useCommand("toggleAutoFit", toggleAutoFit);
 
+  /** The grid crossing near `at` (world units), when snapping is on and one is in reach. */
+  const crossingNear = (at: Vec): Vec | null => {
+    if (!snap) return null;
+    const reach = ((coarse ? 14 : 8) * unitsPerPx) / k;
+    const g = { x: Math.round(at.x) || 0, y: Math.round(at.y) || 0 };
+    return Math.hypot(at.x - g.x, at.y - g.y) <= reach ? g : null;
+  };
+
+  /** The world position for a new point under the pointer: a grid crossing in reach, or rounded to tenths. */
+  const pointAt = (clientX: number, clientY: number): Vec => {
+    const p = toUser(svgRef.current!, clientX, clientY);
+    const at = { x: p.x / k, y: -p.y / k };
+    return crossingNear(at) ?? { x: Math.round(at.x * 10) / 10 || 0, y: Math.round(at.y * 10) / 10 || 0 };
+  };
+
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
 
@@ -209,6 +248,8 @@ export function PreviewPanel() {
     const slop = e.pointerType === "touch" ? 10 : 4;
     const owner = ownerAt(e.target);
     const store = useFigureStore.getState();
+    const keys = e.shiftKey || e.ctrlKey || e.metaKey;
+    const additive = keys || store.multiSelect;
     const movable = movables(store.doc);
     if (mode === "move" && owner && movable.has(owner)) {
       const selectedMovable = store.selection.filter((id) => movable.has(id));
@@ -223,10 +264,11 @@ export function PreviewPanel() {
         start: toUser(svg, e.clientX, e.clientY),
         moved: false,
         slop: slop / 2,
+        additive,
       };
       return;
     }
-    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, shift: e.shiftKey, slop };
+    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, additive, keys, slop };
   };
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -237,29 +279,38 @@ export function PreviewPanel() {
     }
     const g = gesture.current;
     const svg = svgRef.current!;
+    if (placing && e.pointerType === "mouse") setAddAt(g.kind === "none" ? pointAt(e.clientX, e.clientY) : null);
     if (g.kind === "pinch") {
       const a = pointers.current.get(g.ids[0]);
       const b = pointers.current.get(g.ids[1]);
       if (tracked && a && b) placeCamera(pinchView(g.view, g.unitsPerPx, g.at, g.from, pinchOf(a, b)));
     } else if (g.kind === "drag") {
       const p = toUser(svg, e.clientX, e.clientY);
-      const dx = (p.x - g.start.x) / k;
-      const dy = -(p.y - g.start.y) / k;
+      let dx = (p.x - g.start.x) / k;
+      let dy = -(p.y - g.start.y) / k;
       if (!g.moved && Math.hypot(dx, dy) * k < g.slop * unitsPerPx) return;
       g.moved = true;
       const movable = movables(g.base);
+      // The point under the pointer lands on a crossing in reach; the others keep their offsets.
+      const held = pointMap(g.base).get(g.owner);
+      const crossing = held && crossingNear({ x: held.x + dx, y: held.y + dy });
+      if (held && crossing) {
+        dx = crossing.x - held.x;
+        dy = crossing.y - held.y;
+      }
       const moves = g.ids
         .map((id) => movable.get(id))
         .filter((m) => m !== undefined)
         .map((m) => ({ id: m.id, x: round2(m.x + dx), y: round2(m.y + dy) }));
       useFigureStore.getState().setTransient(movePoints(g.base, moves));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > g.slop) {
-      if (mode === "pan") {
+      // Adding points needs no box: a drag moves the view, as fingers expect.
+      if (mode === "pan" || placing) {
         gesture.current = { kind: "pan", x: g.x, y: g.y, view: vb };
       } else {
         const start = toUser(svg, g.x, g.y);
         const end = toUser(svg, e.clientX, e.clientY);
-        gesture.current = { kind: "box", start, end, shift: g.shift };
+        gesture.current = { kind: "box", start, end, additive: g.additive };
         setBox(boxFrom(start, end));
       }
     } else if (g.kind === "pan") {
@@ -293,17 +344,23 @@ export function PreviewPanel() {
     const g = gesture.current;
     gesture.current = { kind: "none" };
     const store = useFigureStore.getState();
-    if (g.kind === "press") {
-      if (g.owner) store.toggleSelect(g.owner);
-      else if (!g.shift) store.clearSelection();
+    const point = g.kind === "press" && g.owner && pointMap(store.doc).has(g.owner) ? g.owner : null;
+    if (g.kind === "press" && placing && !(mode === "add" && point)) {
+      // Keep the view still, so the next point lands where the next click is.
+      if (autoFit) placeCamera(vb);
+      if (mode === "figure") actions.quickFigureAt(point ?? pointAt(g.x, g.y));
+      else actions.addPointAt(pointAt(g.x, g.y));
+    } else if (g.kind === "press") {
+      if (g.owner) store.pick(g.owner, g.additive);
+      else if (!g.keys) store.clearSelection();
     } else if (g.kind === "drag") {
       store.endTransient();
       setFrozen(null);
-      if (!g.moved) store.toggleSelect(g.owner);
+      if (!g.moved) store.pick(g.owner, g.additive);
     } else if (g.kind === "box") {
       setBox(null);
       const found = elementsInBox(store.doc, k, boxFrom(g.start, g.end));
-      if (g.shift) {
+      if (g.additive) {
         const kept = new Set(store.selection);
         store.select([...store.selection, ...found.filter((id) => !kept.has(id))]);
       } else {
@@ -328,7 +385,7 @@ export function PreviewPanel() {
         // A sideways phone is short: the 18rem floor keeps the figure readable, and the page scrolls.
         className="relative flex min-h-[max(55dvh,18rem)] flex-1 flex-col overflow-hidden rounded-lg border bg-card lg:min-h-0"
       >
-        <ActionBar zoom={roomy ? null : zoom} />
+        <ActionBar compact={!roomy} zoom={roomy ? null : zoom} />
         <div ref={containerRef} className="relative min-h-0 flex-1">
           <svg
             ref={svgRef}
@@ -337,6 +394,7 @@ export function PreviewPanel() {
               "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
               mode === "pan" && "cursor-grab active:cursor-grabbing",
               mode === "select" && "cursor-crosshair",
+              placing && "cursor-copy",
             )}
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             preserveAspectRatio="xMidYMid meet"
@@ -344,6 +402,7 @@ export function PreviewPanel() {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
+            onPointerLeave={() => setAddAt(null)}
             // Stops the browser's autoscroll from starting on a middle click.
             onMouseDown={(e) => e.button === 1 && e.preventDefault()}
             onAuxClick={(e) => e.preventDefault()}
@@ -361,6 +420,9 @@ export function PreviewPanel() {
               hit={coarse ? HIT_COARSE : HIT_FINE}
             />
             {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
+            {placing && addAt && (
+              <AddMarker at={addAt} k={k} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
+            )}
             {box && (
               <rect
                 x={box.minX}
@@ -377,7 +439,8 @@ export function PreviewPanel() {
               />
             )}
           </svg>
-          {empty && <EmptyState />}
+          {/* In add mode the whole preview is for clicking, and the hint below says how. */}
+          {empty && !placing && <EmptyState />}
           {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
           {roomy && <SelectionSummary placement="overlay" />}
         </div>
@@ -385,6 +448,40 @@ export function PreviewPanel() {
       {/* Phones have no room to float the hint over the figure, so it goes below the preview. */}
       {!roomy && <SelectionSummary placement="below" />}
     </>
+  );
+}
+
+/** The vertices a Figura rápida click joins: the last one, and the first once there is a side. */
+function quickEnds(doc: FigureDoc, points: Id[]): Vec[] {
+  const pts = pointMap(doc);
+  const ends = points.length >= 2 ? [points[points.length - 1], points[0]] : points;
+  return ends.flatMap((id) => pts.get(id) ?? []);
+}
+
+/** Where the next click puts a point, with its coordinates, and the sides it would draw to `joins`. */
+function AddMarker({ at, k, px, joins }: { at: Vec; k: number; px: number; joins: Vec[] }) {
+  const cx = at.x * k;
+  const cy = -at.y * k;
+  return (
+    <g pointerEvents="none">
+      {joins.map((p, i) => (
+        <line
+          key={i}
+          x1={p.x * k}
+          y1={-p.y * k}
+          x2={cx}
+          y2={cy}
+          stroke={PRIMARY}
+          strokeWidth={1.5}
+          strokeDasharray="6 4"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      <circle cx={cx} cy={cy} r={4 * px} fill="none" stroke={PRIMARY} strokeWidth={1.5 * px} />
+      <text x={cx + 8 * px} y={cy - 8 * px} fontSize={11 * px} fill={PRIMARY} fontFamily="ui-sans-serif, system-ui">
+        ({formatNumber(at.x, 1)}; {formatNumber(at.y, 1)})
+      </text>
+    </g>
   );
 }
 

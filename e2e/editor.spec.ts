@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   addTriangle,
   boxSelectAll,
+  clickCanvasAt,
   clickEmptyCanvas,
   counts,
   leaveInput,
@@ -19,6 +20,47 @@ test("typing points creates points and segments", async ({ page }) => {
   await addTriangle(page);
   expect(await counts(page)).toEqual({ point: 3, segment: 3 });
   await expect(toolbarButton(page, "Exportar")).toBeEnabled();
+});
+
+test("add mode puts a point where the preview is clicked, without selecting it", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("p");
+  await expect(toolbarButton(page, "Adicionar pontos")).toHaveAttribute("aria-pressed", "true");
+
+  await clickCanvasAt(page, 0.3, 0.4);
+  await clickCanvasAt(page, 0.7, 0.6);
+  await expect.poll(async () => (await counts(page)).point ?? 0).toBe(2);
+  await expect(page.getByText(/^Selecionados:/)).toHaveCount(0);
+});
+
+test("a click selects one object; Shift or Seleção múltipla adds to it", async ({ page }) => {
+  await addTriangle(page);
+  await clickEmptyCanvas(page);
+  const point = (id: string) => page.locator(`[data-owner="${id}"]`);
+
+  await point("p1").click();
+  await expect(page.getByText(/Selecionados: 1 ponto\./)).toBeVisible();
+  await point("p2").click();
+  await expect(page.getByText(/Selecionados: 1 ponto\./)).toBeVisible();
+  await point("p3").click({ modifiers: ["Shift"] });
+  await expect(page.getByText(/Selecionados: 2 pontos/)).toBeVisible();
+
+  await toolbarButton(page, "Seleção múltipla").click();
+  await point("p1").click();
+  await expect(page.getByText(/Selecionados: 3 pontos/)).toBeVisible();
+});
+
+test("Figura rápida: three clicks make a filled triangle with its angles", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("Shift+P");
+  await expect(toolbarButton(page, "Figura rápida")).toHaveAttribute("aria-pressed", "true");
+
+  await clickCanvasAt(page, 0.3, 0.7);
+  await expect.poll(() => counts(page)).toEqual({ point: 1 });
+  await clickCanvasAt(page, 0.7, 0.7);
+  await expect.poll(() => counts(page)).toEqual({ point: 2, segment: 1 });
+  await clickCanvasAt(page, 0.5, 0.3);
+  await expect.poll(() => counts(page)).toEqual({ point: 3, segment: 3, polygon: 1, angle: 3 });
 });
 
 test("box selection, polygon and angles", async ({ page }) => {

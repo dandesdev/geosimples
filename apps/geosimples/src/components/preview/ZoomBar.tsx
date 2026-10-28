@@ -33,7 +33,7 @@ export function ZoomBar({
       className={
         placement === "overlay"
           ? "absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
-          : "ml-auto flex gap-0.5"
+          : "flex gap-0.5"
       }
     >
       <IconButton

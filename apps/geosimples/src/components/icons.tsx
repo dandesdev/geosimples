@@ -23,6 +23,24 @@ const Dot = ({ cx, cy }: { cx: number; cy: number }) => (
   <circle cx={cx} cy={cy} r={1.8} fill="currentColor" stroke="none" />
 );
 
+export const AddPointIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Dot cx={9} cy={15} />
+    <path d="M17 4 L17 12 M13 8 L21 8" />
+    <path d="M4 20 L20 20" strokeWidth={1.1} strokeDasharray="2 2" />
+  </Icon>
+);
+
+export const QuickFigureIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 19 L10 7 L16 19 Z" fill="currentColor" fillOpacity={0.2} />
+    <Dot cx={4} cy={19} />
+    <Dot cx={10} cy={7} />
+    <Dot cx={16} cy={19} />
+    <path d="M19 3 L19 9 M16 6 L22 6" />
+  </Icon>
+);
+
 export const ConnectIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M5 17 L12 7 L19 15" />

@@ -13,6 +13,9 @@ export type ActionId =
   | "modeSelect"
   | "modePan"
   | "modeMove"
+  | "modeAdd"
+  | "modeFigure"
+  | "toggleMultiSelect"
   | "connect"
   | "closeContour"
   | "angle"
@@ -35,6 +38,9 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   modeSelect: "Modo selecionar",
   modePan: "Modo mover a vista",
   modeMove: "Modo mover pontos",
+  modeAdd: "Modo adicionar pontos",
+  modeFigure: "Modo figura rápida",
+  toggleMultiSelect: "Seleção múltipla",
   connect: "Ligar pontos em sequência",
   closeContour: "Ligar fechando o contorno",
   angle: "Marcar ângulo",
@@ -58,6 +64,9 @@ export const DEFAULT_SHORTCUTS: Record<ActionId, string[]> = {
   modeSelect: ["V"],
   modePan: ["H"],
   modeMove: ["M"],
+  modeAdd: ["P"],
+  modeFigure: ["Shift+P"],
+  toggleMultiSelect: ["S"],
   connect: ["L"],
   closeContour: ["Shift+L"],
   angle: ["A"],
@@ -87,6 +96,12 @@ export interface Prefs {
     decimals: number;
     /** Kinds Rotular automaticamente starts with checked. */
     autoLabel: Record<AutoLabelKind, boolean>;
+    /** Points added by clicking the preview join the selection. */
+    selectAdded: boolean;
+    /** Points added or moved in the preview land on a grid crossing when near one. */
+    snapToGrid: boolean;
+    /** Shows the Figura rápida mode in the toolbar. Holding Adicionar pontos opens it either way. */
+    quickFigure: boolean;
   };
   export: {
     scale: number;
@@ -105,6 +120,9 @@ export const DEFAULT_PREFS: Prefs = {
     showGrid: true,
     decimals: 2,
     autoLabel: { point: true, segment: false, angle: false, radius: false, area: false, perimeter: false },
+    selectAdded: false,
+    snapToGrid: true,
+    quickFigure: false,
   },
   export: { scale: 1, dpi: 300, background: "white" },
   shortcuts: DEFAULT_SHORTCUTS,
@@ -354,11 +372,14 @@ function sanitizePrefs(raw: unknown): Prefs {
     styles,
     behavior: {
       autoName: bool(b.autoName, d.behavior.autoName),
-      mode: b.mode === "pan" || b.mode === "move" ? b.mode : "select",
+      mode: b.mode === "pan" || b.mode === "move" || b.mode === "add" ? b.mode : "select",
       autoFit: bool(b.autoFit, d.behavior.autoFit),
       showGrid: bool(b.showGrid, d.behavior.showGrid),
       decimals: Math.round(num(b.decimals, 0, 4, d.behavior.decimals)),
       autoLabel: autoLabelKinds(b.autoLabel, d.behavior.autoLabel),
+      selectAdded: bool(b.selectAdded, d.behavior.selectAdded),
+      snapToGrid: bool(b.snapToGrid, d.behavior.snapToGrid),
+      quickFigure: bool(b.quickFigure, d.behavior.quickFigure),
     },
     export: {
       scale: num(e.scale, 0.1, 10, d.export.scale),

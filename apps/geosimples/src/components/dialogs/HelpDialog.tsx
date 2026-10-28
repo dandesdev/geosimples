@@ -12,6 +12,9 @@ const HELP_ACTIONS: ActionId[] = [
   "modeSelect",
   "modePan",
   "modeMove",
+  "modeAdd",
+  "modeFigure",
+  "toggleMultiSelect",
   "connect",
   "angle",
   "polygon",
@@ -35,17 +38,20 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <li>
             <b>Pontos.</b> Digite na barra abaixo da prévia: <code>A=(0;0)--B=(4;0)--C=(0;3)--</code> cria o triângulo
             ABC. <code>--</code> liga pontos, e no fim fecha o contorno. <code>+(4;0)</code> e <code>+(3:90)</code> partem
-            do ponto anterior. O ícone de ajuda ao lado da barra mostra tudo.
+            do ponto anterior. O ícone de ajuda ao lado da barra mostra tudo. Ou use Adicionar pontos e clique na
+            prévia; segurando esse botão, Figura rápida liga os pontos e fecha o polígono.
           </li>
           {touch ? (
             <li>
-              <b>Seleção.</b> Toque nos objetos da prévia, ou arraste uma caixa em volta deles. A ordem importa: os
-              números verdes mostram a ordem dos pontos selecionados. Dois dedos movem e aproximam a vista.
+              <b>Seleção.</b> Toque num objeto da prévia, ou arraste uma caixa em volta deles. Para somar à seleção,
+              ligue Seleção múltipla na barra. A ordem importa: os números verdes mostram a ordem dos pontos
+              selecionados. Dois dedos movem e aproximam a vista.
             </li>
           ) : (
             <li>
-              <b>Seleção.</b> Clique nos objetos da prévia, ou arraste uma caixa em volta deles. A ordem importa: os
-              números verdes mostram a ordem dos pontos selecionados. Arrastar com o botão do meio move a vista.
+              <b>Seleção.</b> Clique num objeto da prévia, ou arraste uma caixa em volta deles. Shift (ou Seleção
+              múltipla, na barra) soma à seleção. A ordem importa: os números verdes mostram a ordem dos pontos
+              selecionados. Arrastar com o botão do meio move a vista.
             </li>
           )}
           <li>

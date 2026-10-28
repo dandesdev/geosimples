@@ -3,6 +3,7 @@ import { labelText, perpendicularBisectorOf, type Element, type FigureDoc } from
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { TYPE_NAMES } from "@/lib/names";
+import { cn } from "@/lib/utils";
 import { useInspected, useInspector } from "./inspected";
 
 function describe(doc: FigureDoc, el: Element): string {
@@ -13,7 +14,7 @@ function describe(doc: FigureDoc, el: Element): string {
 }
 
 /** Names the object Propriedades and Formatação edit, and steps through a multiple selection. */
-export function SelectionHeader() {
+export function SelectionHeader({ bordered = true }: { bordered?: boolean }) {
   const inspected = useInspected();
   const applyAll = useInspector((s) => s.applyAll);
   const setIndex = useInspector((s) => s.setIndex);
@@ -22,7 +23,7 @@ export function SelectionHeader() {
   const { doc, selected, i, el, sameType } = inspected;
 
   return (
-    <div className="space-y-2 border-b py-3">
+    <div className={cn("space-y-2 py-3", bordered && "border-b")}>
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm font-medium" title={describe(doc, el)}>
           {describe(doc, el)}

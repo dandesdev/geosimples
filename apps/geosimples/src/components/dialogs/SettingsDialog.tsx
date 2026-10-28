@@ -305,6 +305,7 @@ function SettingsBody() {
                 { value: "select", label: "Selecionar" },
                 { value: "pan", label: "Mover a vista" },
                 { value: "move", label: "Mover pontos" },
+                { value: "add", label: "Adicionar pontos" },
               ]}
               onChange={(mode) => behavior({ mode })}
             />
@@ -314,6 +315,24 @@ function SettingsBody() {
               onChange={(autoFit) => behavior({ autoFit })}
             />
             <SwitchField label="Mostrar grade" checked={prefs.behavior.showGrid} onChange={(showGrid) => behavior({ showGrid })} />
+            <SwitchField
+              label="Encaixar na grade"
+              checked={prefs.behavior.snapToGrid}
+              onChange={(snapToGrid) => behavior({ snapToGrid })}
+              help="Ao adicionar ou mover pontos na prévia, um ponto perto de um cruzamento da grade vai para o cruzamento."
+            />
+            <SwitchField
+              label="Selecionar pontos criados na prévia"
+              checked={prefs.behavior.selectAdded}
+              onChange={(selectAdded) => behavior({ selectAdded })}
+              help="Os pontos criados com Adicionar pontos ou Figura rápida entram na seleção, em ordem, prontos para Ligar pontos."
+            />
+            <SwitchField
+              label="Figura rápida"
+              checked={prefs.behavior.quickFigure}
+              onChange={(quickFigure) => behavior({ quickFigure })}
+              help="Mostra o modo Figura rápida na barra: cada clique põe um vértice ligado ao anterior, e o terceiro fecha o polígono com preenchimento e ângulos. Desligado, ele abre segurando Adicionar pontos ou com Shift+P."
+            />
             <RangeField
               label="Casas decimais nas medidas"
               value={prefs.behavior.decimals}

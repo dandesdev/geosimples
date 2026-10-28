@@ -14,6 +14,8 @@ import {
   type Id,
   type KeyValueStorage,
   type OpResult,
+  type QuickFigure,
+  NO_QUICK_FIGURE,
 } from "@geosimples/core/figure";
 
 export interface Settings {
@@ -35,8 +37,11 @@ export interface ActionPreview {
   ids: Id[];
 }
 
-/** What dragging in the preview does. Clicking an object always selects it. */
-export type CanvasMode = "select" | "pan" | "move";
+/**
+ * What a press or drag in the preview does. "add" puts a point where you
+ * click; "figure" (Figura rápida) also joins it to the previous one and closes a polygon.
+ */
+export type CanvasMode = "select" | "pan" | "move" | "add" | "figure";
 
 const DEFAULT_SETTINGS: Settings = {
   scale: 1,
@@ -63,6 +68,10 @@ interface FigureState extends LibrarySlice {
   /** What an action would produce, shown while its button is hovered. */
   actionPreview: ActionPreview | null;
   settings: Settings;
+  /** Clicks and taps add to the selection instead of replacing it, as Shift does. */
+  multiSelect: boolean;
+  /** The figure Figura rápida is drawing. Changing mode finishes it. */
+  quickFigure: QuickFigure;
 
   commit: (doc: FigureDoc, coalesceKey?: string) => void;
   /** Runs an operation on the current figure and selects what it created. */
@@ -73,6 +82,8 @@ interface FigureState extends LibrarySlice {
   endTransient: () => void;
 
   toggleSelect: (id: Id) => void;
+  /** A click on an object: selects only it, or with `additive` adds or removes it. */
+  pick: (id: Id, additive: boolean) => void;
   select: (ids: Id[]) => void;
   clearSelection: () => void;
   selectAll: () => void;
@@ -81,6 +92,8 @@ interface FigureState extends LibrarySlice {
   redo: () => void;
   clear: () => void;
   setMode: (mode: CanvasMode) => void;
+  setMultiSelect: (on: boolean) => void;
+  setQuickFigure: (figure: QuickFigure) => void;
   setInputDraft: (text: string) => void;
   setActionPreview: (preview: ActionPreview | null) => void;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
@@ -207,6 +220,7 @@ function withLibrary(
         selection: [],
         inputDraft: "",
         actionPreview: null,
+        quickFigure: NO_QUICK_FIGURE,
         // A camera placed for the previous figure means nothing for this one.
         settings: { ...s.settings, autoFit: true },
       }));
@@ -291,6 +305,8 @@ export const useFigureStore = create<FigureState>()(
       inputDraft: "",
       actionPreview: null,
       settings: DEFAULT_SETTINGS,
+      multiSelect: false,
+      quickFigure: NO_QUICK_FIGURE,
 
       commit: (doc, coalesceKey) => {
         const state = get();
@@ -338,6 +354,10 @@ export const useFigureStore = create<FigureState>()(
         set((s) => ({
           selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id],
         })),
+      pick: (id, additive) => {
+        if (additive) get().toggleSelect(id);
+        else set({ selection: [id] });
+      },
       select: (ids) => set({ selection: ids }),
       clearSelection: () => set({ selection: [] }),
       selectAll: () => set((s) => ({ selection: s.doc.elements.map((e) => e.id) })),
@@ -352,6 +372,8 @@ export const useFigureStore = create<FigureState>()(
           past: past.slice(0, -1),
           future: [doc, ...future],
           selection: pruneSelection(prev, selection),
+          // The figure Figura rápida tracks no longer matches the doc.
+          quickFigure: NO_QUICK_FIGURE,
         });
       },
       redo: () => {
@@ -364,13 +386,16 @@ export const useFigureStore = create<FigureState>()(
           past: [...past, doc],
           future: future.slice(1),
           selection: pruneSelection(next, selection),
+          quickFigure: NO_QUICK_FIGURE,
         });
       },
       clear: () => {
         get().commit(emptyDoc());
         set({ selection: [] });
       },
-      setMode: (mode) => set({ mode }),
+      setMode: (mode) => set({ mode, quickFigure: NO_QUICK_FIGURE }),
+      setMultiSelect: (multiSelect) => set({ multiSelect }),
+      setQuickFigure: (quickFigure) => set({ quickFigure }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
       setActionPreview: (actionPreview) => set({ actionPreview }),
       setSetting: (key, value) => set((s) => ({ settings: { ...s.settings, [key]: value } })),
