@@ -40,12 +40,14 @@ export function describeConstruction(doc: FigureDoc, c: PointConstruction): stri
     case "midpoint":
       return `Ponto médio de ${name(c.points[0])} e ${name(c.points[1])}`;
     case "foot":
-      return `Pé da altura de ${name(c.point)} sobre a reta ${line(c.line)}`;
+      return `Projeção ortogonal de ${name(c.point)} sobre a reta ${line(c.line)}`;
     case "bisector":
       return `Na bissetriz do ângulo ${c.angle.map(name).join("")}${c.line ? `, sobre a reta ${line(c.line)}` : ""}`;
     case "perpendicular":
       return `Na mediatriz de ${line(c.points)}`;
     case "intersection":
       return `Interseção de ${name(c.of[0])} e ${name(c.of[1])}`;
+    case "arcEnd":
+      return `${c.end === 0 ? "Início" : "Fim"} do arco de ${name(c.circle)}`;
   }
 }

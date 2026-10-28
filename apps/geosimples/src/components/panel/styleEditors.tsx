@@ -8,6 +8,7 @@ import {
   type MeasureKind,
   type Stroke,
 } from "@geosimples/core/figure";
+import { Trash2 } from "lucide-react";
 import { MEASURE_NAMES, type LabelChange } from "@/lib/labels";
 import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
@@ -204,7 +205,24 @@ export function LabelEditor({
     }, "label-measure");
 
   return (
-    <Section title="Rótulo">
+    <Section
+      title="Rótulo"
+      aside={
+        label && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+            title={multi ? "Apaga o rótulo de todos os objetos editados" : "Apaga o rótulo"}
+            // A label with no text and no measure is removed.
+            onClick={() => onChange((l) => ({ ...l, text: "", measure: undefined }), "label-remove")}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remover
+          </Button>
+        )
+      }
+    >
       {measures.length > 0 && (
         <Choice
           label="Conteúdo"
@@ -258,8 +276,8 @@ export function LabelEditor({
         </>
       ) : multi ? (
         <p className="mb-1 text-xs text-muted-foreground">
-          Para escrever os textos, desligue "Aplicar a todos" ou use Ferramentas
-          › Rotular automaticamente.
+          Para escrever os textos, desligue "Aplicar a todos" ou use Rótulos e
+          textos › Rotular automaticamente.
         </p>
       ) : (
         <>

@@ -30,7 +30,8 @@ import {
   parseInput,
   applyInput,
   pointOnSegment,
-  projectPoint,
+  removeLabels,
+  clearLabels,
   toSvg,
   toTikz,
   type Circle,
@@ -273,11 +274,27 @@ describe("operations", () => {
     expect(pointOnSegment(doc, "s1", { distance: 5 }).error).toBeDefined();
   });
 
-  it("projects a point and marks the height", () => {
-    const r = projectPoint(triangle(), ["p3", "p1", "p2"], true);
-    expect(r.error).toBeUndefined();
-    const foot = r.doc.elements.find((e) => e.id === r.created[0]);
-    expect(foot).toMatchObject({ x: 0, y: 0 });
+  it("selects every interior angle, also those already marked", () => {
+    const doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
+    const polygon = doc.elements.find((e) => e.type === "polygon")!.id;
+    const right = makeAngles(doc, ["p2", "p1", "p3"]);
+    const all = makeAngles(right.doc, [polygon]);
+    expect(all.created).toHaveLength(2);
+    expect(all.selected).toHaveLength(3);
+    expect(all.selected).toContain(right.created[0]);
+    // Points and the polygon together ask for the same angle twice: it counts once.
+    expect(makeAngles(right.doc, [polygon, "p1", "p2", "p3"]).selected).toHaveLength(3);
+  });
+
+  it("removes labels quickly", () => {
+    let doc = connectPoints(triangle(), ["p1", "p2", "p3"], true).doc;
+    doc = autoLabel(doc, "point", "latin", null).doc;
+    doc = autoLabel(doc, "segment", "length", null).doc;
+    const one = removeLabels(doc, ["p1"]).doc;
+    expect(one.elements.filter((e) => e.label).length).toBe(5);
+    const noSides = clearLabels(doc, [{ type: "segment", scheme: "length" }], null).doc;
+    expect(noSides.elements.filter((e) => e.label).map((e) => e.type)).toEqual(["point", "point", "point"]);
+    expect(removeLabels(noSides, ["s1"]).error).toBeDefined();
   });
 
   it("labels points A, B, C and segments by length", () => {
@@ -672,8 +689,11 @@ describe("auto labels", () => {
   it("labels radii, areas and perimeters as live measures", () => {
     let doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
     doc = makeCircle(doc, ["p1", "p3"], "through").doc;
+    // Side p1p3 is a radius, so the label goes on it rather than beside the circle.
     const radius = autoLabel(doc, "circle", "radius", null, 2).doc;
-    expect(labelText(radius, radius.elements.find((e) => e.id === "c1")!)).toBe("3");
+    const side = radius.elements.find((e) => e.type === "segment" && [e.a, e.b].sort().join() === "p1,p3")!;
+    expect(labelText(radius, side)).toBe("3");
+    expect(radius.elements.find((e) => e.id === "c1")!.label).toBeUndefined();
     const area = autoLabel(doc, "polygon", "area", null, 2).doc;
     expect(area.elements.find((e) => e.id === "g1")!.label?.measure?.kind).toBe("area");
     expect(labelText(area, area.elements.find((e) => e.id === "g1")!)).toBe("6");

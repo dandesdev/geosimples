@@ -13,9 +13,14 @@ import {
   movePoints,
   normalizeDoc,
   perpendicularBisectorOf,
+  autoLabel,
   pointMap,
-  projectPoint,
   resizePerpendicularBisector,
+  sectorRadii,
+  setCircleArc,
+  setSectorRadii,
+  updateElements,
+  type Circle,
   toTikz,
   type Angle,
   type FigureDoc,
@@ -253,8 +258,84 @@ describe("constructions", () => {
   });
 
   it("makes the projection's foot follow too", () => {
-    const r = projectPoint(triangle(), ["p3", "p1", "p2"], false);
-    expect(point(movePoints(r.doc, [{ id: "p3", x: 4, y: 4 }]), r.created[0])).toMatchObject({ x: 4, y: 0 });
+    const r = construct(triangle(), ["p3", "p1", "p2"], "projection");
+    const [foot] = created(r.doc, r.created, "point");
+    expect(point(movePoints(r.doc, [{ id: "p3", x: 4, y: 4 }]), foot.id)).toMatchObject({ x: 4, y: 0 });
+  });
+});
+
+describe("orthogonal projection", () => {
+  it("projects a point onto a selected segment, dashed, with a right angle", () => {
+    const r = construct(triangle(), ["p3", "s1"], "projection");
+    expect(r.error).toBeUndefined();
+    const [foot] = created(r.doc, r.created, "point") as Point[];
+    expect(foot).toMatchObject({ x: 2, y: 0, construction: { kind: "foot", point: "p3", line: ["p1", "p2"] } });
+    const [height] = created(r.doc, r.created, "segment") as Segment[];
+    expect(height).toMatchObject({ a: "p3", b: foot.id, stroke: { dash: "dashed" } });
+    const [angle] = created(r.doc, r.created, "angle") as Angle[];
+    expect(isRight(r.doc, angle)).toBe(true);
+    expect(construct(r.doc, ["p3", "s1"], "projection").error).toMatch(/já existe/);
+  });
+
+  it("projects onto the line through two points, and says when it can't", () => {
+    const r = construct(triangle(), ["p3", "p1", "p2"], "projection");
+    expect(created(r.doc, r.created, "point")[0]).toMatchObject({ x: 2, y: 0 });
+    expect(construct(triangle(), ["p1", "s1"], "projection").error).toMatch(/sobre a reta/);
+    expect(construct(triangle(), ["p1", "p2"], "projection").error).toMatch(/Selecione/);
+  });
+});
+
+describe("sector radii", () => {
+  /** A quarter arc of radius 2 around p1, from 0° to 90°. */
+  function sector(): { doc: FigureDoc; circle: Circle } {
+    let doc = makeCircle(triangle(), ["p1"], "radius").doc;
+    const id = doc.elements.find((e) => e.type === "circle")!.id;
+    doc = updateElements(doc, [id], (c) => (c.type === "circle" ? { ...c, radius: 2, arc: { start: 0, end: 90 } } : c));
+    return { doc, circle: doc.elements.find((e): e is Circle => e.id === id)! };
+  }
+
+  it("draws the radii as segments that follow the arc", () => {
+    const { doc, circle } = sector();
+    const r = setSectorRadii(doc, [circle.id], true);
+    expect(r.error).toBeUndefined();
+    const [first, second] = sectorRadii(r.doc, circle);
+    expect(point(r.doc, first.b)).toMatchObject({ x: 2, y: 0, shape: "none" });
+    expect(point(r.doc, second.b).y).toBeCloseTo(2);
+    const turned = updateElements(r.doc, [circle.id], (c) => (c.type === "circle" ? { ...c, arc: { start: 0, end: 180 } } : c));
+    expect(point(turned, second.b).x).toBeCloseTo(-2);
+    expect(setSectorRadii(r.doc, [circle.id], true).error).toMatch(/já tem/);
+    // The radii export as ordinary segments to the arc's ends.
+    const tikz = toTikz(r.doc);
+    expect(tikz).toContain(`\coordinate (${first.b})`);
+    expect(tikz).toContain(`(${first.a}) -- (${first.b})`);
+  });
+
+  it("labels a drawn radius on its segment", () => {
+    const { doc, circle } = sector();
+    const withRadii = setSectorRadii(doc, [circle.id], true).doc;
+    const labeled = autoLabel(withRadii, "circle", "radius", null).doc;
+    const [first] = sectorRadii(labeled, circle);
+    expect(first.label?.measure?.kind).toBe("length");
+    expect(labeled.elements.find((e) => e.id === circle.id)?.label).toBeUndefined();
+    const plain = autoLabel(doc, "circle", "radius", null).doc;
+    expect(plain.elements.find((e) => e.id === circle.id)?.label?.measure?.kind).toBe("radius");
+  });
+
+  it("removes the radii when switched off, with the arc, or with the circle", () => {
+    const { doc, circle } = sector();
+    const on = setSectorRadii(doc, [circle.id], true).doc;
+    const count = (d: FigureDoc) => d.elements.length;
+    expect(count(setSectorRadii(on, [circle.id], false).doc)).toBe(count(doc));
+    expect(count(setCircleArc(on, [circle.id], false).doc)).toBe(count(doc));
+    expect(count(deleteElements(on, [circle.id]).doc)).toBe(count(doc) - 1);
+  });
+
+  it("turns the old drawn-in radii into segments", () => {
+    const { doc, circle } = sector();
+    const old = updateElements(doc, [circle.id], (c) => (c.type === "circle" ? { ...c, radii: true } : c));
+    const r = setSectorRadii(old, [circle.id], true);
+    expect(r.doc.elements.find((e): e is Circle => e.id === circle.id)?.radii).toBe(false);
+    expect(sectorRadii(r.doc, circle)).toHaveLength(2);
   });
 });
 

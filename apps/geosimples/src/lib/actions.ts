@@ -3,6 +3,7 @@ import {
   addText,
   autoLabelMany,
   buildScene,
+  clearLabels,
   connectPoints,
   construct,
   deleteElements,
@@ -13,9 +14,10 @@ import {
   fillShapes,
   pointMap,
   pointOnSegment,
-  projectPoint,
   resizePerpendicularBisector,
   selectedOfType,
+  setCircleArc,
+  setSectorRadii,
   type CircleMode,
   type ConstructionKind,
   type FigureDoc,
@@ -68,8 +70,11 @@ export const actions = {
   pointOnSegment: (segmentId: Id, at: { ratio: number } | { distance: number }, from: "a" | "b") =>
     perform((doc) => pointOnSegment(doc, segmentId, at, from, opOptions())),
 
-  project: (withHeight: boolean) =>
-    perform((doc, sel) => projectPoint(doc, selectedPoints(doc, sel), withHeight, opOptions())),
+  /** Whole circles or only arcs; back to whole, the sector's radii go too. */
+  circleArc: (ids: Id[], on: boolean) => perform((doc) => setCircleArc(doc, ids, on), "keep"),
+
+  /** Draws the radii of arcs as their own segments, or removes them. */
+  sectorRadii: (ids: Id[], on: boolean) => perform((doc) => setSectorRadii(doc, ids, on, opOptions()), "keep"),
 
   /** Adds a free text centered under the figure, where it can then be dragged. */
   addText: (text: string) => {
@@ -85,6 +90,10 @@ export const actions = {
       "keep",
     );
   },
+
+  /** Removes the labels of the opted-in kinds. */
+  clearLabels: (jobs: AutoLabelJob[], onlySelected: boolean) =>
+    perform((doc, sel) => clearLabels(doc, jobs, onlySelected ? sel : null), "keep"),
 
   /** Sets a perpendicular bisector's length; typing several digits stays one undo step. */
   resizeBisector: (id: Id, length: number, fixed: boolean) => {

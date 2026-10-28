@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { PALETTE, resolveColor } from "@geosimples/core/figure";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -6,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { parseDecimal, show } from "@/lib/format";
+import { usePanelStore } from "@/store/panelStore";
 
 /** The label column is 6.5rem; a wider container can set `--field-label` for longer labels. */
 export function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
@@ -19,14 +21,45 @@ export function Field({ label, htmlFor, children }: { label: string; htmlFor?: s
   );
 }
 
-export function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+/**
+ * A titled group of fields. In the side panel it opens and closes from its
+ * title, and stays as the teacher left it. `fixed` keeps it always open, for dialogs.
+ */
+export function Section({
+  title,
+  children,
+  aside,
+  fixed = false,
+}: {
+  title: string;
+  children: ReactNode;
+  aside?: ReactNode;
+  fixed?: boolean;
+}) {
+  const closed = usePanelStore((s) => !fixed && !!s.closed[title]);
+  const toggle = usePanelStore((s) => s.toggle);
+  const bodyId = useId();
+  const heading = <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>;
   return (
     <section className="border-t pt-2 first:border-t-0 first:pt-0">
-      <div className="mb-1 flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
-        {aside}
+      <div className="mb-1 flex items-center justify-between gap-2">
+        {fixed ? (
+          heading
+        ) : (
+          <button
+            type="button"
+            aria-expanded={!closed}
+            aria-controls={bodyId}
+            onClick={() => toggle(title)}
+            className="-mx-1 flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", closed && "-rotate-90")} />
+            {heading}
+          </button>
+        )}
+        {!closed && aside}
       </div>
-      {children}
+      {!closed && <div id={bodyId}>{children}</div>}
     </section>
   );
 }

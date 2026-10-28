@@ -309,6 +309,11 @@ function pointConstruction(
       if (!Array.isArray(of) || of.length !== 2 || !of.every(isCurve) || of[0] === of[1]) return undefined;
       return { kind: "intersection", of: [of[0], of[1]], index: x.index === 1 ? 1 : 0 };
     }
+    case "arcEnd": {
+      const circle = x.circle;
+      if (typeof circle !== "string" || circle === self || types.get(circle) !== "circle") return undefined;
+      return { kind: "arcEnd", circle, end: x.end === 1 ? 1 : 0 };
+    }
   }
   return undefined;
 }

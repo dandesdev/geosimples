@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   AltitudeIcon,
+  ProjectionIcon,
   AngleIcon,
   BisectorIcon,
   CircleRadiusIcon,
@@ -95,6 +96,11 @@ const CONSTRUCTIONS: Record<ConstructionKind, { icon: React.ReactNode; title: st
     icon: <AltitudeIcon />,
     title: "Altura",
     hint: "Do vértice até a reta do lado oposto, com ângulo reto. Com um triângulo, traça as três.",
+  },
+  projection: {
+    icon: <ProjectionIcon />,
+    title: "Projeção ortogonal",
+    hint: "Leva um ponto até a reta de um segmento (ou de dois pontos), com perpendicular tracejada e ângulo reto.",
   },
   median: {
     icon: <MedianIcon />,
@@ -256,7 +262,7 @@ export function ActionBar() {
           <MenuItem
             icon={<CircleRadiusIcon />}
             title="Centro e raio 1"
-            hint="Selecione o centro. Ajuste o raio depois, em Customização."
+            hint="Selecione o centro. Ajuste o raio depois, em Propriedades."
             availability={av["circle-radius"]}
             onSelect={() => actions.circle("radius")}
           />
@@ -288,7 +294,7 @@ export function ActionBar() {
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Construções"
-            hint="Ponto médio, altura, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
+            hint="Ponto médio, altura, projeção ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
             dimmed={!anyConstruction}
             ready={hasSelection && anyConstruction}
           >

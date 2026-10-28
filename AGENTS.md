@@ -8,7 +8,7 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 
 ## Architecture
 
-- **Layout**: kept from v1 (tikzgenerator), Adobe-like: a large preview with the action bar on top and zoom on its edge, the point input below it, and a side panel with Customização and Ferramentas accordions.
+- **Layout**: kept from v1 (tikzgenerator), Adobe-like: a large preview with the action bar on top and zoom on its edge, the point input below it, and a side panel with three accordions: Propriedades (measures, constructions and geometry of the selection), Formatação (looks only) and Rótulos e textos (auto labels, free text). Sections inside them open and close from their titles.
 - **Figure model**: `FigureDoc` v1 in `packages/core/src/figure/types.ts`. World units are cm at scale 1, Y up. Visual sizes (stroke, point, angle radius, labels) are in pt. Styles are stored in full on each element, so saved figures never change look.
 - **One renderer**: `buildScene` (core) lays the figure out in pt. The preview injects the same markup that `toSvg` writes, so the preview is the export. `toTikz` writes TikZ from the doc with the same geometry helpers.
 - **Editing operations** are pure functions in `packages/core/src/figure/ops.ts` and return `{ doc, created, error }`. The app wraps them in `src/lib/actions.ts` and shows errors as toasts.

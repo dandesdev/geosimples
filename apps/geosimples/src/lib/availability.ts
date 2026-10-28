@@ -37,6 +37,7 @@ const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircl
 export const CONSTRUCTION_KINDS: ConstructionKind[] = [
   "midpoint",
   "altitude",
+  "projection",
   "median",
   "bisector",
   "perpendicularBisector",

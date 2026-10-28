@@ -8,13 +8,18 @@ import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { FigureBar } from "@/components/figures/FigureBar";
 import { useCommand } from "@/lib/commands";
 import { activeProfileName, usePrefsStore } from "@/store/prefsStore";
-import { Customization } from "./Customization";
-import { Tools } from "./Tools";
+import { usePanelStore } from "@/store/panelStore";
+import { Formatting } from "./Formatting";
+import { LabelTools } from "./LabelTools";
+import { Properties } from "./Properties";
+import { SelectionHeader } from "./SelectionHeader";
 
 export function SidePanel() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const profileName = usePrefsStore((s) => activeProfileName(s));
+  const open = usePanelStore((s) => s.open);
+  const setOpen = usePanelStore((s) => s.setOpen);
   useCommand("help", useCallback(() => setHelpOpen(true), []));
   useCommand("settings", useCallback(() => setSettingsOpen(true), []));
 
@@ -41,17 +46,24 @@ export function SidePanel() {
       </header>
       <FigureBar />
       <div className="min-h-0 flex-1 overflow-y-auto px-4">
-        <Accordion type="multiple" defaultValue={["custom"]}>
-          <AccordionItem value="custom">
-            <AccordionTrigger>Customização</AccordionTrigger>
+        <SelectionHeader />
+        <Accordion type="multiple" value={open} onValueChange={setOpen}>
+          <AccordionItem value="properties">
+            <AccordionTrigger>Propriedades</AccordionTrigger>
             <AccordionContent>
-              <Customization />
+              <Properties />
             </AccordionContent>
           </AccordionItem>
-          <AccordionItem value="tools" className="border-b-0">
-            <AccordionTrigger>Ferramentas</AccordionTrigger>
+          <AccordionItem value="formatting">
+            <AccordionTrigger>Formatação</AccordionTrigger>
             <AccordionContent>
-              <Tools />
+              <Formatting />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="labels" className="border-b-0">
+            <AccordionTrigger>Rótulos e textos</AccordionTrigger>
+            <AccordionContent>
+              <LabelTools />
             </AccordionContent>
           </AccordionItem>
         </Accordion>
