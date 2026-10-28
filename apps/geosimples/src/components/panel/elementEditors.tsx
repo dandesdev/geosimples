@@ -3,6 +3,7 @@ import {
   dist,
   formatNumber,
   MEASURES,
+  perpendicularBisectorOf,
   pointMap,
   signedArea2,
   type Angle,
@@ -103,9 +104,10 @@ export function SegmentEditor({ el, update, updateLabel, doc, multi }: EditorPro
   const b = pts.get(el.b);
   const decimals = useFigureStore((s) => s.settings.decimals);
   const length = a && b ? formatNumber(dist(a, b), decimals) : "";
+  const bisector = multi ? null : perpendicularBisectorOf(doc, el);
   return (
     <div className="space-y-2">
-      <Readout label="Comprimento" value={length} />
+      {bisector ? <BisectorFields el={el} bisector={bisector} doc={doc} /> : <Readout label="Comprimento" value={length} />}
       <StrokeEditor stroke={el.stroke} onChange={(stroke, key) => update((s) => ({ ...s, stroke }), key)} />
       <Section title="Marcas de congruência">
         <Choice
@@ -117,6 +119,44 @@ export function SegmentEditor({ el, update, updateLabel, doc, multi }: EditorPro
       </Section>
       <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.segment} placeholder="Ex.: a, 5, x" />
     </div>
+  );
+}
+
+function BisectorFields({
+  el,
+  bisector,
+  doc,
+}: {
+  el: Segment;
+  bisector: NonNullable<ReturnType<typeof perpendicularBisectorOf>>;
+  doc: FigureDoc;
+}) {
+  const pts = pointMap(doc);
+  const name = bisector.points.map((id) => pts.get(id)?.label?.text || id).join("");
+  return (
+    <Section title="Mediatriz">
+      <p className="mb-1 text-xs text-muted-foreground">Mediatriz de {name}.</p>
+      <Field label="Comprimento">
+        <NumberInput
+          ariaLabel="Comprimento da mediatriz"
+          value={bisector.length}
+          min={0.01}
+          max={200}
+          onChange={(length) => actions.resizeBisector(el.id, length, bisector.fixed)}
+        />
+      </Field>
+      <SwitchField
+        label={`Acompanhar ${name}`}
+        checked={!bisector.fixed}
+        onChange={(follow) => actions.resizeBisector(el.id, bisector.length, !follow)}
+      />
+      <p className="mb-1 text-xs text-muted-foreground">
+        {bisector.fixed
+          ? "O comprimento fica fixo quando os pontos se movem."
+          : `O comprimento cresce e diminui junto com ${name}.`}
+      </p>
+      <SwitchField label="Marca de ângulo reto" checked={bisector.mark !== null} onChange={(on) => actions.markBisector(el.id, on)} />
+    </Section>
   );
 }
 

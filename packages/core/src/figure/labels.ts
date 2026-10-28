@@ -38,7 +38,10 @@ export type LabelScheme =
   | "numbered"
   | "coordinates"
   | "length"
-  | "measure";
+  | "measure"
+  | "radius"
+  | "area"
+  | "perimeter";
 
 export function labelFor(
   scheme: LabelScheme,
@@ -74,6 +77,12 @@ export function labelFor(
       const b = pts.get(el.b);
       const arc = a && v && b ? angleArc(a, v, b, el.reflex) : null;
       return arc ? `${formatNumber(arc.measure, Math.min(decimals, 1))}°` : null;
+    }
+    case "radius":
+    case "area":
+    case "perimeter": {
+      const value = measureValue(doc, el, scheme);
+      return value === null ? null : formatNumber(value, decimals);
     }
   }
 }
@@ -131,9 +140,9 @@ export function measureNumber(doc: FigureDoc, el: Element, m: LabelMeasure): str
   return formatNumber(value, m.decimals) + (m.kind === "angle" ? "°" : "");
 }
 
-/** A new live measure label setting, with the element's usual measure. */
-export function newMeasure(el: Element, decimals: number): LabelMeasure | null {
-  const kind = MEASURES[el.type][0];
+/** A new live measure label setting, with the given measure or the element's usual one. */
+export function newMeasure(el: Element, decimals: number, measure?: MeasureKind): LabelMeasure | null {
+  const kind = measure && MEASURES[el.type].includes(measure) ? measure : MEASURES[el.type][0];
   return kind ? { kind, decimals: Math.max(0, Math.min(4, Math.round(decimals))), prefix: "", suffix: "" } : null;
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { labelText, updateElements, type Element, type FigureDoc } from "@geosimples/core/figure";
+import { labelText, perpendicularBisectorOf, updateElements, type Element, type FigureDoc } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { changeLabel, type LabelChange } from "@/lib/labels";
@@ -18,7 +18,7 @@ import {
 } from "./elementEditors";
 
 function describe(doc: FigureDoc, el: Element): string {
-  const name = TYPE_NAMES[el.type].title;
+  const name = perpendicularBisectorOf(doc, el) ? "Mediatriz" : TYPE_NAMES[el.type].title;
   if (el.type === "text") return `${name} "${el.text}"`;
   const text = labelText(doc, el);
   return text ? `${name} ${text}` : `${name} ${el.id}`;

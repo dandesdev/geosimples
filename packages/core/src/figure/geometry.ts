@@ -452,7 +452,8 @@ export function constructedPosition(
     case "perpendicular": {
       const [p, q] = c.points.map((id) => pts.get(id));
       if (!p || !q) return null;
-      return add(lerp(p, q, c.along), scale(perp(sub(q, p)), c.across));
+      const normal = perp(sub(q, p));
+      return add(lerp(p, q, c.along), scale(c.fixed ? unit(normal) : normal, c.across));
     }
     case "intersection": {
       const [first, second] = c.of.map((id) => segments.get(id) ?? circles.get(id));

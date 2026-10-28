@@ -300,7 +300,9 @@ function pointConstruction(
       if (!points || !finite(x.along) || !finite(x.across)) return undefined;
       const along = num(x.along, -100, 100, 0.5);
       const across = num(x.across, -100, 100, 0);
-      return { kind: "perpendicular", points, along, across };
+      return x.fixed === true
+        ? { kind: "perpendicular", points, along, across, fixed: true }
+        : { kind: "perpendicular", points, along, across };
     }
     case "intersection": {
       const of = x.of;

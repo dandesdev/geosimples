@@ -548,7 +548,10 @@ export function projectPoint(doc: FigureDoc, pointIds: Id[], withHeight: boolean
   return ok(working, [footId, ...joined.created, angle.id]);
 }
 
-export type LabelTarget = "point" | "segment" | "angle";
+export type LabelTarget = "point" | "segment" | "angle" | "circle" | "polygon";
+
+/** Schemes that become live measure labels, which follow the points. */
+const LIVE_SCHEMES: LabelScheme[] = ["length", "measure", "radius", "area", "perimeter"];
 
 /** Applies an automatic naming scheme to all elements of a type, or only the given ones. */
 export function autoLabel(
@@ -568,15 +571,44 @@ export function autoLabel(
     if (text !== null) texts.set(el.id, text);
   });
   // Measures become live labels that follow the points. Angles keep at most one decimal.
-  const live = scheme === "length" || scheme === "measure";
+  const live = LIVE_SCHEMES.includes(scheme);
+  const kind = scheme === "area" || scheme === "perimeter" ? scheme : undefined;
   const elements = doc.elements.map((el) => {
     const text = texts.get(el.id);
     if (text === undefined || el.type === "text") return el;
     const label = withText(el.label, text, stylesOf(opts).label);
-    const measure = live ? newMeasure(el, el.type === "angle" ? Math.min(decimals, 1) : decimals) : null;
+    const measure = live ? newMeasure(el, el.type === "angle" ? Math.min(decimals, 1) : decimals, kind) : null;
     return { ...el, label: measure ? { ...label, measure } : label } as Element;
   });
   return ok(withElements(doc, elements));
+}
+
+export interface AutoLabelJob {
+  type: LabelTarget;
+  scheme: LabelScheme;
+}
+
+/**
+ * Runs several automatic labelings as one change, like points A, B, C plus
+ * live side lengths. Jobs with nothing to label are skipped.
+ */
+export function autoLabelMany(
+  doc: FigureDoc,
+  jobs: AutoLabelJob[],
+  onlyIds: Id[] | null,
+  decimals = 2,
+  opts: OpOptions = {},
+): OpResult {
+  if (jobs.length === 0) return fail(doc, "Marque o que rotular.");
+  let working = doc;
+  let labeled = false;
+  for (const job of jobs) {
+    const r = autoLabel(working, job.type, job.scheme, onlyIds, decimals, opts);
+    if (r.error) continue;
+    working = r.doc;
+    labeled = true;
+  }
+  return labeled ? ok(working) : fail(doc, "Não há elementos para etiquetar.");
 }
 
 /** Adds a free text centered at (x, y), in the label style of the options. */
