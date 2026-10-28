@@ -13,6 +13,7 @@ export type ActionId =
   | "modeSelect"
   | "modePan"
   | "modeMove"
+  | "modeAdd"
   | "connect"
   | "closeContour"
   | "angle"
@@ -35,6 +36,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   modeSelect: "Modo selecionar",
   modePan: "Modo mover a vista",
   modeMove: "Modo mover pontos",
+  modeAdd: "Modo adicionar pontos",
   connect: "Ligar pontos em sequência",
   closeContour: "Ligar fechando o contorno",
   angle: "Marcar ângulo",
@@ -58,6 +60,7 @@ export const DEFAULT_SHORTCUTS: Record<ActionId, string[]> = {
   modeSelect: ["V"],
   modePan: ["H"],
   modeMove: ["M"],
+  modeAdd: ["P"],
   connect: ["L"],
   closeContour: ["Shift+L"],
   angle: ["A"],
@@ -354,7 +357,7 @@ function sanitizePrefs(raw: unknown): Prefs {
     styles,
     behavior: {
       autoName: bool(b.autoName, d.behavior.autoName),
-      mode: b.mode === "pan" || b.mode === "move" ? b.mode : "select",
+      mode: b.mode === "pan" || b.mode === "move" || b.mode === "add" ? b.mode : "select",
       autoFit: bool(b.autoFit, d.behavior.autoFit),
       showGrid: bool(b.showGrid, d.behavior.showGrid),
       decimals: Math.round(num(b.decimals, 0, 4, d.behavior.decimals)),

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { useCommand } from "@/lib/commands";
 import { Download, Redo2, Trash2, Undo2 } from "lucide-react";
@@ -125,6 +125,44 @@ const CONSTRUCTIONS: Record<ConstructionKind, { icon: React.ReactNode; title: st
   },
 };
 
+/**
+ * A row of tools that scrolls sideways, with a fade on the side that has more,
+ * so it reads as a strip to swipe rather than a toolbar that ends.
+ */
+function ToolStrip({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setMore({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 });
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div
+        ref={ref}
+        onScroll={measure}
+        className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] *:shrink-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+      </div>
+      {more.left && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background" />
+      )}
+      {more.right && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background" />
+      )}
+    </div>
+  );
+}
+
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
 /** Runs an action after clearing its hover preview, which would be stale afterwards. */
@@ -133,8 +171,11 @@ const act = (fn: () => void) => () => {
   fn();
 };
 
-/** `zoom` adds the zoom controls at the end on phones, where they don't fit over the preview. */
-export function ActionBar({ zoom }: { zoom: ZoomControls | null }) {
+/**
+ * `compact` is the phone layout: one row that scrolls sideways, with the zoom
+ * controls (`zoom`, when there is something to zoom) that don't fit over the preview.
+ */
+export function ActionBar({ compact, zoom }: { compact: boolean; zoom: ZoomControls | null }) {
   const canUndo = useFigureStore((s) => s.past.length > 0);
   const canRedo = useFigureStore((s) => s.future.length > 0);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
@@ -161,8 +202,10 @@ export function ActionBar({ zoom }: { zoom: ZoomControls | null }) {
     <div
       role="toolbar"
       aria-label="Ações da figura"
-      // Wraps instead of scrolling, so on phones the modes sit on a second row instead of off screen.
-      className="flex shrink-0 flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1.5"
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 border-b bg-background px-2 py-1.5",
+        compact ? "flex-nowrap" : "flex-wrap",
+      )}
     >
       <Button
         size="sm"
@@ -182,143 +225,289 @@ export function ActionBar({ zoom }: { zoom: ZoomControls | null }) {
       <IconButton label="Refazer" shortcut="redo" onClick={() => store().redo()} disabled={!canRedo}>
         <Redo2 />
       </IconButton>
-      <IconButton
-        label={hasSelection ? "Apagar selecionados" : "Limpar figura"}
-        hint={hasSelection ? "Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
-        shortcut={hasSelection ? "delete" : undefined}
-        onClick={onDelete}
-        disabled={isEmpty}
-      >
-        <Trash2 />
-      </IconButton>
-      <Divider />
+      {compact ? (
+        // Phones: one row that scrolls sideways, instead of two rows over the small preview.
+        <ToolStrip>
+          {/* Modes first: on a phone, tapping points in is how a figure usually starts. */}
+          <ModeSwitch />
+          <Divider />
 
-      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
-        <DropdownMenuTrigger asChild>
+          <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                label="Ligar pontos"
+                shortcut="connect"
+                hint="Cria segmentos entre os pontos selecionados, na ordem da seleção."
+                dimmed={!anyConnect}
+                ready={hasSelection && anyConnect}
+              >
+                <ConnectIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              <DropdownMenuLabel>Ligar pontos selecionados</DropdownMenuLabel>
+              <MenuItem
+                icon={<ConnectIcon />}
+                title="Em sequência"
+                hint="A, B, C → segmentos AB e BC"
+                availability={av.connect}
+                onSelect={() => actions.connect(false)}
+              />
+              <MenuItem
+                icon={<CloseLoopIcon />}
+                title="Fechando o contorno"
+                hint="A, B, C → segmentos AB, BC e CA"
+                availability={av.closeContour}
+                onSelect={() => actions.connect(true)}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <IconButton
-            label="Ligar pontos"
-            shortcut="connect"
-            hint="Cria segmentos entre os pontos selecionados, na ordem da seleção."
-            dimmed={!anyConnect}
-            ready={hasSelection && anyConnect}
+            label="Marcar ângulo"
+            shortcut="angle"
+            hint="Selecione A, B, C para marcar o ângulo em B, ou um polígono para marcar todos os seus ângulos."
+            unavailable={av.angle.reason}
+            ready={hasSelection}
+            onClick={act(actions.angles)}
+            {...previewProps(av.angle)}
           >
-            <ConnectIcon />
+            <AngleIcon />
           </IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-72">
-          <DropdownMenuLabel>Ligar pontos selecionados</DropdownMenuLabel>
-          <MenuItem
-            icon={<ConnectIcon />}
-            title="Em sequência"
-            hint="A, B, C → segmentos AB e BC"
-            availability={av.connect}
-            onSelect={() => actions.connect(false)}
-          />
-          <MenuItem
-            icon={<CloseLoopIcon />}
-            title="Fechando o contorno"
-            hint="A, B, C → segmentos AB, BC e CA"
-            availability={av.closeContour}
-            onSelect={() => actions.connect(true)}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
 
-      <IconButton
-        label="Marcar ângulo"
-        shortcut="angle"
-        hint="Selecione A, B, C para marcar o ângulo em B, ou um polígono para marcar todos os seus ângulos."
-        unavailable={av.angle.reason}
-        ready={hasSelection}
-        onClick={act(actions.angles)}
-        {...previewProps(av.angle)}
-      >
-        <AngleIcon />
-      </IconButton>
-
-      <IconButton
-        label="Polígono e preenchimento"
-        shortcut="polygon"
-        hint="Selecione os vértices em ordem, ou os segmentos de um contorno fechado. Circunferências e polígonos selecionados também são preenchidos."
-        unavailable={av.polygon.reason}
-        ready={hasSelection}
-        onClick={act(actions.polygon)}
-        {...previewProps(av.polygon)}
-      >
-        <PolygonIcon />
-      </IconButton>
-
-      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
-        <DropdownMenuTrigger asChild>
           <IconButton
-            label="Circunferência"
-            hint="Escolha como construir a partir da seleção."
-            dimmed={!anyCircle}
-            ready={hasSelection && anyCircle}
+            label="Polígono e preenchimento"
+            shortcut="polygon"
+            hint="Selecione os vértices em ordem, ou os segmentos de um contorno fechado. Circunferências e polígonos selecionados também são preenchidos."
+            unavailable={av.polygon.reason}
+            ready={hasSelection}
+            onClick={act(actions.polygon)}
+            {...previewProps(av.polygon)}
           >
-            <CircleThroughIcon />
+            <PolygonIcon />
           </IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-80">
-          <DropdownMenuLabel>Circunferência</DropdownMenuLabel>
-          <MenuItem
-            icon={<CircleRadiusIcon />}
-            title="Centro e raio 1"
-            hint="Selecione o centro. Ajuste o raio depois, em Propriedades."
-            availability={av["circle-radius"]}
-            onSelect={() => actions.circle("radius")}
-          />
-          <MenuItem
-            icon={<CircleThroughIcon />}
-            title="Centro e um ponto"
-            hint="Selecione o centro e depois um ponto da circunferência."
-            availability={av["circle-through"]}
-            onSelect={() => actions.circle("through")}
-          />
-          <MenuItem
-            icon={<CircleTangentIcon />}
-            title="Centro e tangente"
-            hint="Selecione o centro e um segmento a tangenciar."
-            availability={av["circle-tangent"]}
-            onSelect={() => actions.circle("tangent")}
-          />
-          <MenuItem
-            icon={<CircumcircleIcon />}
-            title="Por três pontos"
-            hint="Selecione três pontos. O centro é criado como um novo ponto."
-            availability={av["circle-circumcircle"]}
-            onSelect={() => actions.circle("circumcircle")}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
 
-      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
-        <DropdownMenuTrigger asChild>
+          <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                label="Circunferência"
+                hint="Escolha como construir a partir da seleção."
+                dimmed={!anyCircle}
+                ready={hasSelection && anyCircle}
+              >
+                <CircleThroughIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <DropdownMenuLabel>Circunferência</DropdownMenuLabel>
+              <MenuItem
+                icon={<CircleRadiusIcon />}
+                title="Centro e raio 1"
+                hint="Selecione o centro. Ajuste o raio depois, em Propriedades."
+                availability={av["circle-radius"]}
+                onSelect={() => actions.circle("radius")}
+              />
+              <MenuItem
+                icon={<CircleThroughIcon />}
+                title="Centro e um ponto"
+                hint="Selecione o centro e depois um ponto da circunferência."
+                availability={av["circle-through"]}
+                onSelect={() => actions.circle("through")}
+              />
+              <MenuItem
+                icon={<CircleTangentIcon />}
+                title="Centro e tangente"
+                hint="Selecione o centro e um segmento a tangenciar."
+                availability={av["circle-tangent"]}
+                onSelect={() => actions.circle("tangent")}
+              />
+              <MenuItem
+                icon={<CircumcircleIcon />}
+                title="Por três pontos"
+                hint="Selecione três pontos. O centro é criado como um novo ponto."
+                availability={av["circle-circumcircle"]}
+                onSelect={() => actions.circle("circumcircle")}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                label="Construções"
+                hint="Ponto médio, altura, projeção ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
+                dimmed={!anyConstruction}
+                ready={hasSelection && anyConstruction}
+              >
+                <ConstructionsIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <DropdownMenuLabel>Construções</DropdownMenuLabel>
+              {CONSTRUCTION_KINDS.map((kind) => (
+                <MenuItem
+                  key={kind}
+                  {...CONSTRUCTIONS[kind]}
+                  availability={av[`construct-${kind}`]}
+                  onSelect={() => actions.construct(kind)}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {zoom && <Divider />}
+          {zoom && <ZoomBar {...zoom} placement="toolbar" />}
+          <Divider />
           <IconButton
-            label="Construções"
-            hint="Ponto médio, altura, projeção ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
-            dimmed={!anyConstruction}
-            ready={hasSelection && anyConstruction}
+            label={hasSelection ? "Apagar selecionados" : "Limpar figura"}
+            hint={hasSelection ? "Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
+            shortcut={hasSelection ? "delete" : undefined}
+            onClick={onDelete}
+            disabled={isEmpty}
           >
-            <ConstructionsIcon />
+            <Trash2 />
           </IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-80">
-          <DropdownMenuLabel>Construções</DropdownMenuLabel>
-          {CONSTRUCTION_KINDS.map((kind) => (
-            <MenuItem
-              key={kind}
-              {...CONSTRUCTIONS[kind]}
-              availability={av[`construct-${kind}`]}
-              onSelect={() => actions.construct(kind)}
-            />
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </ToolStrip>
+      ) : (
+        <>
+          <IconButton
+            label={hasSelection ? "Apagar selecionados" : "Limpar figura"}
+            hint={hasSelection ? "Apaga também o que depende deles." : "Sem seleção, apaga a figura inteira."}
+            shortcut={hasSelection ? "delete" : undefined}
+            onClick={onDelete}
+            disabled={isEmpty}
+          >
+            <Trash2 />
+          </IconButton>
+          <Divider />
 
-      <Divider className="hidden sm:block" />
-      <ModeSwitch />
-      {zoom && <ZoomBar {...zoom} placement="toolbar" />}
+          <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                label="Ligar pontos"
+                shortcut="connect"
+                hint="Cria segmentos entre os pontos selecionados, na ordem da seleção."
+                dimmed={!anyConnect}
+                ready={hasSelection && anyConnect}
+              >
+                <ConnectIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              <DropdownMenuLabel>Ligar pontos selecionados</DropdownMenuLabel>
+              <MenuItem
+                icon={<ConnectIcon />}
+                title="Em sequência"
+                hint="A, B, C → segmentos AB e BC"
+                availability={av.connect}
+                onSelect={() => actions.connect(false)}
+              />
+              <MenuItem
+                icon={<CloseLoopIcon />}
+                title="Fechando o contorno"
+                hint="A, B, C → segmentos AB, BC e CA"
+                availability={av.closeContour}
+                onSelect={() => actions.connect(true)}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <IconButton
+            label="Marcar ângulo"
+            shortcut="angle"
+            hint="Selecione A, B, C para marcar o ângulo em B, ou um polígono para marcar todos os seus ângulos."
+            unavailable={av.angle.reason}
+            ready={hasSelection}
+            onClick={act(actions.angles)}
+            {...previewProps(av.angle)}
+          >
+            <AngleIcon />
+          </IconButton>
+
+          <IconButton
+            label="Polígono e preenchimento"
+            shortcut="polygon"
+            hint="Selecione os vértices em ordem, ou os segmentos de um contorno fechado. Circunferências e polígonos selecionados também são preenchidos."
+            unavailable={av.polygon.reason}
+            ready={hasSelection}
+            onClick={act(actions.polygon)}
+            {...previewProps(av.polygon)}
+          >
+            <PolygonIcon />
+          </IconButton>
+
+          <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                label="Circunferência"
+                hint="Escolha como construir a partir da seleção."
+                dimmed={!anyCircle}
+                ready={hasSelection && anyCircle}
+              >
+                <CircleThroughIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <DropdownMenuLabel>Circunferência</DropdownMenuLabel>
+              <MenuItem
+                icon={<CircleRadiusIcon />}
+                title="Centro e raio 1"
+                hint="Selecione o centro. Ajuste o raio depois, em Propriedades."
+                availability={av["circle-radius"]}
+                onSelect={() => actions.circle("radius")}
+              />
+              <MenuItem
+                icon={<CircleThroughIcon />}
+                title="Centro e um ponto"
+                hint="Selecione o centro e depois um ponto da circunferência."
+                availability={av["circle-through"]}
+                onSelect={() => actions.circle("through")}
+              />
+              <MenuItem
+                icon={<CircleTangentIcon />}
+                title="Centro e tangente"
+                hint="Selecione o centro e um segmento a tangenciar."
+                availability={av["circle-tangent"]}
+                onSelect={() => actions.circle("tangent")}
+              />
+              <MenuItem
+                icon={<CircumcircleIcon />}
+                title="Por três pontos"
+                hint="Selecione três pontos. O centro é criado como um novo ponto."
+                availability={av["circle-circumcircle"]}
+                onSelect={() => actions.circle("circumcircle")}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                label="Construções"
+                hint="Ponto médio, altura, projeção ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
+                dimmed={!anyConstruction}
+                ready={hasSelection && anyConstruction}
+              >
+                <ConstructionsIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <DropdownMenuLabel>Construções</DropdownMenuLabel>
+              {CONSTRUCTION_KINDS.map((kind) => (
+                <MenuItem
+                  key={kind}
+                  {...CONSTRUCTIONS[kind]}
+                  availability={av[`construct-${kind}`]}
+                  onSelect={() => actions.construct(kind)}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Divider className="hidden sm:block" />
+          <ModeSwitch />
+        </>
+      )}
 
       <MountOnFirstOpen open={exportOpen}>
         <LazyExportDialog open={exportOpen} onOpenChange={setExportOpen} />

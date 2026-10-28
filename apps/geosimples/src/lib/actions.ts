@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import {
+  addPoints,
   addText,
   autoLabelMany,
   buildScene,
@@ -65,6 +66,19 @@ export const actions = {
     const { selection } = useFigureStore.getState();
     if (selection.length === 0) return false;
     return perform((doc, sel) => deleteElements(doc, sel), "none");
+  },
+
+  /** A free point where the preview was clicked, added to the end of the selection. */
+  addPointAt: (at: { x: number; y: number }) => {
+    const store = useFigureStore.getState();
+    const before = store.selection;
+    const result = store.run((doc) => addPoints(doc, [at], opOptions()), "keep");
+    if (result.error) {
+      toast.error(result.error);
+      return false;
+    }
+    store.select([...before, ...result.created]);
+    return true;
   },
 
   pointOnSegment: (segmentId: Id, at: { ratio: number } | { distance: number }, from: "a" | "b") =>

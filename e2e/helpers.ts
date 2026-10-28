@@ -80,3 +80,9 @@ export async function clickEmptyCanvas(page: Page) {
   const b = await canvasBox(page);
   await page.mouse.click(b.x + 12, b.y + 12);
 }
+
+/** Clicks the drawing surface at a fraction of its width and height. */
+export async function clickCanvasAt(page: Page, fx: number, fy: number) {
+  const b = await canvasBox(page);
+  await page.mouse.click(b.x + b.width * fx, b.y + b.height * fy);
+}

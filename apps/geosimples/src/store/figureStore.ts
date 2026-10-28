@@ -36,7 +36,8 @@ export interface ActionPreview {
 }
 
 /** What dragging in the preview does. Clicking an object always selects it. */
-export type CanvasMode = "select" | "pan" | "move";
+/** What a press or drag in the preview does. "add" puts a point where you click. */
+export type CanvasMode = "select" | "pan" | "move" | "add";
 
 const DEFAULT_SETTINGS: Settings = {
   scale: 1,

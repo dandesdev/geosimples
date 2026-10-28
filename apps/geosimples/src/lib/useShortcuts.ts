@@ -38,6 +38,9 @@ export function runAction(id: ActionId): boolean {
     case "modeMove":
       store.setMode("move");
       return true;
+    case "modeAdd":
+      store.setMode("add");
+      return true;
     case "connect":
       actions.connect(false);
       return true;

@@ -7,6 +7,7 @@ import { LazyHelpDialog, LazySettingsDialog } from "@/components/dialogs/lazy";
 import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { FigureBar } from "@/components/figures/FigureBar";
 import { useCommand } from "@/lib/commands";
+import { useSidePanelBeside } from "@/lib/useMediaQuery";
 import { activeProfileName, usePrefsStore } from "@/store/prefsStore";
 import { usePanelStore } from "@/store/panelStore";
 import { Formatting } from "./Formatting";
@@ -19,6 +20,8 @@ export function SidePanel() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const profileName = usePrefsStore((s) => activeProfileName(s));
   const open = usePanelStore((s) => s.open);
+  // Narrower, the panel sits below the fold: editing the selection moves to EditSheet.
+  const beside = useSidePanelBeside();
   const setOpen = usePanelStore((s) => s.setOpen);
   useCommand("help", useCallback(() => setHelpOpen(true), []));
   useCommand("settings", useCallback(() => setSettingsOpen(true), []));
@@ -46,20 +49,24 @@ export function SidePanel() {
       </header>
       <FigureBar />
       <div className="min-h-0 flex-1 overflow-y-auto px-4">
-        <SelectionHeader />
+        {beside && <SelectionHeader />}
         <Accordion type="multiple" value={open} onValueChange={setOpen}>
-          <AccordionItem value="properties">
-            <AccordionTrigger>Propriedades</AccordionTrigger>
-            <AccordionContent>
-              <Properties />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="formatting">
-            <AccordionTrigger>Formatação</AccordionTrigger>
-            <AccordionContent>
-              <Formatting />
-            </AccordionContent>
-          </AccordionItem>
+          {beside && (
+            <AccordionItem value="properties">
+              <AccordionTrigger>Propriedades</AccordionTrigger>
+              <AccordionContent>
+                <Properties />
+              </AccordionContent>
+            </AccordionItem>
+          )}
+          {beside && (
+            <AccordionItem value="formatting">
+              <AccordionTrigger>Formatação</AccordionTrigger>
+              <AccordionContent>
+                <Formatting />
+              </AccordionContent>
+            </AccordionItem>
+          )}
           <AccordionItem value="labels" className="border-b-0">
             <AccordionTrigger>Rótulos e textos</AccordionTrigger>
             <AccordionContent>

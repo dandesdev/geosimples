@@ -12,6 +12,7 @@ const HELP_ACTIONS: ActionId[] = [
   "modeSelect",
   "modePan",
   "modeMove",
+  "modeAdd",
   "connect",
   "angle",
   "polygon",

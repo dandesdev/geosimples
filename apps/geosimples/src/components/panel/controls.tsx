@@ -65,7 +65,7 @@ export function Section({ title, children, aside }: { title: string; children: R
 export function ColorPicker({ value, onChange, label }: { value: string; onChange: (c: string) => void; label: string }) {
   const current = resolveColor(value);
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap items-center gap-1">
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap items-center gap-1 pointer-coarse:gap-1.5">
       {PALETTE.map((c) => {
         const selected = resolveColor(c.value) === current;
         return (
@@ -78,7 +78,7 @@ export function ColorPicker({ value, onChange, label }: { value: string; onChang
             title={c.name}
             onClick={() => onChange(c.value)}
             className={cn(
-              "h-5 w-5 rounded-full border border-black/20 transition-transform hover:scale-110",
+              "h-5 w-5 rounded-full border border-black/20 transition-transform hover:scale-110 pointer-coarse:h-6 pointer-coarse:w-6",
               selected && "ring-2 ring-primary ring-offset-1",
             )}
             // Swatch colors come from data, so they can't be Tailwind classes.
@@ -88,7 +88,7 @@ export function ColorPicker({ value, onChange, label }: { value: string; onChang
       })}
       <label
         title="Outra cor"
-        className="relative h-5 w-5 cursor-pointer overflow-hidden rounded-full border border-black/20 bg-[conic-gradient(red,yellow,lime,cyan,blue,magenta,red)]"
+        className="relative h-5 w-5 cursor-pointer overflow-hidden rounded-full border border-black/20 bg-[conic-gradient(red,yellow,lime,cyan,blue,magenta,red)] pointer-coarse:h-6 pointer-coarse:w-6"
       >
         <span className="sr-only">Outra cor</span>
         <input

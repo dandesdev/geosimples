@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildScene,
+  formatNumber,
   movePoints,
   paddedBox,
+  pointMap,
   sceneMarkup,
   type Box,
   type FigureDoc,
@@ -10,7 +12,9 @@ import {
   type Id,
   type ParsedInput,
   type Prim,
+  type Vec,
 } from "@geosimples/core/figure";
+import { actions } from "@/lib/actions";
 import { useFigureStore } from "@/store/figureStore";
 import { ActionBar } from "./ActionBar";
 import { ZoomBar } from "./ZoomBar";
@@ -95,6 +99,8 @@ export function PreviewPanel() {
   /** Holds the camera still while a point is dragged. */
   const [frozen, setFrozen] = useState<View | null>(null);
   const [box, setBox] = useState<Box | null>(null);
+  /** Where a click would put a point in add mode, under the mouse. */
+  const [addAt, setAddAt] = useState<Vec | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -159,6 +165,21 @@ export function PreviewPanel() {
   useCommand("zoomIn", () => zoomBy(1 / 1.25));
   useCommand("zoomOut", () => zoomBy(1.25));
   useCommand("toggleAutoFit", toggleAutoFit);
+
+  /**
+   * The world position for a new point under the pointer: a grid crossing
+   * when the pointer is near one, otherwise rounded to tenths.
+   */
+  const pointAt = (clientX: number, clientY: number): Vec => {
+    const p = toUser(svgRef.current!, clientX, clientY);
+    const x = p.x / k;
+    const y = -p.y / k;
+    const reach = ((coarse ? 14 : 8) * unitsPerPx) / k;
+    const gx = Math.round(x);
+    const gy = Math.round(y);
+    if (Math.hypot(x - gx, y - gy) <= reach) return { x: gx || 0, y: gy || 0 };
+    return { x: Math.round(x * 10) / 10 || 0, y: Math.round(y * 10) / 10 || 0 };
+  };
 
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
@@ -237,6 +258,7 @@ export function PreviewPanel() {
     }
     const g = gesture.current;
     const svg = svgRef.current!;
+    if (mode === "add" && e.pointerType === "mouse") setAddAt(g.kind === "none" ? pointAt(e.clientX, e.clientY) : null);
     if (g.kind === "pinch") {
       const a = pointers.current.get(g.ids[0]);
       const b = pointers.current.get(g.ids[1]);
@@ -254,7 +276,8 @@ export function PreviewPanel() {
         .map((m) => ({ id: m.id, x: round2(m.x + dx), y: round2(m.y + dy) }));
       useFigureStore.getState().setTransient(movePoints(g.base, moves));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > g.slop) {
-      if (mode === "pan") {
+      // Adding points needs no box: a drag moves the view, as fingers expect.
+      if (mode === "pan" || mode === "add") {
         gesture.current = { kind: "pan", x: g.x, y: g.y, view: vb };
       } else {
         const start = toUser(svg, g.x, g.y);
@@ -293,7 +316,11 @@ export function PreviewPanel() {
     const g = gesture.current;
     gesture.current = { kind: "none" };
     const store = useFigureStore.getState();
-    if (g.kind === "press") {
+    if (g.kind === "press" && mode === "add" && !(g.owner && pointMap(store.doc).has(g.owner))) {
+      // Keep the view still, so the next point lands where the next click is.
+      if (autoFit) placeCamera(vb);
+      actions.addPointAt(pointAt(g.x, g.y));
+    } else if (g.kind === "press") {
       if (g.owner) store.toggleSelect(g.owner);
       else if (!g.shift) store.clearSelection();
     } else if (g.kind === "drag") {
@@ -328,7 +355,7 @@ export function PreviewPanel() {
         // A sideways phone is short: the 18rem floor keeps the figure readable, and the page scrolls.
         className="relative flex min-h-[max(55dvh,18rem)] flex-1 flex-col overflow-hidden rounded-lg border bg-card lg:min-h-0"
       >
-        <ActionBar zoom={roomy ? null : zoom} />
+        <ActionBar compact={!roomy} zoom={roomy ? null : zoom} />
         <div ref={containerRef} className="relative min-h-0 flex-1">
           <svg
             ref={svgRef}
@@ -337,6 +364,7 @@ export function PreviewPanel() {
               "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
               mode === "pan" && "cursor-grab active:cursor-grabbing",
               mode === "select" && "cursor-crosshair",
+            mode === "add" && "cursor-copy",
             )}
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             preserveAspectRatio="xMidYMid meet"
@@ -344,6 +372,7 @@ export function PreviewPanel() {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
+          onPointerLeave={() => setAddAt(null)}
             // Stops the browser's autoscroll from starting on a middle click.
             onMouseDown={(e) => e.button === 1 && e.preventDefault()}
             onAuxClick={(e) => e.preventDefault()}
@@ -361,6 +390,7 @@ export function PreviewPanel() {
               hit={coarse ? HIT_COARSE : HIT_FINE}
             />
             {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
+          {mode === "add" && addAt && <AddMarker at={addAt} k={k} px={unitsPerPx} />}
             {box && (
               <rect
                 x={box.minX}
@@ -377,7 +407,8 @@ export function PreviewPanel() {
               />
             )}
           </svg>
-          {empty && <EmptyState />}
+          {/* In add mode the whole preview is for clicking, and the hint below says how. */}
+        {empty && mode !== "add" && <EmptyState />}
           {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
           {roomy && <SelectionSummary placement="overlay" />}
         </div>
@@ -385,6 +416,20 @@ export function PreviewPanel() {
       {/* Phones have no room to float the hint over the figure, so it goes below the preview. */}
       {!roomy && <SelectionSummary placement="below" />}
     </>
+  );
+}
+
+/** Where the next click puts a point, with its coordinates. */
+function AddMarker({ at, k, px }: { at: Vec; k: number; px: number }) {
+  const cx = at.x * k;
+  const cy = -at.y * k;
+  return (
+    <g pointerEvents="none">
+      <circle cx={cx} cy={cy} r={4 * px} fill="none" stroke={PRIMARY} strokeWidth={1.5 * px} />
+      <text x={cx + 8 * px} y={cy - 8 * px} fontSize={11 * px} fill={PRIMARY} fontFamily="ui-sans-serif, system-ui">
+        ({formatNumber(at.x, 1)}; {formatNumber(at.y, 1)})
+      </text>
+    </g>
   );
 }
 

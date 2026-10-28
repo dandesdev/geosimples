@@ -1,5 +1,6 @@
 import { Hand, Move, SquareDashedMousePointer } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
+import { AddPointIcon } from "@/components/icons";
 import { useFigureStore, type CanvasMode } from "@/store/figureStore";
 import type { ActionId } from "@/store/prefsStore";
 
@@ -25,14 +26,21 @@ const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: string; 
     hint: "Arraste um ponto, ou vários selecionados, para mudá-los de lugar.",
     icon: <Move />,
   },
+  {
+    mode: "add",
+    action: "modeAdd",
+    label: "Adicionar pontos",
+    hint: "Clique na prévia para criar um ponto ali. Perto de um cruzamento da grade, ele se encaixa nele.",
+    icon: <AddPointIcon />,
+  },
 ];
 
-/** What dragging in the preview does. Clicking an object selects it in every mode. */
+/** What pressing and dragging in the preview does. Clicking a point selects it in every mode. */
 export function ModeSwitch() {
   const mode = useFigureStore((s) => s.mode);
   const setMode = useFigureStore((s) => s.setMode);
   return (
-    <div role="group" aria-label="Ao arrastar na prévia" className="flex shrink-0 gap-0.5 rounded-md bg-muted/60 p-0.5">
+    <div role="group" aria-label="Ao clicar ou arrastar na prévia" className="flex shrink-0 gap-0.5 rounded-md bg-muted/60 p-0.5">
       {MODES.map((m) => (
         <IconButton key={m.mode} label={m.label} hint={m.hint} shortcut={m.action} active={mode === m.mode} onClick={() => setMode(m.mode)}>
           {m.icon}

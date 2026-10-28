@@ -7,12 +7,14 @@ const HINTS = {
   select: "Clique nos objetos para selecioná-los, ou arraste uma caixa em volta deles.",
   pan: "Arraste para deslocar a vista. Clique nos objetos para selecioná-los.",
   move: "Arraste um ponto ou texto, ou selecione vários e arraste um deles.",
+  add: "Clique onde quer um ponto. Perto de um cruzamento da grade, ele se encaixa nele. Arraste para mover a vista.",
 } as const;
 
 const TOUCH_HINTS = {
   select: "Toque nos objetos para selecioná-los, ou arraste uma caixa em volta deles. Use dois dedos para mover e aproximar a vista.",
   pan: "Arraste para deslocar a vista, ou pince para aproximar. Toque nos objetos para selecioná-los.",
   move: "Arraste um ponto, ou selecione vários e arraste um deles. Use dois dedos para mover a vista.",
+  add: "Toque onde quer um ponto. Perto de um cruzamento da grade, ele se encaixa nele. Arraste para mover a vista.",
 } as const;
 
 /**
@@ -24,7 +26,8 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "below"
   const selection = useFigureStore((s) => s.selection);
   const mode = useFigureStore((s) => s.mode);
   const coarse = useCoarsePointer();
-  if (doc.elements.length === 0) return null;
+  // An empty figure has the welcome card, except in add mode, where this hint says what to do.
+  if (doc.elements.length === 0 && mode !== "add") return null;
 
   const counts = new Map<ElementType, number>();
   const byId = new Map(doc.elements.map((e) => [e.id, e]));

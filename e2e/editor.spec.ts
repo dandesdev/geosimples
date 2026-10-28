@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   addTriangle,
   boxSelectAll,
+  clickCanvasAt,
   clickEmptyCanvas,
   counts,
   leaveInput,
@@ -19,6 +20,18 @@ test("typing points creates points and segments", async ({ page }) => {
   await addTriangle(page);
   expect(await counts(page)).toEqual({ point: 3, segment: 3 });
   await expect(toolbarButton(page, "Exportar")).toBeEnabled();
+});
+
+test("add mode puts a point where the preview is clicked", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("p");
+  await expect(toolbarButton(page, "Adicionar pontos")).toHaveAttribute("aria-pressed", "true");
+
+  await clickCanvasAt(page, 0.3, 0.4);
+  await clickCanvasAt(page, 0.7, 0.6);
+  await expect.poll(async () => (await counts(page)).point ?? 0).toBe(2);
+  // Both stay selected, in click order, ready for "Ligar pontos".
+  await expect(page.getByText(/Selecionados: 2 pontos/)).toBeVisible();
 });
 
 test("box selection, polygon and angles", async ({ page }) => {
