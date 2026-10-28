@@ -9,10 +9,13 @@ import {
   freePoints,
   makeCircle,
   makePolygon,
+  markPerpendicularBisector,
   movePoints,
   normalizeDoc,
+  perpendicularBisectorOf,
   pointMap,
   projectPoint,
+  resizePerpendicularBisector,
   toTikz,
   type Angle,
   type FigureDoc,
@@ -135,6 +138,43 @@ describe("constructions", () => {
     const moved = movePoints(r.doc, [{ id: "p2", x: 6, y: 6 }]);
     expect(isRight(moved, angle)).toBe(true);
     expect(point(moved, ends[0].id)).toMatchObject({ x: 0, y: 6 });
+  });
+
+  it("resizes a perpendicular bisector, in proportion or at a fixed length", () => {
+    const r = construct(triangle(), ["s1"], "perpendicularBisector");
+    const seg = (created(r.doc, r.created, "segment") as Segment[])[0];
+    const info = perpendicularBisectorOf(r.doc, seg)!;
+    expect(info).toMatchObject({ points: ["p1", "p2"], length: 6, fixed: false });
+    expect(info.mark).not.toBeNull();
+    expect(perpendicularBisectorOf(r.doc, r.doc.elements.find((e) => e.id === "s1")!)).toBeNull();
+
+    // In proportion: twice as long as p1p2 now and after p2 moves.
+    let doc = resizePerpendicularBisector(r.doc, seg.id, 12, false).doc;
+    expect(perpendicularBisectorOf(doc, seg)!.length).toBeCloseTo(12);
+    doc = movePoints(doc, [{ id: "p2", x: 3, y: 0 }]);
+    expect(perpendicularBisectorOf(doc, seg)!.length).toBeCloseTo(6);
+
+    // Fixed: keeps 4 when p2 moves, and survives a save.
+    doc = resizePerpendicularBisector(doc, seg.id, 4, true).doc;
+    doc = movePoints(doc, [{ id: "p2", x: 10, y: 0 }]);
+    expect(perpendicularBisectorOf(doc, seg)).toMatchObject({ fixed: true });
+    expect(perpendicularBisectorOf(doc, seg)!.length).toBeCloseTo(4);
+    expect(normalizeDoc(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
+    expect(resizePerpendicularBisector(doc, "s1", 4, true).error).toBeDefined();
+    expect(resizePerpendicularBisector(doc, seg.id, 0, true).error).toBeDefined();
+  });
+
+  it("removes and restores the right-angle mark of a perpendicular bisector", () => {
+    const r = construct(triangle(), ["s1"], "perpendicularBisector");
+    const seg = (created(r.doc, r.created, "segment") as Segment[])[0];
+    const off = markPerpendicularBisector(r.doc, seg.id, false).doc;
+    expect(perpendicularBisectorOf(off, seg)!.mark).toBeNull();
+    expect(off.elements.some((e) => e.type === "point" && e.id === perpendicularBisectorOf(off, seg)!.midpoint)).toBe(true);
+    const on = markPerpendicularBisector(off, seg.id, true);
+    const mark = on.doc.elements.find((e) => e.id === perpendicularBisectorOf(on.doc, seg)!.mark) as Angle;
+    expect(mark.rightMark).toBe(true);
+    expect(isRight(on.doc, mark)).toBe(true);
+    expect(markPerpendicularBisector(on.doc, seg.id, true).error).toBeDefined();
   });
 
   it("marks where two segments cross and follows them", () => {

@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import {
   addText,
-  autoLabel,
+  autoLabelMany,
   buildScene,
   connectPoints,
   construct,
@@ -9,17 +9,18 @@ import {
   freePoints,
   makeAngles,
   makeCircle,
+  markPerpendicularBisector,
   fillShapes,
   pointMap,
   pointOnSegment,
   projectPoint,
+  resizePerpendicularBisector,
   selectedOfType,
   type CircleMode,
   type ConstructionKind,
   type FigureDoc,
   type Id,
-  type LabelScheme,
-  type LabelTarget,
+  type AutoLabelJob,
   type OpResult,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
@@ -76,13 +77,24 @@ export const actions = {
     return perform((doc) => addText(doc, spotBelow(doc, settings.scale), text, opOptions()));
   },
 
-  autoLabel: (type: LabelTarget, scheme: LabelScheme, onlySelected: boolean) => {
+  /** Runs every opted-in labeling as one undo step. */
+  autoLabel: (jobs: AutoLabelJob[], onlySelected: boolean) => {
     const { settings } = useFigureStore.getState();
     return perform(
-      (doc, sel) => autoLabel(doc, type, scheme, onlySelected ? sel : null, settings.decimals, opOptions()),
+      (doc, sel) => autoLabelMany(doc, jobs, onlySelected ? sel : null, settings.decimals, opOptions()),
       "keep",
     );
   },
+
+  /** Sets a perpendicular bisector's length; typing several digits stays one undo step. */
+  resizeBisector: (id: Id, length: number, fixed: boolean) => {
+    const store = useFigureStore.getState();
+    const result = resizePerpendicularBisector(store.doc, id, length, fixed);
+    if (result.error) toast.error(result.error);
+    else store.commit(result.doc, `${id}:bisector-length`);
+  },
+
+  markBisector: (id: Id, on: boolean) => perform((doc) => markPerpendicularBisector(doc, id, on, opOptions()), "keep"),
 };
 
 /** A free spot centered under everything drawn, in world units. */

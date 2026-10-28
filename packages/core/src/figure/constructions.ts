@@ -12,12 +12,14 @@ import {
 import { nextPointNames, withText } from "./labels";
 import {
   angleExists,
+  deleteElements,
   idMaker,
   LIMIT_ERROR,
   newAngle,
   newSegment,
   segmentExists,
   selectedOfType,
+  updateElements,
   type OpOptions,
   type OpResult,
 } from "./ops";
@@ -414,6 +416,88 @@ export function makePerpendicularBisector(
     if (withMark) d.rightAngle(top, m, points[1]);
   }
   return d.result(coincident === pairs.length ? "Os dois pontos coincidem." : "Essa mediatriz já existe.");
+}
+
+/** A perpendicular bisector drawn by makePerpendicularBisector, as the editor shows it. */
+export interface PerpendicularBisector {
+  /** The two points it bisects. */
+  points: [Id, Id];
+  /** Length in world units. */
+  length: number;
+  /** True when the length stays put, false when it scales with the bisected points. */
+  fixed: boolean;
+  /** The midpoint of the two points, if it is still in the figure. */
+  midpoint: Id | null;
+  /** The right-angle mark at the midpoint, if there is one. */
+  mark: Id | null;
+}
+
+/** The perpendicular bisector a segment is, or null for other segments. */
+export function perpendicularBisectorOf(doc: FigureDoc, el: Element): PerpendicularBisector | null {
+  if (el.type !== "segment") return null;
+  const pts = pointMap(doc);
+  const a = pts.get(el.a);
+  const b = pts.get(el.b);
+  const ca = a?.construction;
+  const cb = b?.construction;
+  if (!a || !b || ca?.kind !== "perpendicular" || cb?.kind !== "perpendicular") return null;
+  const samePoints = ca.points[0] === cb.points[0] && ca.points[1] === cb.points[1];
+  if (!samePoints || ca.along !== 0.5 || cb.along !== 0.5 || Math.sign(ca.across) !== -Math.sign(cb.across)) return null;
+  const points = ca.points;
+  const midpoint =
+    doc.elements.find(
+      (e): e is Point => e.type === "point" && !!e.construction && sameParents(e.construction, { kind: "midpoint", points }),
+    )?.id ?? null;
+  const mark =
+    doc.elements.find(
+      (e) => e.type === "angle" && e.vertex === midpoint && [e.a, e.b].some((id) => id === el.a || id === el.b),
+    )?.id ?? null;
+  return { points, length: dist(a, b), fixed: ca.fixed === true, midpoint, mark };
+}
+
+/**
+ * Sets the length of a perpendicular bisector. With `fixed` it keeps that
+ * length when its points move; otherwise it keeps the same proportion to them.
+ */
+export function resizePerpendicularBisector(doc: FigureDoc, id: Id, length: number, fixed: boolean): OpResult {
+  const el = doc.elements.find((e) => e.id === id);
+  const info = el && perpendicularBisectorOf(doc, el);
+  if (!el || el.type !== "segment" || !info) return fail(doc, "Selecione uma mediatriz.");
+  if (!(length > 0)) return fail(doc, "O comprimento precisa ser maior que zero.");
+  const pts = pointMap(doc);
+  const base = dist(pts.get(info.points[0])!, pts.get(info.points[1])!);
+  if (base < SAME) return fail(doc, "Os dois pontos coincidem.");
+  const half = fixed ? length / 2 : length / 2 / base;
+  const next = updateElements(doc, [el.a, el.b], (p) => {
+    if (p.type !== "point" || p.construction?.kind !== "perpendicular") return p;
+    const { points, along } = p.construction;
+    const across = Math.sign(p.construction.across) * half;
+    const construction: PointConstruction = fixed
+      ? { kind: "perpendicular", points, along, across, fixed: true }
+      : { kind: "perpendicular", points, along, across };
+    return { ...p, construction };
+  });
+  return { doc: next, created: [] };
+}
+
+/** Adds or removes the right-angle mark of a perpendicular bisector. */
+export function markPerpendicularBisector(doc: FigureDoc, id: Id, on: boolean, opts: OpOptions = {}): OpResult {
+  const el = doc.elements.find((e) => e.id === id);
+  const info = el && perpendicularBisectorOf(doc, el);
+  if (!el || el.type !== "segment" || !info) return fail(doc, "Selecione uma mediatriz.");
+  if (!on) return info.mark ? deleteElements(doc, [info.mark]) : fail(doc, "A mediatriz não tem marca.");
+  const pts = pointMap(doc);
+  const [p, q] = info.points.map((pid) => pts.get(pid)!);
+  const d = draft(doc, opts);
+  const m = d.point(mid(p, q), { kind: "midpoint", points: info.points });
+  const across = (pid: Id) => {
+    const c = pts.get(pid)?.construction;
+    return c?.kind === "perpendicular" ? c.across : 0;
+  };
+  // The mark sits between the end on the positive side and the second point, as when it was made.
+  const top = across(el.a) > 0 ? el.a : el.b;
+  d.rightAngle(top, m, info.points[1]);
+  return d.result("A mediatriz já tem marca.");
 }
 
 /** Most segments and circles the intersection action compares pairwise. */

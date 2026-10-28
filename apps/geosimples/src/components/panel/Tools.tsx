@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { selectedOfType, type Element, type LabelScheme, type LabelTarget } from "@geosimples/core/figure";
+import { selectedOfType, type Element, type LabelScheme } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actions } from "@/lib/actions";
+import { AUTO_LABEL, NUMERIC_SCHEMES, toggleKind } from "@/lib/autoLabel";
 import { useFigureStore } from "@/store/figureStore";
+import { AUTO_LABEL_KINDS, type AutoLabelKind } from "@/store/prefsStore";
+import { useActivePrefs } from "@/store/useActivePrefs";
 import { Choice, Field, NumberInput, RangeField, Section, SwitchField } from "./controls";
 
 const nameOf = (el: Element | undefined) => (el ? el.label?.text || el.id : "?");
@@ -83,50 +86,42 @@ function ProjectionTool() {
   );
 }
 
-const SCHEMES: Record<LabelTarget, { value: LabelScheme; label: string }[]> = {
-  point: [
-    { value: "latin", label: "A, B, C" },
-    { value: "numbered", label: "P1, P2" },
-    { value: "coordinates", label: "(x; y)" },
-  ],
-  segment: [
-    { value: "latin-lower", label: "a, b, c" },
-    { value: "length", label: "Medida" },
-  ],
-  angle: [
-    { value: "greek", label: "α, β, γ" },
-    { value: "measure", label: "Medida" },
-  ],
-};
-
 function AutoLabelTool() {
   const decimals = useFigureStore((s) => s.settings.decimals);
   const setSetting = useFigureStore((s) => s.setSetting);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
-  const [target, setTarget] = useState<LabelTarget>("point");
-  const [scheme, setScheme] = useState<LabelScheme>("latin");
+  const defaults = useActivePrefs().behavior.autoLabel;
+  // Changes here last for the session; the starting choice lives in Configurações.
+  const [picked, setPicked] = useState<Partial<Record<AutoLabelKind, boolean>>>({});
+  const [schemes, setSchemes] = useState<Partial<Record<AutoLabelKind, LabelScheme>>>({});
   const [onlySelected, setOnlySelected] = useState(false);
-  const usesDecimals = scheme === "length" || scheme === "coordinates" || scheme === "measure";
+  const isOn = (k: AutoLabelKind) => picked[k] ?? defaults[k];
+  const schemeOf = (k: AutoLabelKind) => schemes[k] ?? AUTO_LABEL[k].schemes[0].value;
+  const kinds = AUTO_LABEL_KINDS.filter(isOn);
+  const usesDecimals = kinds.some((k) => NUMERIC_SCHEMES.includes(schemeOf(k)));
 
   return (
     <Section title="Rotular automaticamente">
-      <Choice
-        label="Objetos"
-        value={target}
-        options={[
-          { value: "point", label: "Pontos" },
-          { value: "segment", label: "Segmentos" },
-          { value: "angle", label: "Ângulos" },
-        ]}
-        onChange={(t) => {
-          setTarget(t);
-          setScheme(SCHEMES[t][0].value);
-        }}
-      />
-      <Choice label="Nomes" value={scheme} options={SCHEMES[target]} onChange={setScheme} />
-      {(scheme === "length" || scheme === "measure") && (
-        <p className="mb-1 text-xs text-muted-foreground">A medida atualiza sozinha quando os pontos se movem.</p>
-      )}
+      {AUTO_LABEL_KINDS.map((k) => (
+        <div key={k}>
+          <SwitchField
+            label={AUTO_LABEL[k].label}
+            checked={isOn(k)}
+            onChange={(on) => setPicked((p) => toggleKind({ ...defaults, ...p }, k, on))}
+          />
+          {isOn(k) && AUTO_LABEL[k].schemes.length > 1 && (
+            <Choice
+              label="Como"
+              value={schemeOf(k)}
+              options={AUTO_LABEL[k].schemes}
+              onChange={(s) => setSchemes((x) => ({ ...x, [k]: s }))}
+            />
+          )}
+        </div>
+      ))}
+      <p className="mb-1 text-xs text-muted-foreground">
+        Medidas atualizam sozinhas quando os pontos se movem. Um polígono tem um rótulo só: área ou perímetro.
+      </p>
       <Choice
         label="Quais"
         value={onlySelected ? "selected" : "all"}
@@ -150,8 +145,13 @@ function AutoLabelTool() {
       <Button
         size="sm"
         className="mt-1 w-full"
-        disabled={onlySelected && !hasSelection}
-        onClick={() => actions.autoLabel(target, scheme, onlySelected)}
+        disabled={kinds.length === 0 || (onlySelected && !hasSelection)}
+        onClick={() =>
+          actions.autoLabel(
+            kinds.map((k) => ({ type: AUTO_LABEL[k].target, scheme: schemeOf(k) })),
+            onlySelected,
+          )
+        }
       >
         Rotular
       </Button>

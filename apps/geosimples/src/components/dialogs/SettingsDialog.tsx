@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Choice, ColorPicker, Field, NumberInput, RangeField, Section, SwitchField } from "@/components/panel/controls";
 import { FillEditor, StrokeEditor } from "@/components/panel/styleEditors";
+import { AUTO_LABEL, toggleKind } from "@/lib/autoLabel";
 import { pt } from "@/lib/format";
 import { comboFromEvent, comboKeys } from "@/lib/keys";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ import {
   ACTION_LABELS,
   activePrefs,
   applyPrefsToSession,
+  AUTO_LABEL_KINDS,
   DEFAULT_PROFILE_ID,
   DEFAULT_SHORTCUTS,
   DRAFT_NAME,
@@ -308,6 +310,16 @@ function SettingsBody() {
               format={(n) => String(n)}
               onChange={(decimals) => behavior({ decimals })}
             />
+            <Section title="Rotular automaticamente começa com">
+              {AUTO_LABEL_KINDS.map((k) => (
+                <SwitchField
+                  key={k}
+                  label={AUTO_LABEL[k].label}
+                  checked={prefs.behavior.autoLabel[k]}
+                  onChange={(on) => behavior({ autoLabel: toggleKind(prefs.behavior.autoLabel, k, on) })}
+                />
+              ))}
+            </Section>
           </TabBody>
         </TabsContent>
 

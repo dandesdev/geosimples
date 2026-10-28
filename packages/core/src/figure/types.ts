@@ -84,9 +84,11 @@ export type PointConstruction =
   | { kind: "bisector"; angle: [Id, Id, Id]; reflex: boolean; line: [Id, Id] | null; length: number }
   /**
    * In the frame of segment pq: lerp(p, q, along) plus `across` times pq
-   * turned 90° counterclockwise. Ends of a perpendicular bisector.
+   * turned 90° counterclockwise. Ends of a perpendicular bisector. With
+   * `fixed`, `across` is in world units instead, so the end keeps its
+   * distance when pq changes length.
    */
-  | { kind: "perpendicular"; points: [Id, Id]; along: number; across: number }
+  | { kind: "perpendicular"; points: [Id, Id]; along: number; across: number; fixed?: true }
   /**
    * Where two segments or circles cross. With two crossings, `index` 0 is the
    * one nearer the first end of a segment, or left of center-to-center for two circles.

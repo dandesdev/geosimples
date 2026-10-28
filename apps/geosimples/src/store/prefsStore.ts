@@ -72,6 +72,10 @@ export const DEFAULT_SHORTCUTS: Record<ActionId, string[]> = {
   settings: ["Ctrl+,"],
 };
 
+/** What the Rotular automaticamente tool can label, each opted in on its own. */
+export type AutoLabelKind = "point" | "segment" | "angle" | "radius" | "area" | "perimeter";
+export const AUTO_LABEL_KINDS: AutoLabelKind[] = ["point", "segment", "angle", "radius", "area", "perimeter"];
+
 export interface Prefs {
   styles: StyleDefaults;
   behavior: {
@@ -81,6 +85,8 @@ export interface Prefs {
     autoFit: boolean;
     showGrid: boolean;
     decimals: number;
+    /** Kinds Rotular automaticamente starts with checked. */
+    autoLabel: Record<AutoLabelKind, boolean>;
   };
   export: {
     scale: number;
@@ -92,7 +98,14 @@ export interface Prefs {
 
 export const DEFAULT_PREFS: Prefs = {
   styles: DEFAULT_STYLES,
-  behavior: { autoName: false, mode: "select", autoFit: true, showGrid: true, decimals: 2 },
+  behavior: {
+    autoName: false,
+    mode: "select",
+    autoFit: true,
+    showGrid: true,
+    decimals: 2,
+    autoLabel: { point: true, segment: false, angle: false, radius: false, area: false, perimeter: false },
+  },
   export: { scale: 1, dpi: 300, background: "white" },
   shortcuts: DEFAULT_SHORTCUTS,
 };
@@ -159,6 +172,15 @@ const isObj = (x: unknown): x is Raw => typeof x === "object" && x !== null && !
 const num = (x: unknown, min: number, max: number, fallback: number) =>
   typeof x === "number" && Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : fallback;
 const bool = (x: unknown, fallback: boolean) => (typeof x === "boolean" ? x : fallback);
+
+/** Reads the auto-label opt-ins; an area and a perimeter can't share a polygon's one label. */
+function autoLabelKinds(raw: unknown, d: Record<AutoLabelKind, boolean>): Record<AutoLabelKind, boolean> {
+  const r = isObj(raw) ? raw : {};
+  const out = Object.fromEntries(AUTO_LABEL_KINDS.map((k) => [k, bool(r[k], d[k])])) as Record<AutoLabelKind, boolean>;
+  if (out.area && out.perimeter) out.perimeter = false;
+  return out;
+}
+
 const color = (x: unknown, fallback: string) => (typeof x === "string" && isValidColor(x) ? x : fallback);
 
 /** Deep equality for plain JSON data, ignoring key order. */
@@ -336,6 +358,7 @@ function sanitizePrefs(raw: unknown): Prefs {
       autoFit: bool(b.autoFit, d.behavior.autoFit),
       showGrid: bool(b.showGrid, d.behavior.showGrid),
       decimals: Math.round(num(b.decimals, 0, 4, d.behavior.decimals)),
+      autoLabel: autoLabelKinds(b.autoLabel, d.behavior.autoLabel),
     },
     export: {
       scale: num(e.scale, 0.1, 10, d.export.scale),

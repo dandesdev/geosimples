@@ -4,6 +4,7 @@ import {
   addText,
   angleArc,
   autoLabel,
+  autoLabelMany,
   buildScene,
   circumcircle,
   connectPoints,
@@ -664,6 +665,39 @@ describe("live measure labels", () => {
     expect(doc.elements).toHaveLength(3);
     expect(doc.elements[2].label).toEqual({ text: "4", angle: null, distance: 9, size: 10, color: "ink", font: "serif" });
     expect(toTikz(doc)).toContain("{$4$};");
+  });
+});
+
+describe("auto labels", () => {
+  it("labels radii, areas and perimeters as live measures", () => {
+    let doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
+    doc = makeCircle(doc, ["p1", "p3"], "through").doc;
+    const radius = autoLabel(doc, "circle", "radius", null, 2).doc;
+    expect(labelText(radius, radius.elements.find((e) => e.id === "c1")!)).toBe("3");
+    const area = autoLabel(doc, "polygon", "area", null, 2).doc;
+    expect(area.elements.find((e) => e.id === "g1")!.label?.measure?.kind).toBe("area");
+    expect(labelText(area, area.elements.find((e) => e.id === "g1")!)).toBe("6");
+    const perimeter = autoLabel(doc, "polygon", "perimeter", null, 0).doc;
+    expect(labelText(perimeter, perimeter.elements.find((e) => e.id === "g1")!)).toBe("12");
+  });
+
+  it("runs only the opted-in labelings, as one change", () => {
+    const doc = connectPoints(triangle(), ["p1", "p2", "p3"], true).doc;
+    const r = autoLabelMany(
+      doc,
+      [
+        { type: "point", scheme: "latin" },
+        { type: "segment", scheme: "length" },
+        { type: "circle", scheme: "radius" },
+      ],
+      null,
+      2,
+    );
+    expect(r.error).toBeUndefined();
+    const text = (id: string) => labelText(r.doc, r.doc.elements.find((e) => e.id === id)!);
+    expect([text("p1"), text("p2"), text("p3"), text("s1")]).toEqual(["A", "B", "C", "4"]);
+    expect(autoLabelMany(doc, [], null).error).toMatch(/Marque/);
+    expect(autoLabelMany(doc, [{ type: "circle", scheme: "radius" }], null).error).toBeDefined();
   });
 });
 
