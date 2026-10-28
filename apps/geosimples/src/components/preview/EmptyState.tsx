@@ -18,19 +18,21 @@ function insertExample() {
 
 export function EmptyState() {
   return (
-    <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
-      <div className="pointer-events-auto max-w-sm rounded-lg border bg-background/95 p-5 text-sm shadow-sm">
+    <div className="pointer-events-none absolute inset-0 grid place-items-center p-3 sm:p-6">
+      {/* A short phone preview can't fit the whole card, so it scrolls instead of being cut. */}
+      <div className="pointer-events-auto max-h-full max-w-sm overflow-y-auto rounded-lg border bg-background/95 p-4 text-sm shadow-sm sm:p-5">
         <h2 className="mb-2 text-base font-semibold">Comece pelos pontos</h2>
         <p className="text-muted-foreground">
           Digite na barra abaixo da prévia. Um nome antes do = vira o rótulo, e -- liga os pontos. No fim, -- fecha o
           contorno:
         </p>
         <code className="my-3 block rounded bg-muted px-3 py-2 font-mono text-foreground">{EXAMPLE}</code>
-        <p className="mb-4 text-muted-foreground">
+        {/* Phones show the action bar right above, so this line mostly takes room there. */}
+        <p className="mb-4 hidden text-muted-foreground sm:block">
           Depois selecione os objetos na prévia e use os botões acima para marcar ângulos, preencher o polígono ou
           criar circunferências.
         </p>
-        <Button size="sm" variant="outline" onClick={insertExample}>
+        <Button size="sm" variant="outline" className="mt-1 sm:mt-0" onClick={insertExample}>
           Inserir este exemplo
         </Button>
       </div>

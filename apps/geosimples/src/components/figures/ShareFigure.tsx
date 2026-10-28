@@ -5,7 +5,7 @@ import { FIGURE_FILE_EXTENSION, SHARE_LINK_WARN_LENGTH } from "@geosimples/core/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Section } from "@/components/panel/controls";
+import { Section, SectionsStayOpen } from "@/components/panel/controls";
 import { copyText } from "@/lib/exporting";
 import { canShareLinks, downloadFigureFile, figureShareUrl, pickFigureFiles } from "@/lib/figureFiles";
 import { useFigureStore } from "@/store/figureStore";
@@ -36,7 +36,7 @@ export function ShareContent() {
 
   return (
     <div className="space-y-4">
-      <Section fixed title="Arquivo">
+      <Section title="Arquivo">
         <p className="mb-2 text-sm text-muted-foreground">
           Guarde a figura num arquivo {FIGURE_FILE_EXTENSION} para enviar ou abrir em outro computador. Para abri-lo,
           use Abrir arquivo ou arraste-o para a figura.
@@ -53,7 +53,7 @@ export function ShareContent() {
         </div>
       </Section>
 
-      <Section fixed title="Link">
+      <Section title="Link">
         <p className="mb-2 text-sm text-muted-foreground">
           Quem abrir o link recebe uma cópia da figura. A figura vai dentro do próprio link: nada é enviado a um
           servidor.
@@ -109,7 +109,11 @@ export function ShareDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           <DialogTitle>Salvar e compartilhar</DialogTitle>
           <DialogDescription>“{name}”</DialogDescription>
         </DialogHeader>
-        {open && <ShareContent />}
+        {open && (
+          <SectionsStayOpen>
+            <ShareContent />
+          </SectionsStayOpen>
+        )}
       </DialogContent>
     </Dialog>
   );

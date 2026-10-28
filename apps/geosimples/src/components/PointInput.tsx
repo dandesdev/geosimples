@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { useFigureStore } from "@/store/figureStore";
 import { opOptions } from "@/store/prefsStore";
@@ -59,6 +60,8 @@ export function PointInput() {
   const [scroll, setScroll] = useState(0);
   const [helpPinned, setHelpPinned] = useState(false);
   const [helpHovered, setHelpHovered] = useState(false);
+  // Phones show a shorter example: the long one is cut in the middle.
+  const wide = useMediaQuery("(min-width: 640px)");
 
   const parsed = useMemo(() => parseDraft(text, doc, selection), [text, doc, selection]);
   const syncScroll = () => setScroll(inputRef.current?.scrollLeft ?? 0);
@@ -127,7 +130,7 @@ export function PointInput() {
             spellCheck={false}
             aria-invalid={parsed.errors.length > 0}
             aria-describedby="point-input-message"
-            placeholder="Ex.: A=(0;0)--B=(4;0)--C=(0;3)--   ou   (1;1) +(2;0) +(3:90)"
+            placeholder={wide ? "Ex.: A=(0;0)--B=(4;0)--C=(0;3)--   ou   (1;1) +(2;0) +(3:90)" : "Ex.: A=(0;0)--B=(4;0)"}
             // 16px on phones: smaller text makes iOS zoom the page when the input gets focus.
             className="relative w-full bg-transparent px-2 py-1.5 font-mono text-base text-transparent caret-foreground outline-none selection:bg-primary/25 selection:text-transparent placeholder:font-sans placeholder:text-muted-foreground sm:text-sm"
           />

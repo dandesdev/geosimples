@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Choice, Field, NumberInput } from "@/components/panel/controls";
+import { Choice, Field, NumberInput, SectionsStayOpen } from "@/components/panel/controls";
 import { ShareContent } from "@/components/figures/ShareFigure";
 import {
   canCopyImage,
@@ -40,7 +40,11 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           (e.currentTarget as HTMLElement).focus();
         }}
       >
-        {open && <ExportBody />}
+        {open && (
+          <SectionsStayOpen>
+            <ExportBody />
+          </SectionsStayOpen>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -101,10 +105,23 @@ function ExportBody() {
 
       <Tabs defaultValue="tikz">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="tikz">LaTeX (TikZ)</TabsTrigger>
-          <TabsTrigger value="png">Imagem PNG</TabsTrigger>
-          <TabsTrigger value="svg">Vetor SVG</TabsTrigger>
-          <TabsTrigger value="share">Arquivo e link</TabsTrigger>
+          {/* Phones get the short names: the long ones run into each other. */}
+          <TabsTrigger value="tikz">
+            <span className="sm:hidden">TikZ</span>
+            <span className="hidden sm:inline">LaTeX (TikZ)</span>
+          </TabsTrigger>
+          <TabsTrigger value="png">
+            <span className="sm:hidden">PNG</span>
+            <span className="hidden sm:inline">Imagem PNG</span>
+          </TabsTrigger>
+          <TabsTrigger value="svg">
+            <span className="sm:hidden">SVG</span>
+            <span className="hidden sm:inline">Vetor SVG</span>
+          </TabsTrigger>
+          <TabsTrigger value="share">
+            <span className="sm:hidden">Arquivo</span>
+            <span className="hidden sm:inline">Arquivo e link</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="tikz" className="space-y-3">

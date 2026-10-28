@@ -1,4 +1,5 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
 import { ACTION_LABELS, type ActionId } from "@/store/prefsStore";
 
@@ -20,6 +21,7 @@ const HELP_ACTIONS: ActionId[] = [
 ];
 
 export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const touch = useCoarsePointer();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
@@ -35,10 +37,17 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             ABC. <code>--</code> liga pontos, e no fim fecha o contorno. <code>+(4;0)</code> e <code>+(3:90)</code> partem
             do ponto anterior. O ícone de ajuda ao lado da barra mostra tudo.
           </li>
-          <li>
-            <b>Seleção.</b> Clique nos objetos da prévia, ou arraste uma caixa em volta deles. A ordem importa: os
-            números verdes mostram a ordem dos pontos selecionados. Arrastar com o botão do meio move a vista.
-          </li>
+          {touch ? (
+            <li>
+              <b>Seleção.</b> Toque nos objetos da prévia, ou arraste uma caixa em volta deles. A ordem importa: os
+              números verdes mostram a ordem dos pontos selecionados. Dois dedos movem e aproximam a vista.
+            </li>
+          ) : (
+            <li>
+              <b>Seleção.</b> Clique nos objetos da prévia, ou arraste uma caixa em volta deles. A ordem importa: os
+              números verdes mostram a ordem dos pontos selecionados. Arrastar com o botão do meio move a vista.
+            </li>
+          )}
           <li>
             <b>Construir.</b> Com pontos selecionados, use a barra acima da prévia: ligar pontos, marcar ângulo (A, B, C
             marca o ângulo em B), polígono e circunferência. Em Construções ficam ponto médio, altura, projeção
@@ -59,7 +68,8 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             programas.
           </li>
         </ol>
-        <div className="text-sm">
+        {/* Keyboard shortcuts mean little on a phone or tablet without a keyboard. */}
+        <div className={touch ? "hidden" : "text-sm"}>
           <h3 className="mb-1 font-semibold">Atalhos</h3>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
             {HELP_ACTIONS.map((id) => (
