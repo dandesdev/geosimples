@@ -326,7 +326,7 @@ function roundTiny(n: number): number {
 }
 
 /** `f(x) = …` always; `y = …` unless what follows is a point, like y=(1;2). */
-const FUNCTION_INPUT = /^(\s*)([A-Za-z])\s*\(\s*x\s*\)\s*=|^(\s*)y\s*=(?![^;:]*[;:])/;
+const FUNCTION_INPUT = /^(\s*)([A-Za-z])\s*\(\s*x\s*\)\s*=|^(\s*)[yY]\s*=(?![^;:]*[;:])/;
 
 /**
  * A function typed in the point input: f(x) = x^2 - 1, g(x)=2sen(x) or

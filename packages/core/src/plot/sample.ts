@@ -84,7 +84,8 @@ export function sampleFunction(
       (aOk !== bOk ||
         !mOk ||
         (aOk && bOk && (Math.abs(m.y - (a.y + b.y) / 2) > tol || Math.abs(b.y - a.y) > jump)) ||
-        (aOk && bOk && inside(a.y) !== inside(b.y)));
+        (aOk && bOk && inside(a.y) !== inside(b.y)) ||
+        (aOk && bOk && !inside(a.y) && !inside(b.y) && a.y > yMax !== b.y > yMax));
     if (needsSplit && (aOk || bOk || mOk)) {
       segment(a, m, level + 1);
       segment(m, b, level + 1);

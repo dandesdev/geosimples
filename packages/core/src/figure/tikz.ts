@@ -9,7 +9,7 @@ import {
   type OffsetLine,
 } from "./geometry";
 import { estimateTextWidth, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
-import { axesOrigin, axisTicks, functionLines } from "./plot";
+import { axesOrigin, axisTicks, functionLines, gridValues } from "./plot";
 import { PATTERN } from "./svg";
 import type { Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
@@ -203,9 +203,9 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         const xs = axisTicks(el.x, el.step, o.x);
         const ys = axisTicks(el.y, el.step, o.y);
         if (el.grid) {
-          const grid = [...xs, o.x]
+          const grid = gridValues(el.x, el.step)
             .map((x) => `(${at({ x, y: el.y[0] })}) -- (${at({ x, y: el.y[1] })})`)
-            .concat([...ys, o.y].map((y) => `(${at({ x: el.x[0], y })}) -- (${at({ x: el.x[1], y })})`));
+            .concat(gridValues(el.y, el.step).map((y) => `(${at({ x: el.x[0], y })}) -- (${at({ x: el.x[1], y })})`));
           sections.axes.push(`\\draw${opts(strokeOpts(AXES_GRID))} ${grid.join(" ")};`);
         }
         const xEnd = at({ x: el.x[1], y: o.y });

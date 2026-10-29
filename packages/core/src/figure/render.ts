@@ -18,7 +18,7 @@ import {
   measureRuns,
   type LabelRun,
 } from "./labels";
-import { axesOrigin, axisTicks, functionLines } from "./plot";
+import { axesOrigin, axisTicks, functionLines, gridValues } from "./plot";
 import type {
   Dash,
   Element,
@@ -373,9 +373,9 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         const xs = axisTicks(el.x, el.step, o.x);
         const ys = axisTicks(el.y, el.step, o.y);
         if (el.grid) {
-          const lines = [...xs, o.x]
+          const lines = gridValues(el.x, el.step)
             .map((x) => `M${f(x * k)} ${f(-el.y[0] * k)}L${f(x * k)} ${f(-el.y[1] * k)}`)
-            .concat([...ys, o.y].map((y) => `M${f(el.x[0] * k)} ${f(-y * k)}L${f(el.x[1] * k)} ${f(-y * k)}`))
+            .concat(gridValues(el.y, el.step).map((y) => `M${f(el.x[0] * k)} ${f(-y * k)}L${f(el.x[1] * k)} ${f(-y * k)}`))
             .join("");
           layers.grid.push({ kind: "path", owner: el.id, d: lines, stroke: paintStroke(AXES_GRID), fill: null });
         }

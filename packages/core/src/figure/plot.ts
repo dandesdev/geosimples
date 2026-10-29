@@ -28,8 +28,13 @@ export function axesOrigin(el: Axes): Pt {
   return { x: clamp(0, el.x), y: clamp(0, el.y) };
 }
 
+/** Grid line values along one axis: every multiple of the step in the range, ends included. */
+export function gridValues(range: [number, number], step: number): number[] {
+  return axisTicks(range, step, NaN, true);
+}
+
 /** Tick values along one axis: multiples of the step inside the range, without the crossing and the arrow tip. */
-export function axisTicks(range: [number, number], step: number, skip: number): number[] {
+export function axisTicks(range: [number, number], step: number, skip: number, keepTip = false): number[] {
   if (!(step > 0)) return [];
   const [a, b] = range;
   const out: number[] = [];
@@ -39,7 +44,7 @@ export function axisTicks(range: [number, number], step: number, skip: number): 
   if (last - first > 400) return [];
   for (let i = first; i <= last; i++) {
     const v = Math.round(i * step * 1e9) / 1e9;
-    if (Math.abs(v - skip) < 1e-9 || Math.abs(v - b) < step * 0.25) continue;
+    if (Math.abs(v - skip) < 1e-9 || (!keepTip && Math.abs(v - b) < step * 0.25)) continue;
     out.push(v);
   }
   return out;

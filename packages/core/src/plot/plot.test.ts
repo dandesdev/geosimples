@@ -31,6 +31,13 @@ describe("expressions", () => {
     expect(value("x^(1/3)", -8)).toBeCloseTo(-2);
     expect(value("1/x", 0)).toBe(Infinity);
     expect(value("sqrt(x)", -1)).toBeNaN();
+    // e is the constant, not an exponent: 2e+1 is 2·e + 1.
+    expect(value("2e+1", 0)).toBeCloseTo(2 * Math.E + 1);
+    expect(value("x+2e-1", 0)).toBeCloseTo(2 * Math.E - 1);
+    // Without parentheses a function takes the factors written together.
+    expect(value("sen 2x", Math.PI / 4)).toBeCloseTo(1);
+    expect(value("sen x cos x", Math.PI / 4)).toBeCloseTo(0.5);
+    expect(value("x^(2/3)", -8)).toBeCloseTo(4);
   });
 
   it("explains mistakes, with where they are", () => {
@@ -80,6 +87,13 @@ describe("sampling", () => {
     const lines = sampleFunction(Math.tan, [-Math.PI, Math.PI], [-4, 4]);
     // Branches around -π, 0 and π: cut at ±π/2.
     expect(lines).toHaveLength(3);
+  });
+
+  it("keeps a steep line that crosses the whole range between two samples", () => {
+    const lines = sampleFunction((x) => 1000 * x, [-5, 5], [-1, 1], { steps: 4 });
+    expect(lines).toHaveLength(1);
+    expect(Math.min(...lines[0].map((p) => p.y))).toBeCloseTo(-1, 2);
+    expect(Math.max(...lines[0].map((p) => p.y))).toBeCloseTo(1, 2);
   });
 
   it("returns nothing for an empty domain or range", () => {

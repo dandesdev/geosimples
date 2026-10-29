@@ -65,9 +65,10 @@ export const actions = {
   /** Turns constructed points into free points that no longer follow their parents. */
   freePoints: (ids: Id[]) => perform((doc) => freePoints(doc, ids), "keep"),
 
-  /** Starts a graph: "y = " in the point input, ready for the expression. */
+  /** Starts a graph: "y = " in the point input, ready for the expression. Text already typed stays. */
   startGraph: () => {
-    useFigureStore.getState().setInputDraft("y = ");
+    const store = useFigureStore.getState();
+    if (store.inputDraft.trim() === "") store.setInputDraft("y = ");
     // After the input shows the new text, so the caret lands at its end.
     requestAnimationFrame(() => emitCommand("focusInput"));
   },

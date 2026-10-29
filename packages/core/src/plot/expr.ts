@@ -79,7 +79,8 @@ function tokenize(text: string): Token[] {
     if (/\s/.test(c)) {
       i++;
     } else if (/[0-9.]/.test(c)) {
-      const m = /^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(s.slice(i));
+      // No scientific notation: 2e+1 means 2·e + 1, as a teacher would mean it.
+      const m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i));
       if (!m) throw new ParseError("Número incompleto.", i);
       out.push({ t: "num", value: Number(m[0]), at: i });
       i += m[0].length;
@@ -206,8 +207,11 @@ class Parser {
       case "x":
         return { kind: "x" };
       case "fn": {
-        // sen(x) or sen x: without parentheses the function takes the next factor.
-        const arg = this.peek().t === "(" ? this.primary() : this.power();
+        if (this.peek().t === "(") return { kind: "call", fn: t.fn, arg: this.primary() };
+        // Without parentheses the function takes the factors written together, as on paper:
+        // sen 2x is sen(2x). Another function starts a new factor: sen x cos x is sen(x)·cos(x).
+        let arg = this.power();
+        while (["num", "x", "const"].includes(this.peek().t)) arg = { kind: "bin", op: "*", a: arg, b: this.power() };
         return { kind: "call", fn: t.fn, arg };
       }
       case "(": {
@@ -280,12 +284,15 @@ export function compile(e: Expr): (x: number) => number {
   }
 }
 
-/** Like Math.pow, but odd roots of negatives stay real: x^(1/3) at -8 is -2. */
+/**
+ * Like Math.pow, but powers p/q with an odd q stay real for negative bases,
+ * as in the textbook: x^(1/3) at -8 is -2, and x^(2/3) at -8 is 4.
+ */
 function pow(base: number, exp: number): number {
   if (base < 0 && !Number.isInteger(exp)) {
-    const inverse = 1 / exp;
-    if (Number.isInteger(Math.round(inverse)) && Math.abs(inverse - Math.round(inverse)) < 1e-9 && Math.round(inverse) % 2 !== 0) {
-      return -Math.pow(-base, exp);
+    for (let q = 3; q <= 15; q += 2) {
+      const p = Math.round(exp * q);
+      if (Math.abs(exp * q - p) < 1e-9) return (p % 2 === 0 ? 1 : -1) * Math.pow(-base, exp);
     }
   }
   return Math.pow(base, exp);

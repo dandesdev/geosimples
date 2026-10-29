@@ -337,8 +337,8 @@ function FunctionProperties({ el, update, multi, doc }: EditorProps<FunctionGrap
   const parsed = parseExpr(text);
   const axes = doc.elements.find((e): e is Axes => e.type === "axes");
   const commit = () => {
-    if (draft === null) return;
-    if (parsed.ok) update((f) => ({ ...f, expr: text.trim() }), "expr");
+    if (draft === null || !parsed.ok) return;
+    update((f) => ({ ...f, expr: text.trim() }), "expr");
     setDraft(null);
   };
   if (multi) return <Hint>Com vários gráficos selecionados, a expressão se ajusta um por vez.</Hint>;

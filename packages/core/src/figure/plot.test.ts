@@ -48,6 +48,7 @@ describe("function graphs", () => {
     expect(p.functions).toEqual([{ name: "f", expr: "x^2 - 1" }]);
     expect(p.errors).toEqual([]);
     expect(parseInput("y=2x+1").functions).toEqual([{ name: "", expr: "2x+1" }]);
+    expect(parseInput("Y = x").functions).toEqual([{ name: "", expr: "x" }]);
     // A point named y is still a point.
     expect(parseInput("y=(1;2)").functions).toEqual([]);
     expect(parseInput("y=(1;2)").nodes).toHaveLength(1);
@@ -88,6 +89,10 @@ describe("function graphs", () => {
     const axes = doc.elements[0] as Axes;
     const gridded = { ...doc, elements: [{ ...axes, grid: true }, doc.elements[1]] };
     expect(buildScene(gridded).prims.length).toBeGreaterThan(buildScene(doc).prims.length);
+    // Lines at both ends, not only at -5: the grid is even.
+    const grid = toTikz(gridded).split("\n").find((l) => l.startsWith("\\draw[draw=gs1"))!;
+    expect(grid).toContain("(5,-5) -- (5,5)");
+    expect(grid).toContain("(-5,5) -- (5,5)");
     const broken = normalizeDoc({ ...doc, elements: [axes, { ...doc.elements[1], expr: "x +" }] });
     expect(broken.elements).toHaveLength(2);
     expect(buildScene(broken).prims.filter((p) => p.owner === "f1" && p.kind === "path")).toHaveLength(0);
