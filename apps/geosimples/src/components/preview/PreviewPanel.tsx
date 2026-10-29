@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  addFunction,
   buildScene,
   formatNumber,
   movePoints,
@@ -136,10 +137,23 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     if (draft.trim() === "") return null;
     const parsed = parseDraft(draft, doc, selection);
     // Parts typed correctly show even while a later part is unfinished.
-    return parsed.nodes.length > 0 || parsed.texts.length > 0 ? parsed : null;
+    return parsed.nodes.length > 0 || parsed.texts.length > 0 || parsed.functions.length > 0 ? parsed : null;
   }, [draft, doc, selection]);
+  /** A graph being typed (f(x) = …), drawn in the selection color with the axes it would add. */
+  const graphGhost = useMemo(() => {
+    const f = ghost?.functions[0];
+    if (!f) return null;
+    const added = addFunction(doc, f.expr, f.name);
+    if (added.error) return null;
+    const result = buildScene(added.doc, { scale });
+    const ids = new Set(added.created);
+    return { markup: sceneMarkup({ ...result, prims: result.prims.filter((p) => ids.has(p.owner)).map(tint) }), box: result.box };
+  }, [ghost, doc, scale]);
 
-  const fitted = useMemo(() => fitView(unionBox(scene.box, ghost && ghostBox(ghost, k)), k), [scene.box, ghost, k]);
+  const fitted = useMemo(
+    () => fitView(unionBox(scene.box, (ghost && ghostBox(ghost, k)) ?? graphGhost?.box ?? null), k),
+    [scene.box, ghost, graphGhost, k],
+  );
   const vb = frozen ?? (autoFit ? fitted : (view ?? fitted));
   const unitsPerPx = Math.max(vb.w / Math.max(size.w, 1), vb.h / Math.max(size.h, 1));
   const vbRef = useRef(vb);
@@ -441,6 +455,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 hit={coarse ? HIT_COARSE : HIT_FINE}
               />
               {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
+              {graphGhost && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: graphGhost.markup }} />}
               {placing && addAt && (
                 <AddMarker at={addAt} k={k} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
               )}

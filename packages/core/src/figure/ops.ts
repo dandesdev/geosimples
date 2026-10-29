@@ -878,3 +878,26 @@ export function addFunction(doc: FigureDoc, expr: string, name = "", opts: OpOpt
   const elements = existing ? [...doc.elements, graph] : [axes, ...doc.elements, graph];
   return ok(withElements(doc, elements), existing ? [graph.id] : [graph.id, axes.id]);
 }
+
+const sameInterval = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
+
+/**
+ * Changes the window of axes. Graphs drawn over the old window follow it, so
+ * widening the axes widens the curves too; graphs given their own domain or
+ * y cut keep it.
+ */
+export function setAxesWindow(doc: FigureDoc, id: Id, x: [number, number], y: [number, number]): OpResult {
+  const axes = doc.elements.find((e): e is Axes => e.id === id && e.type === "axes");
+  if (!axes) return fail(doc, "Selecione os eixos.");
+  if (!(x[0] < x[1]) || !(y[0] < y[1])) return fail(doc, "O início precisa ser menor que o fim.");
+  const elements = doc.elements.map((el): Element => {
+    if (el.id === id) return { ...axes, x, y };
+    if (el.type !== "function") return el;
+    return {
+      ...el,
+      domain: sameInterval(el.domain, axes.x) ? x : el.domain,
+      range: sameInterval(el.range, axes.y) ? y : el.range,
+    };
+  });
+  return ok(withElements(doc, elements));
+}

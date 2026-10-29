@@ -9,6 +9,7 @@ import {
   labelText,
   normalizeDoc,
   parseInput,
+  setAxesWindow,
   toSvg,
   toTikz,
   type Axes,
@@ -117,5 +118,22 @@ describe("function graphs", () => {
     const withPoint = addPoints(graph("x"), [{ x: 1, y: 1 }]);
     const after = deleteElements(withPoint.doc, withPoint.created).doc;
     expect(after.elements.map((e) => e.type)).toEqual(["axes", "function"]);
+  });
+});
+
+describe("axes window", () => {
+  it("carries the graphs drawn over it, and leaves graphs with their own domain", () => {
+    let doc = graph("x^2");
+    doc = addFunction(doc, "x").doc;
+    const own = doc.elements[2] as FunctionGraph;
+    doc = { ...doc, elements: doc.elements.map((e) => (e.id === own.id ? { ...own, domain: [0, 2] as [number, number] } : e)) };
+    const r = setAxesWindow(doc, "e1", [-8, 8], [-2, 10]);
+    const [axes, f, g] = r.doc.elements as [Axes, FunctionGraph, FunctionGraph];
+    expect(axes.x).toEqual([-8, 8]);
+    expect(f.domain).toEqual([-8, 8]);
+    expect(f.range).toEqual([-2, 10]);
+    expect(g.domain).toEqual([0, 2]);
+    expect(g.range).toEqual([-2, 10]);
+    expect(setAxesWindow(doc, "e1", [3, 1], [0, 1]).error).toMatch(/menor/);
   });
 });

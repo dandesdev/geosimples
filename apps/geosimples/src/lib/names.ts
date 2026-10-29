@@ -7,6 +7,8 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   circle: { one: "circunferência", many: "circunferências", title: "Circunferência" },
   polygon: { one: "polígono", many: "polígonos", title: "Polígono" },
   text: { one: "texto", many: "textos", title: "Texto" },
+  function: { one: "gráfico", many: "gráficos", title: "Gráfico" },
+  axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
 };
 
 /** "2 pontos, 1 segmento", or null for an empty selection. */

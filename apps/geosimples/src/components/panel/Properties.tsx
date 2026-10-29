@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from "react";
+import { setAxesWindow, type Axes, type FunctionGraph } from "@geosimples/core/figure";
+import { parseExpr } from "@geosimples/core/plot";
 import {
   angleArc,
   dist,
@@ -45,6 +47,8 @@ export function Properties() {
       {el.type === "circle" && <CircleProperties el={el} {...props} />}
       {el.type === "polygon" && <PolygonProperties el={el} {...props} />}
       {el.type === "text" && <TextProperties el={el} {...props} />}
+      {el.type === "function" && <FunctionProperties el={el} {...props} />}
+      {el.type === "axes" && <AxesProperties el={el} {...props} />}
     </div>
   );
 }
@@ -305,3 +309,115 @@ function TextProperties({ el, update, multi }: EditorProps<FreeText>) {
   );
 }
 
+
+/** A [from, to] pair of number fields; a change that would put "from" past "to" is ignored. */
+function IntervalFields({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: [number, number];
+  onChange: (next: [number, number]) => void;
+}) {
+  const set = (next: [number, number]) => next[0] < next[1] && onChange(next);
+  return (
+    <Field label={label}>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberInput ariaLabel={`${label}: de`} value={value[0]} suffix="a" onChange={(a) => set([a, value[1]])} />
+        <NumberInput ariaLabel={`${label}: até`} value={value[1]} onChange={(b) => set([value[0], b])} />
+      </div>
+    </Field>
+  );
+}
+
+function FunctionProperties({ el, update, multi, doc }: EditorProps<FunctionGraph>) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? el.expr;
+  const parsed = parseExpr(text);
+  const axes = doc.elements.find((e): e is Axes => e.type === "axes");
+  const commit = () => {
+    if (draft === null) return;
+    if (parsed.ok) update((f) => ({ ...f, expr: text.trim() }), "expr");
+    setDraft(null);
+  };
+  if (multi) return <Hint>Com vários gráficos selecionados, a expressão se ajusta um por vez.</Hint>;
+  return (
+    <>
+      <Section title="Função">
+        <Field label="y =">
+          <Input
+            value={text}
+            aria-label="Expressão da função"
+            aria-invalid={!parsed.ok}
+            spellCheck={false}
+            className="font-mono"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setDraft(null);
+            }}
+          />
+        </Field>
+        {!parsed.ok && <p className="mb-1 text-xs text-destructive">{parsed.error}</p>}
+        <Hint>Ex.: x^2 - 1, 2x + 3, sen(x), raiz(x), |x|, 1/x. Vírgula ou ponto nos decimais.</Hint>
+      </Section>
+      <Section title="Onde desenhar">
+        <IntervalFields label="x de" value={el.domain} onChange={(domain) => update((f) => ({ ...f, domain }), "domain")} />
+        <IntervalFields label="Cortar y de" value={el.range} onChange={(range) => update((f) => ({ ...f, range }), "range")} />
+        {axes && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-1 w-full"
+            onClick={() => update((f) => ({ ...f, domain: [...axes.x], range: [...axes.y] }), "fit-axes")}
+          >
+            Usar a janela dos eixos
+          </Button>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
+  const setWindow = (x: [number, number], y: [number, number]) => {
+    const store = useFigureStore.getState();
+    const r = setAxesWindow(store.doc, el.id, x, y);
+    if (!r.error) store.commit(r.doc, `${el.id}:window`);
+  };
+  if (multi) return <Hint>Com vários eixos selecionados, a janela se ajusta um por vez.</Hint>;
+  return (
+    <>
+      <Section title="Janela">
+        <IntervalFields label="x de" value={el.x} onChange={(x) => setWindow(x, el.y)} />
+        <IntervalFields label="y de" value={el.y} onChange={(y) => setWindow(el.x, y)} />
+        <Hint>Os gráficos desenhados na janela dos eixos acompanham a mudança.</Hint>
+      </Section>
+      <Section title="Marcas">
+        <Field label="De quanto em quanto">
+          <NumberInput ariaLabel="Distância entre marcas" value={el.step} min={0.01} onChange={(step) => update((a) => ({ ...a, step }), "step")} />
+        </Field>
+        <SwitchField label="Números" checked={el.numbers} onChange={(numbers) => update((a) => ({ ...a, numbers }), "numbers")} />
+        <SwitchField label="Grade" checked={el.grid} onChange={(grid) => update((a) => ({ ...a, grid }), "grid")} />
+      </Section>
+      <Section title="Nomes">
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            aria-label="Nome do eixo horizontal"
+            value={el.names[0]}
+            maxLength={20}
+            onChange={(e) => update((a) => ({ ...a, names: [e.target.value, a.names[1]] }), "name-x")}
+          />
+          <Input
+            aria-label="Nome do eixo vertical"
+            value={el.names[1]}
+            maxLength={20}
+            onChange={(e) => update((a) => ({ ...a, names: [a.names[0], e.target.value] }), "name-y")}
+          />
+        </div>
+      </Section>
+    </>
+  );
+}
