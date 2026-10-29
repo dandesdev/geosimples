@@ -69,6 +69,14 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <b>Texto livre.</b> Em Rótulos e textos › Texto livre, ou na barra de pontos com <code>"Figura 1"@(2;-1)</code>.
             Arraste o texto no modo Mover pontos e mude fonte, tamanho e cor em Formatação.
           </li>
+          {!touch && (
+            <li>
+              <b>Layout profissional.</b> Em Configurações › Aparência, ou no botão ao lado do nome do GeoSimples. A
+              prévia ocupa a tela, as ferramentas ficam numa coluna à esquerda, e Propriedades, Formatação e os outros
+              painéis viram janelas: arraste pelo título até uma borda para encaixar, ou solte sobre a prévia para
+              flutuar. O botão direito do mouse na prévia mostra todas as ações. Há também o tema escuro.
+            </li>
+          )}
           <li>
             <b>Exportar.</b> TikZ para colar no LaTeX, PNG para colar no Word ou Google Docs, SVG para editar em outros
             programas.

@@ -42,22 +42,23 @@
   }
 }
 
+/* Semantic colors come from the variables below, so the dark theme only swaps those. */
 @theme inline {
-  --color-primary: rgb(var(--color-emerald-500));
-  --color-primary-foreground: rgb(var(--color-emerald-foreground));
-  --color-foreground: rgb(var(--color-soft-black-900));
-  --color-foreground-muted: rgb(var(--color-soft-black-500));
-  --color-background: rgb(var(--color-paper-light));
-  --color-background-secondary: rgb(var(--color-surface-light));
-  --color-muted: rgb(var(--color-soft-black-200));
-  --color-muted-foreground: rgb(var(--color-soft-black-600));
-  --color-destructive: rgb(var(--color-destructive));
-  --color-destructive-foreground: rgb(var(--color-destructive-foreground));
-  --color-info: rgb(var(--color-info));
-  --color-info-foreground: rgb(var(--color-info-foreground));
-  --color-border: rgb(var(--color-border));
-  --color-input: rgb(var(--color-input));
-  --color-ring: rgb(var(--color-ring));
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -69,116 +70,67 @@
 }
 
 :root {
-  /* RGB Triplets for Tailwind opacity support */
-  /* Emerald - Primary */
-  --color-emerald-50: 240 253 244;
-  --color-emerald-100: 220 252 231;
-  --color-emerald-200: 187 247 208;
-  --color-emerald-300: 134 239 172;
+  /* Palette as RGB triplets */
   --color-emerald-400: 74 222 128;
   --color-emerald-500: 16 185 129;
-  --color-emerald-600: 5 150 105;
-  --color-emerald-700: 4 120 87;
-  --color-emerald-800: 6 95 70;
-  --color-emerald-900: 6 78 59;
-  --color-emerald-foreground: 255 255 255;
-
-  /* Soft Black - Foreground */
-  --color-soft-black-50: 245 245 245;
-  --color-soft-black-100: 229 229 229;
   --color-soft-black-200: 212 212 212;
-  --color-soft-black-300: 163 163 163;
-  --color-soft-black-400: 115 115 115;
   --color-soft-black-500: 82 82 82;
   --color-soft-black-600: 64 64 64;
-  --color-soft-black-700: 51 51 51;
-  --color-soft-black-800: 38 38 38;
   --color-soft-black-900: 26 26 26;
-
-  /* Paper - Background */
   --color-paper-light: 250 249 246;
-  --color-paper-dark: 18 18 18;
 
-  /* Surface */
-  --color-surface-light: 255 255 255;
-  --color-surface-dark: 38 38 38;
-
-  /* Semantic */
-  --color-destructive: 239 68 68;
-  --color-destructive-foreground: 255 255 255;
-  --color-info: 115 115 115;
-  --color-info-foreground: 64 64 64;
-  --color-border: 180 180 180;
-  --color-input: 180 180 180;
-  --color-ring: 16 185 129;
-  --radius: 0.625rem;
-
-  /* Shadcn CSS variables (using our RGB values) */
   --background: rgb(var(--color-paper-light));
+  --background-secondary: rgb(255 255 255);
   --foreground: rgb(var(--color-soft-black-900));
-  --card: rgb(var(--color-surface-light));
+  --foreground-muted: rgb(var(--color-soft-black-500));
+  --card: rgb(255 255 255);
   --card-foreground: rgb(var(--color-soft-black-900));
-  --popover: rgb(var(--color-surface-light));
+  --popover: rgb(255 255 255);
   --popover-foreground: rgb(var(--color-soft-black-900));
   --primary: rgb(var(--color-emerald-500));
-  --primary-foreground: rgb(var(--color-emerald-foreground));
+  --primary-foreground: rgb(255 255 255);
   --secondary: rgb(var(--color-soft-black-200));
   --secondary-foreground: rgb(var(--color-soft-black-900));
   --muted: rgb(var(--color-soft-black-200));
   --muted-foreground: rgb(var(--color-soft-black-600));
   --accent: rgb(var(--color-soft-black-200));
   --accent-foreground: rgb(var(--color-soft-black-900));
-  --destructive: rgb(var(--color-destructive));
-  --destructive-foreground: rgb(var(--color-destructive-foreground));
-  --border: rgb(var(--color-border));
-  --input: rgb(var(--color-input));
-  --ring: rgb(var(--color-ring));
-
-  /* Chart colors (optional) */
-  --chart-1: 16 185 129;
-  --chart-2: 74 222 128;
-  --chart-3: 134 239 172;
-  --chart-4: 187 247 208;
-  --chart-5: 220 252 231;
+  --destructive: rgb(239 68 68);
+  --destructive-foreground: rgb(255 255 255);
+  --info: rgb(115 115 115);
+  --info-foreground: rgb(64 64 64);
+  --border: rgb(180 180 180);
+  --input: rgb(180 180 180);
+  --ring: rgb(var(--color-emerald-500));
+  --radius: 0.625rem;
 }
 
+/* Dark UI around the figure. The preview stays white paper, as printed. */
 .dark {
-  --color-foreground: 255 255 255;
-  --color-foreground-muted: 163 163 163;
-  --color-background: var(--color-paper-dark);
-  --color-background-secondary: var(--color-surface-dark);
-  --color-muted: 82 82 82;
-  --color-muted-foreground: 115 115 115;
-  --color-border: 64 64 64;
-  --color-input: 64 64 64;
-
-  /* Shadcn dark mode variables */
-  --background: rgb(var(--color-paper-dark));
-  --foreground: 255 255 255;
-  --card: rgb(var(--color-surface-dark));
-  --card-foreground: 255 255 255;
-  --popover: rgb(var(--color-surface-dark));
-  --popover-foreground: 255 255 255;
+  color-scheme: dark;
+  --background: rgb(27 27 28);
+  --background-secondary: rgb(38 38 38);
+  --foreground: rgb(232 232 232);
+  --foreground-muted: rgb(163 163 163);
+  --card: rgb(37 37 38);
+  --card-foreground: rgb(232 232 232);
+  --popover: rgb(43 43 44);
+  --popover-foreground: rgb(232 232 232);
   --primary: rgb(var(--color-emerald-500));
-  --primary-foreground: rgb(var(--color-emerald-foreground));
-  --secondary: rgb(var(--color-soft-black-800));
-  --secondary-foreground: 255 255 255;
-  --muted: rgb(var(--color-soft-black-800));
-  --muted-foreground: rgb(var(--color-soft-black-400));
-  --accent: rgb(var(--color-soft-black-800));
-  --accent-foreground: 255 255 255;
-  --destructive: rgb(var(--color-destructive));
-  --destructive-foreground: rgb(var(--color-destructive-foreground));
-  --border: rgb(var(--color-soft-black-800));
-  --input: rgb(var(--color-soft-black-800));
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(58 58 60);
+  --secondary-foreground: rgb(232 232 232);
+  --muted: rgb(58 58 60);
+  --muted-foreground: rgb(168 168 168);
+  --accent: rgb(58 58 60);
+  --accent-foreground: rgb(232 232 232);
+  --destructive: rgb(240 82 82);
+  --destructive-foreground: rgb(255 255 255);
+  --info: rgb(138 138 138);
+  --info-foreground: rgb(200 200 200);
+  --border: rgb(61 61 63);
+  --input: rgb(74 74 76);
   --ring: rgb(var(--color-emerald-400));
-
-  /* Chart colors dark */
-  --chart-1: 16 185 129;
-  --chart-2: 74 222 128;
-  --chart-3: 134 239 172;
-  --chart-4: 187 247 208;
-  --chart-5: 220 252 231;
 }
 
 * {

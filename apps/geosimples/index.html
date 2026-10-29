@@ -9,6 +9,14 @@
       content="Crie figuras geométricas para provas e materiais didáticos e exporte em TikZ (LaTeX), PNG ou SVG."
     />
     <title>GeoSimples</title>
+    <script>
+      // The saved theme, before the first paint, so a dark page doesn't flash white.
+      try {
+        const t = JSON.parse(localStorage.getItem("geosimples-workspace") || "{}").state?.theme;
+        if (t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

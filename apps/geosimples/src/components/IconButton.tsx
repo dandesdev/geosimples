@@ -3,6 +3,7 @@ import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
+import { useTooltipSide } from "@/components/tooltipSide";
 import type { ActionId } from "@/store/prefsStore";
 
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -32,6 +33,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const timer = useRef<number | undefined>(undefined);
+  const side = useTooltipSide();
 
   const explain = () => {
     setPinned(true);
@@ -70,7 +72,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
           )}
         </button>
       </TooltipTrigger>
-      <TooltipContent className="max-w-72">
+      <TooltipContent side={side} className="max-w-72">
         <p className="flex items-center gap-2 font-medium">
           {label}
           {shortcut && <ShortcutKeys action={shortcut} />}

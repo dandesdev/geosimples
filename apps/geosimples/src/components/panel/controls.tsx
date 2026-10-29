@@ -201,33 +201,39 @@ export function Choice<T extends string>({
   value,
   options,
   onChange,
+  help,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string; title?: string }[];
   onChange: (v: T) => void;
+  /** What the choice means, behind a "?" next to it. */
+  help?: ReactNode;
 }) {
   return (
     <Field label={label}>
-      <ToggleGroup
-        type="single"
-        value={value}
-        onValueChange={(v) => v && onChange(v as T)}
-        aria-label={label}
-        className="flex-wrap justify-start gap-0.5"
-      >
-        {options.map((o) => (
-          <ToggleGroupItem
-            key={o.value}
-            value={o.value}
-            title={o.title ?? o.label}
-            aria-label={o.title ?? o.label}
-            className="h-7 min-w-7 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-          >
-            {o.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <div className="flex items-center gap-1">
+        <ToggleGroup
+          type="single"
+          value={value}
+          onValueChange={(v) => v && onChange(v as T)}
+          aria-label={label}
+          className="flex-wrap justify-start gap-0.5"
+        >
+          {options.map((o) => (
+            <ToggleGroupItem
+              key={o.value}
+              value={o.value}
+              title={o.title ?? o.label}
+              aria-label={o.title ?? o.label}
+              className="h-7 min-w-7 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              {o.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        {help && <HelpTip label={`Sobre ${label}`}>{help}</HelpTip>}
+      </div>
     </Field>
   );
 }

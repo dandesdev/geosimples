@@ -3,6 +3,7 @@ import { useFigureStore } from "@/store/figureStore";
 import { TYPE_NAMES } from "@/lib/names";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { useActivePrefs } from "@/store/useActivePrefs";
+import { cn } from "@/lib/utils";
 
 const SNAP_HINT = " Perto da grade, encaixa no cruzamento.";
 
@@ -26,7 +27,7 @@ const TOUCH_HINTS = {
  * What is selected, or how to select. Over the bottom of the preview on wider
  * screens; below it on phones, where it would cover the figure.
  */
-export function SelectionSummary({ placement }: { placement: "overlay" | "below" }) {
+export function SelectionSummary({ placement }: { placement: "overlay" | "overlay-top" | "below" }) {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
   const mode = useFigureStore((s) => s.mode);
@@ -51,11 +52,14 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "below"
   return (
     <p
       aria-live="polite"
-      className={
-        placement === "overlay"
-          ? "pointer-events-none absolute bottom-2 left-2 right-14 truncate rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground"
-          : "-mt-1.5 px-1 text-xs text-muted-foreground"
-      }
+      className={cn(
+        placement === "below"
+          ? "-mt-1.5 px-1 text-xs text-muted-foreground"
+          : "pointer-events-none absolute left-2 right-14 truncate rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground",
+        // The pro layout's point input slides up from the bottom, so the hint goes on top.
+        placement === "overlay" && "bottom-2",
+        placement === "overlay-top" && "top-2",
+      )}
     >
       {text}
     </p>

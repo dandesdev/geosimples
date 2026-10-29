@@ -1,30 +1,27 @@
-import { useCallback, useState } from "react";
-import { CircleHelp, Settings } from "lucide-react";
+import { CircleHelp, LayoutDashboard, Moon, Settings, Sun } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { IconButton } from "@/components/IconButton";
 import { Logo } from "@/components/icons";
-import { LazyHelpDialog, LazySettingsDialog } from "@/components/dialogs/lazy";
-import { MountOnFirstOpen } from "@/components/dialogs/MountOnFirstOpen";
 import { FigureBar } from "@/components/figures/FigureBar";
-import { useCommand } from "@/lib/commands";
+import { emitCommand } from "@/lib/commands";
+import { nextTheme, useDarkTheme } from "@/lib/theme";
 import { useSidePanelBeside } from "@/lib/useMediaQuery";
 import { activeProfileName, usePrefsStore } from "@/store/prefsStore";
 import { usePanelStore } from "@/store/panelStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { Formatting } from "./Formatting";
 import { LabelTools } from "./LabelTools";
 import { Properties } from "./Properties";
 import { SelectionHeader } from "./SelectionHeader";
 
 export function SidePanel() {
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const profileName = usePrefsStore((s) => activeProfileName(s));
   const open = usePanelStore((s) => s.open);
   // Narrower, the panel sits below the fold: editing the selection moves to EditSheet.
   const beside = useSidePanelBeside();
   const setOpen = usePanelStore((s) => s.setOpen);
-  useCommand("help", useCallback(() => setHelpOpen(true), []));
-  useCommand("settings", useCallback(() => setSettingsOpen(true), []));
+  const dark = useDarkTheme();
+  const ws = useWorkspaceStore.getState;
 
   return (
     <aside aria-label="Painel" className="flex min-h-0 flex-col rounded-lg border bg-card">
@@ -34,15 +31,31 @@ export function SidePanel() {
           GeoSimples
         </h1>
         <div className="flex items-center gap-0.5">
+          {beside && (
+            <IconButton
+              label="Layout profissional"
+              hint="A tela inteira para a prévia, ferramentas numa coluna à esquerda e janelas que se encaixam nas bordas ou flutuam."
+              onClick={() => ws().setLayout("pro")}
+            >
+              <LayoutDashboard />
+            </IconButton>
+          )}
+          <IconButton
+            label={dark ? "Tema claro" : "Tema escuro"}
+            hint="A prévia continua branca, como no papel."
+            onClick={() => ws().setTheme(nextTheme(dark))}
+          >
+            {dark ? <Sun /> : <Moon />}
+          </IconButton>
           <IconButton
             label="Configurações"
-            hint={`Em uso: ${profileName}. Padrões, comportamento e atalhos.`}
+            hint={`Em uso: ${profileName}. Padrões, comportamento, atalhos e aparência.`}
             shortcut="settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => emitCommand("settings")}
           >
             <Settings />
           </IconButton>
-          <IconButton label="Como usar" shortcut="help" onClick={() => setHelpOpen(true)}>
+          <IconButton label="Como usar" shortcut="help" onClick={() => emitCommand("help")}>
             <CircleHelp />
           </IconButton>
         </div>
@@ -75,12 +88,6 @@ export function SidePanel() {
           </AccordionItem>
         </Accordion>
       </div>
-      <MountOnFirstOpen open={helpOpen}>
-        <LazyHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      </MountOnFirstOpen>
-      <MountOnFirstOpen open={settingsOpen}>
-        <LazySettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      </MountOnFirstOpen>
     </aside>
   );
 }

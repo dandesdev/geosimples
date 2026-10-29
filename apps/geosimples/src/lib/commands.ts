@@ -1,7 +1,15 @@
 import { useEffect } from "react";
 
 /** Commands that a component carries out, like opening a dialog or zooming. */
-export type UiCommand = "export" | "help" | "settings" | "focusInput" | "zoomIn" | "zoomOut" | "toggleAutoFit";
+export type UiCommand =
+  | "export"
+  | "help"
+  | "settings"
+  | "focusInput"
+  | "zoomIn"
+  | "zoomOut"
+  | "toggleAutoFit"
+  | "confirmClear";
 
 const listeners = new Map<UiCommand, Set<() => void>>();
 

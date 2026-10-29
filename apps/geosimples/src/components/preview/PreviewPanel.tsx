@@ -21,6 +21,7 @@ import { ActionBar } from "./ActionBar";
 import { ZoomBar } from "./ZoomBar";
 import { EmptyState } from "./EmptyState";
 import { SelectionSummary } from "./SelectionSummary";
+import { PreviewMenu } from "./PreviewMenu";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
 import { parseDraft } from "@/lib/inputContext";
@@ -85,7 +86,11 @@ function initialView(): View | null {
   return fitView(scene.box, scene.k);
 }
 
-export function PreviewPanel() {
+/**
+ * The figure, its view controls and the hint line. `pro` is the pro layout:
+ * edge to edge, with the tools in the side column instead of a bar on top.
+ */
+export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
   const mode = useFigureStore((s) => s.mode);
@@ -119,6 +124,8 @@ export function PreviewPanel() {
   const [box, setBox] = useState<Box | null>(null);
   /** Where a click would put a point in add mode, under the mouse. */
   const [addAt, setAddAt] = useState<Vec | null>(null);
+  /** Where the preview was right-clicked, for the menu's "Adicionar ponto aqui". */
+  const [menuAt, setMenuAt] = useState<Vec | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -201,6 +208,16 @@ export function PreviewPanel() {
 
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
+
+  /** A right click: an object under the pointer becomes the selection, unless it is already part of it. */
+  const onContextMenu = (e: React.MouseEvent) => {
+    const svg = svgRef.current;
+    const onFigure = !!svg && e.target instanceof Node && svg.contains(e.target);
+    setMenuAt(onFigure ? pointAt(e.clientX, e.clientY) : null);
+    const owner = onFigure ? ownerAt(e.target) : null;
+    const store = useFigureStore.getState();
+    if (owner && !store.selection.includes(owner)) store.pick(owner, false);
+  };
 
   /** Drops the gesture in progress without selecting or moving anything. */
   const abortGesture = () => {
@@ -383,67 +400,72 @@ export function PreviewPanel() {
       <section
         aria-label="Prévia da figura"
         // A sideways phone is short: the 18rem floor keeps the figure readable, and the page scrolls.
-        className="relative flex min-h-[max(55dvh,18rem)] flex-1 flex-col overflow-hidden rounded-lg border bg-card lg:min-h-0"
+        className={cn(
+          "relative flex flex-1 flex-col overflow-hidden bg-card",
+          pro ? "h-full min-h-0" : "min-h-[max(55dvh,18rem)] rounded-lg border lg:min-h-0",
+        )}
       >
-        <ActionBar compact={!roomy} zoom={roomy ? null : zoom} />
-        <div ref={containerRef} className="relative min-h-0 flex-1">
-          <svg
-            ref={svgRef}
-            className={cn(
-              // touch-none keeps the browser from scrolling or zooming the page under the fingers.
-              "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
-              mode === "pan" && "cursor-grab active:cursor-grabbing",
-              mode === "select" && "cursor-crosshair",
-              placing && "cursor-copy",
-            )}
-            viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-            preserveAspectRatio="xMidYMid meet"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerCancel}
-            onPointerLeave={() => setAddAt(null)}
-            // Stops the browser's autoscroll from starting on a middle click.
-            onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-            onAuxClick={(e) => e.preventDefault()}
-          >
-            {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
-            <g dangerouslySetInnerHTML={{ __html: markup }} />
-            {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
-            <Overlay
-              hits={scene.hits}
-              selection={selection}
-              pointOrder={pointOrder}
-              unitsPerPx={unitsPerPx}
-              moveMode={mode === "move"}
-              doc={doc}
-              hit={coarse ? HIT_COARSE : HIT_FINE}
-            />
-            {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
-            {placing && addAt && (
-              <AddMarker at={addAt} k={k} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
-            )}
-            {box && (
-              <rect
-                x={box.minX}
-                y={box.minY}
-                width={box.maxX - box.minX}
-                height={box.maxY - box.minY}
-                fill={PRIMARY}
-                fillOpacity={0.08}
-                stroke={PRIMARY}
-                strokeWidth={1}
-                strokeDasharray="4 3"
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
+        {!pro && <ActionBar layout={roomy ? "row" : "strip"} zoom={roomy ? null : zoom} />}
+        <PreviewMenu at={menuAt} zoom={zoom}>
+          <div ref={containerRef} className="relative min-h-0 flex-1" onContextMenu={onContextMenu}>
+            <svg
+              ref={svgRef}
+              className={cn(
+                // touch-none keeps the browser from scrolling or zooming the page under the fingers.
+                "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
+                mode === "pan" && "cursor-grab active:cursor-grabbing",
+                mode === "select" && "cursor-crosshair",
+                placing && "cursor-copy",
+              )}
+              viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+              preserveAspectRatio="xMidYMid meet"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+              onPointerLeave={() => setAddAt(null)}
+              // Stops the browser's autoscroll from starting on a middle click.
+              onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+              onAuxClick={(e) => e.preventDefault()}
+            >
+              {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
+              <g dangerouslySetInnerHTML={{ __html: markup }} />
+              {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
+              <Overlay
+                hits={scene.hits}
+                selection={selection}
+                pointOrder={pointOrder}
+                unitsPerPx={unitsPerPx}
+                moveMode={mode === "move"}
+                doc={doc}
+                hit={coarse ? HIT_COARSE : HIT_FINE}
               />
-            )}
-          </svg>
-          {/* In add mode the whole preview is for clicking, and the hint below says how. */}
-          {empty && !placing && <EmptyState />}
-          {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
-          {roomy && <SelectionSummary placement="overlay" />}
-        </div>
+              {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
+              {placing && addAt && (
+                <AddMarker at={addAt} k={k} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
+              )}
+              {box && (
+                <rect
+                  x={box.minX}
+                  y={box.minY}
+                  width={box.maxX - box.minX}
+                  height={box.maxY - box.minY}
+                  fill={PRIMARY}
+                  fillOpacity={0.08}
+                  stroke={PRIMARY}
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+              )}
+            </svg>
+            {/* In add mode the whole preview is for clicking, and the hint below says how. */}
+            {empty && !placing && <EmptyState pro={pro} />}
+            {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
+            {roomy && <SelectionSummary placement={pro ? "overlay-top" : "overlay"} />}
+          </div>
+        </PreviewMenu>
       </section>
       {/* Phones have no room to float the hint over the figure, so it goes below the preview. */}
       {!roomy && <SelectionSummary placement="below" />}
