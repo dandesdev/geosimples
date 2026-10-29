@@ -1,4 +1,5 @@
-import { DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
+import { DEFAULT_AXES_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
+import { parseExpr } from "../plot";
 import {
   angleArc,
   circumcircle,
@@ -12,6 +13,8 @@ import {
 import { labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
+  Axes,
+  FunctionGraph,
   Angle,
   Circle,
   CircleConstruction,
@@ -80,6 +83,8 @@ const PREFIX: Record<ElementType, string> = {
   circle: "c",
   polygon: "g",
   text: "t",
+  function: "f",
+  axes: "e",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
@@ -131,6 +136,10 @@ export function addPoints(doc: FigureDoc, parsed: ParsedPoint[], opts: OpOptions
  */
 export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions = {}): OpResult {
   if (parsed.errors.length > 0) return fail(doc, parsed.errors[0].message);
+  if (parsed.functions.length > 0) {
+    const [f] = parsed.functions;
+    return addFunction(doc, f.expr, f.name, opts);
+  }
   if (parsed.nodes.length === 0 && parsed.texts.length === 0) return ok(doc);
   const fresh = parsed.nodes.filter((n) => n.kind === "new");
   if (!roomFor(doc, fresh.length + parsed.segments.length + parsed.texts.length)) return fail(doc, LIMIT_ERROR);
@@ -417,6 +426,8 @@ function referencedPoints(el: Element): Id[] {
   switch (el.type) {
     case "point":
     case "text":
+    case "function":
+    case "axes":
       return [];
     case "segment":
       return [el.a, el.b];
@@ -707,7 +718,7 @@ export function addText(doc: FigureDoc, at: { x: number; y: number }, text: stri
 
 export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
-    if (el.type === "text") return el;
+    if (el.type === "text" || el.type === "axes") return el;
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
       const next = { ...el };
@@ -822,4 +833,48 @@ export function quickFigureStep(
 function onOneLine(vs: Vec[]): boolean {
   const [a, b] = vs;
   return vs.every((p) => Math.abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) < 1e-9);
+}
+
+/** Names given to graphs typed as y = …: f, g, h, then f₁, f₂… */
+const FUNCTION_NAMES = ["f", "g", "h", "p", "q", "r"];
+
+function nextFunctionName(doc: FigureDoc): string {
+  const used = new Set(doc.elements.flatMap((e) => (e.type === "function" && e.label ? [e.label.text] : [])));
+  return FUNCTION_NAMES.find((n) => !used.has(n)) ?? `f${used.size + 1}`;
+}
+
+/**
+ * Adds the graph of y = expr, named `name` (or the next free of f, g, h…).
+ * It spans the figure's axes, which are added first when there are none.
+ */
+export function addFunction(doc: FigureDoc, expr: string, name = "", opts: OpOptions = {}): OpResult {
+  const parsed = parseExpr(expr);
+  if (!parsed.ok) return fail(doc, parsed.error);
+  const existing = doc.elements.find((e): e is Axes => e.type === "axes");
+  if (!roomFor(doc, existing ? 1 : 2)) return fail(doc, LIMIT_ERROR);
+  const nextId = idMaker(doc);
+  const axes: Axes = existing ?? {
+    id: nextId("axes"),
+    type: "axes",
+    x: [...DEFAULT_PLOT_WINDOW.x],
+    y: [...DEFAULT_PLOT_WINDOW.y],
+    step: 1,
+    numbers: true,
+    grid: false,
+    names: ["x", "y"],
+    stroke: { ...DEFAULT_AXES_STROKE },
+    size: 8,
+  };
+  const graph: FunctionGraph = {
+    id: nextId("function"),
+    type: "function",
+    expr: expr.trim(),
+    domain: [...axes.x],
+    range: [...axes.y],
+    stroke: { ...stylesOf(opts).stroke },
+    label: withText(undefined, name || nextFunctionName(doc), stylesOf(opts).label),
+  };
+  // Axes go first, so everything else draws over them.
+  const elements = existing ? [...doc.elements, graph] : [axes, ...doc.elements, graph];
+  return ok(withElements(doc, elements), existing ? [graph.id] : [graph.id, axes.id]);
 }
