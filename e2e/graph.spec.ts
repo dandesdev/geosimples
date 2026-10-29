@@ -58,3 +58,24 @@ test("selecting a graph lets its expression and the axes window change", async (
     .poll(() => page.evaluate(() => localStorage.getItem(`geosimples-figure:${JSON.parse(localStorage.getItem("geosimples-library")!).activeId}`)))
     .toMatch(/"domain":\[-5,8\]/);
 });
+
+test("a half-typed expression stays with its graph when another one is selected", async ({ page }) => {
+  for (const f of ["y=x", "y=-x"]) {
+    await pointInput(page).fill(f);
+    await pointInput(page).press("Enter");
+  }
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 2 });
+  // Each line crosses its box corner to corner: y = x up to the right, y = -x up to the left.
+  const clickOn = async (id: string, fx: number) => {
+    const line = page.locator(`[data-owner="${id}"]`).first();
+    const box = (await line.boundingBox())!;
+    await line.click({ position: { x: box.width * fx, y: box.height * 0.25 } });
+  };
+  await clickOn("f1", 0.75);
+  const expr = page.getByRole("textbox", { name: "Expressão da função" });
+  await expect(expr).toHaveValue("x");
+  await expr.fill("x +");
+  await clickOn("f2", 0.25);
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  await expect(expr).toHaveValue("-x");
+});

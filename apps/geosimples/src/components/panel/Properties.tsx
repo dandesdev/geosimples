@@ -47,7 +47,8 @@ export function Properties() {
       {el.type === "circle" && <CircleProperties el={el} {...props} />}
       {el.type === "polygon" && <PolygonProperties el={el} {...props} />}
       {el.type === "text" && <TextProperties el={el} {...props} />}
-      {el.type === "function" && <FunctionProperties el={el} {...props} />}
+      {/* Keyed, so a half-typed expression stays with its graph when the selection changes. */}
+      {el.type === "function" && <FunctionProperties key={el.id} el={el} {...props} />}
       {el.type === "axes" && <AxesProperties el={el} {...props} />}
     </div>
   );
