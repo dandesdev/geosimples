@@ -86,7 +86,7 @@ export function ShareContent() {
             </div>
             {url && url.length > SHARE_LINK_WARN_LENGTH && (
               <p role="status" className="mt-2 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span>
                   Este link tem {url.length.toLocaleString("pt-BR")} caracteres. Links tão longos podem ser cortados
                   por e-mail ou mensageiros; se não abrir, envie o arquivo.

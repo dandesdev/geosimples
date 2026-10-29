@@ -1,58 +1,21 @@
 import { useRef } from "react";
-import { CheckCheck, Hand, Move, SquareDashedMousePointer } from "lucide-react";
+import { CheckCheck } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
-import { AddPointIcon, QuickFigureIcon } from "@/components/icons";
-import { useFigureStore, type CanvasMode } from "@/store/figureStore";
-import type { ActionId } from "@/store/prefsStore";
+import { useFigureStore } from "@/store/figureStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
+import { cn } from "@/lib/utils";
+import { MODES } from "./tools";
 
 /** How long Adicionar pontos is held to switch to Figura rápida. */
 const HOLD_MS = 500;
 
-const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: string; icon: React.ReactNode }[] = [
-  {
-    mode: "select",
-    action: "modeSelect",
-    label: "Selecionar",
-    hint: "Arraste para selecionar o que estiver dentro da caixa. Shift soma à seleção.",
-    icon: <SquareDashedMousePointer />,
-  },
-  {
-    mode: "pan",
-    action: "modePan",
-    label: "Mover a vista",
-    hint: "Arraste para deslocar a prévia.",
-    icon: <Hand />,
-  },
-  {
-    mode: "move",
-    action: "modeMove",
-    label: "Mover pontos",
-    hint: "Arraste um ponto, ou vários selecionados, para mudá-los de lugar.",
-    icon: <Move />,
-  },
-  {
-    mode: "add",
-    action: "modeAdd",
-    label: "Adicionar pontos",
-    hint: "Clique na prévia para criar um ponto ali. Segure o botão para Figura rápida.",
-    icon: <AddPointIcon />,
-  },
-  {
-    mode: "figure",
-    action: "modeFigure",
-    label: "Figura rápida",
-    hint: "Cada clique põe um vértice ligado ao anterior; o terceiro fecha o polígono, com preenchimento e ângulos.",
-    icon: <QuickFigureIcon />,
-  },
-];
 
 /**
  * What pressing and dragging in the preview does, and whether clicks add to
  * the selection. Figura rápida shows when the profile turns it on, or while
  * it is in use after holding Adicionar pontos.
  */
-export function ModeSwitch() {
+export function ModeSwitch({ vertical = false }: { vertical?: boolean }) {
   const mode = useFigureStore((s) => s.mode);
   const setMode = useFigureStore((s) => s.setMode);
   const multiSelect = useFigureStore((s) => s.multiSelect);
@@ -74,7 +37,11 @@ export function ModeSwitch() {
   const shown = MODES.filter((m) => m.mode !== "figure" || quickFigure || mode === "figure");
   return (
     <>
-      <div role="group" aria-label="Ao clicar ou arrastar na prévia" className="flex shrink-0 gap-0.5 rounded-md bg-muted/60 p-0.5">
+      <div
+        role="group"
+        aria-label="Ao clicar ou arrastar na prévia"
+        className={cn("flex shrink-0 gap-0.5 rounded-md bg-muted/60 p-0.5", vertical && "flex-col")}
+      >
         {shown.map((m) => (
           <IconButton
             key={m.mode}
@@ -100,7 +67,7 @@ export function ModeSwitch() {
               onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
             })}
           >
-            {m.icon}
+            <m.Icon />
           </IconButton>
         ))}
       </div>

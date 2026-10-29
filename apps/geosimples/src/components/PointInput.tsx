@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CircleHelp, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { applyInput, type InputTokenKind, type ParsedInput } from "@geosimples/core/figure";
@@ -14,8 +14,8 @@ import { opOptions } from "@/store/prefsStore";
 const TOKEN_CLASS: Record<InputTokenKind, string> = {
   name: "text-primary",
   point: "rounded-sm bg-primary/10",
-  ref: "text-sky-700",
-  text: "text-amber-700",
+  ref: "text-sky-700 dark:text-sky-400",
+  text: "text-amber-700 dark:text-amber-400",
   // The text stays "--" but shows as a connector line, so it can't be mistaken for a minus.
   connector:
     "relative text-transparent after:absolute after:inset-x-px after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
@@ -50,7 +50,12 @@ function summary(parsed: ParsedInput): string {
   return list ? `${list}. Enter para adicionar.` : "";
 }
 
-export function PointInput() {
+/**
+ * `floating`: over the preview, in the pro layout. The message line shows only
+ * when there is one, and Escape leaves the input so it can hide again.
+ * `extra` goes before the Adicionar button.
+ */
+export function PointInput({ floating = false, extra }: { floating?: boolean; extra?: ReactNode }) {
   const text = useFigureStore((s) => s.inputDraft);
   const setText = useFigureStore((s) => s.setInputDraft);
   const doc = useFigureStore((s) => s.doc);
@@ -88,7 +93,10 @@ export function PointInput() {
   return (
     <div className="flex shrink-0 flex-col gap-1">
       <form
-        className="flex items-center gap-2 rounded-lg border bg-card p-1.5 focus-within:ring-2 focus-within:ring-primary/50"
+        className={cn(
+          "flex items-center gap-2 rounded-lg border bg-card p-1.5 focus-within:ring-2 focus-within:ring-primary/50",
+          floating && "shadow-lg",
+        )}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -122,6 +130,9 @@ export function PointInput() {
             }}
             onScroll={syncScroll}
             onSelect={syncScroll}
+            onKeyDown={(e) => {
+              if (floating && e.key === "Escape") e.currentTarget.blur();
+            }}
             autoComplete="off"
             autoCorrect="off"
             // Point names are capital letters; on phones this saves a shift per name.
@@ -181,6 +192,7 @@ export function PointInput() {
             </p>
           </TooltipContent>
         </Tooltip>
+        {extra}
         <Button
           type="submit"
           size="sm"
@@ -195,7 +207,8 @@ export function PointInput() {
         id="point-input-message"
         aria-live="polite"
         className={cn(
-          "min-h-4 px-2 text-xs",
+          "px-2 text-xs",
+          floating ? (message ? "self-start rounded bg-card/95 py-0.5 shadow-sm" : "sr-only") : "min-h-4",
           parsed.errors.length > 0 ? "text-destructive" : "text-muted-foreground",
         )}
       >

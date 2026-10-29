@@ -49,6 +49,54 @@ import {
   type Prefs,
 } from "@/store/prefsStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
+import { useWorkspaceStore, type Layout, type Theme } from "@/store/workspaceStore";
+import { THEME_NAMES } from "@/lib/theme";
+import { useSidePanelBeside } from "@/lib/useMediaQuery";
+
+/** Layout and theme belong to this computer, not to a profile: switching profiles keeps them. */
+function AppearanceSettings() {
+  const layout = useWorkspaceStore((s) => s.layout);
+  const theme = useWorkspaceStore((s) => s.theme);
+  const inputAutoHide = useWorkspaceStore((s) => s.inputAutoHide);
+  const ws = useWorkspaceStore.getState;
+  const desktop = useSidePanelBeside();
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">Vale para este computador, em qualquer perfil.</p>
+      <Choice
+        label="Layout"
+        value={layout}
+        options={[
+          { value: "classic", label: "Clássico" },
+          { value: "pro", label: "Profissional" },
+        ]}
+        onChange={(next: Layout) => ws().setLayout(next)}
+        help="Clássico: barra de ferramentas em cima da prévia e painel à direita. Profissional: a prévia ocupa a tela, as ferramentas ficam numa coluna à esquerda e cada painel vira uma janela que se encaixa em qualquer borda ou flutua sobre a prévia. Precisa de uma janela com 1024 px de largura ou mais."
+      />
+      {layout === "pro" && !desktop && (
+        <p className="text-xs text-muted-foreground">Esta janela é estreita: o layout profissional aparece quando ela for mais larga.</p>
+      )}
+      <Choice
+        label="Tema"
+        value={theme}
+        options={(Object.keys(THEME_NAMES) as Theme[]).map((t) => ({ value: t, label: THEME_NAMES[t] }))}
+        onChange={(next: Theme) => ws().setTheme(next)}
+      />
+      <SwitchField
+        label="Esconder a barra de pontos"
+        checked={inputAutoHide}
+        onChange={(on) => ws().setInputAutoHide(on)}
+        help="No layout profissional, a barra de pontos some até o mouse chegar à borda de baixo da prévia, ou até você teclar /."
+      />
+      <Field label="Janelas">
+        <Button variant="outline" size="sm" className="justify-self-start" onClick={() => ws().resetWindows()}>
+          <RotateCcw />
+          Restaurar janelas
+        </Button>
+      </Field>
+    </>
+  );
+}
 
 /** Marks an input whose Escape key cancels its own edit instead of closing the dialog. */
 const OWN_ESCAPE = "data-own-escape";
@@ -143,6 +191,9 @@ function SettingsBody() {
           </TabsTrigger>
           <TabsTrigger value="shortcuts" className={TAB}>
             Atalhos
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className={TAB}>
+            Aparência
           </TabsTrigger>
         </TabsList>
 
@@ -397,6 +448,12 @@ function SettingsBody() {
               shortcuts={prefs.shortcuts}
               onChange={(shortcuts) => update((p) => ({ ...p, shortcuts }))}
             />
+          </TabBody>
+        </TabsContent>
+
+        <TabsContent value="appearance" className={TAB_CONTENT}>
+          <TabBody narrow>
+            <AppearanceSettings />
           </TabBody>
         </TabsContent>
       </Tabs>
