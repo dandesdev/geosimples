@@ -1,4 +1,4 @@
-import { INK, isValidColor } from "./defaults";
+import { AXES_GRID, INK, isValidColor } from "./defaults";
 import {
   angleArc,
   angleArcRadii,
@@ -8,7 +8,8 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
+import { estimateTextWidth, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
+import { axesOrigin, axisTicks, functionLines, gridValues } from "./plot";
 import { PATTERN } from "./svg";
 import type { Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
@@ -80,10 +81,15 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       .map((l) => `\\draw${opts(strokeOpts({ ...s, dash: "solid" }))} ${shifted(base, l.from)} -- ${shifted(base, l.to)};`)
       .join("\n");
 
-  const sections: Record<"coords" | "polygon" | "circle" | "angle" | "segment" | "point" | "label", string[]> = {
+  const sections: Record<
+    "coords" | "axes" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    string[]
+  > = {
     coords: [],
+    axes: [],
     polygon: [],
     circle: [],
+    function: [],
     angle: [],
     segment: [],
     point: [],
@@ -181,6 +187,60 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         sections.polygon.push(`\\path${opts(o)} ${vs.map((id) => `(${id})`).join(" -- ")} -- cycle;`);
         break;
       }
+      case "function": {
+        // The sampled points, as in the SVG: plain TikZ, no pgfplots, and pgf's degree-based trig never comes in.
+        for (const line of functionLines(el)) {
+          const coords: string[] = [];
+          for (let i = 0; i < line.length; i += 6) {
+            coords.push(line.slice(i, i + 6).map((p) => `(${at(p)})`).join(" "));
+          }
+          sections.function.push(`\\draw${opts(strokeOpts(el.stroke))} plot coordinates {\n  ${coords.join("\n  ")}\n};`);
+        }
+        break;
+      }
+      case "axes": {
+        const o = axesOrigin(el);
+        const xs = axisTicks(el.x, el.step, o.x);
+        const ys = axisTicks(el.y, el.step, o.y);
+        if (el.grid) {
+          const grid = gridValues(el.x, el.step)
+            .map((x) => `(${at({ x, y: el.y[0] })}) -- (${at({ x, y: el.y[1] })})`)
+            .concat(gridValues(el.y, el.step).map((y) => `(${at({ x: el.x[0], y })}) -- (${at({ x: el.x[1], y })})`));
+          sections.axes.push(`\\draw${opts(strokeOpts(AXES_GRID))} ${grid.join(" ")};`);
+        }
+        const xEnd = at({ x: el.x[1], y: o.y });
+        const yEnd = at({ x: o.x, y: el.y[1] });
+        sections.axes.push(
+          `\\draw${opts(strokeOpts(el.stroke))} (${at({ x: el.x[0], y: o.y })}) -- (${xEnd}) (${at({ x: o.x, y: el.y[0] })}) -- (${yEnd});`,
+        );
+        // Arrowheads drawn like the SVG's, so no arrows library is needed.
+        const len = 4 + el.stroke.width * 2;
+        const half = len * 0.4;
+        const head = (tip: string, dx: number, dy: number) =>
+          `(${tip}) -- ${shifted(tip, { x: -dx * len - dy * half, y: -dy * len + dx * half })} -- ${shifted(tip, { x: -dx * len + dy * half, y: -dy * len - dx * half })} -- cycle`;
+        const headOpts = [color(el.stroke.color)];
+        if (el.stroke.opacity < 1) headOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
+        sections.axes.push(`\\fill${opts(headOpts)} ${head(xEnd, 1, 0)} ${head(yEnd, 0, 1)};`);
+        const tick = 2.5;
+        const ticks = [
+          ...xs.map((x) => at({ x, y: o.y })).map((b) => `${shifted(b, { x: 0, y: -tick })} -- ${shifted(b, { x: 0, y: tick })}`),
+          ...ys.map((y) => at({ x: o.x, y })).map((b) => `${shifted(b, { x: -tick, y: 0 })} -- ${shifted(b, { x: tick, y: 0 })}`),
+        ];
+        if (ticks.length) sections.axes.push(`\\draw${opts(strokeOpts({ ...el.stroke, dash: "solid" }))} ${ticks.join(" ")};`);
+        const node = (text: string, base: string, offset: Vec) =>
+          `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(base, offset)} {${labelToLatex(text, "serif")}};`;
+        if (el.numbers) {
+          const gap = el.size * 0.9;
+          for (const x of xs) sections.label.push(node(formatNumber(x), at({ x, y: o.y }), { x: 0, y: -(tick + gap * 0.7) }));
+          for (const y of ys) {
+            const s = formatNumber(y);
+            sections.label.push(node(s, at({ x: o.x, y }), { x: -(tick + 2 + estimateTextWidth(s, el.size) / 2), y: 0 }));
+          }
+        }
+        if (el.names[0]) sections.label.push(node(el.names[0], xEnd, { x: 2, y: -el.size }));
+        if (el.names[1]) sections.label.push(node(el.names[1], yEnd, { x: el.size * 0.9, y: 0 }));
+        break;
+      }
       case "text":
         sections.label.push(
           `\\node${opts(textOptions(el.color, el.size, el.font, color))} at (${at(el)}) {${labelToLatex(el.text, el.font)}};`,
@@ -201,7 +261,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   // SVG's default miter limit: sharp corners get beveled instead of drawing long spikes.
   lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
-  const order = ["coords", "polygon", "circle", "angle", "segment", "point", "label"] as const;
+  const order = ["coords", "axes", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
   lines.push("\\end{tikzpicture}");
   return lines.join("\n") + "\n";
@@ -217,7 +277,7 @@ function textOptions(c: string, size: number, font: LabelFont, color: (c: string
 }
 
 function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
-  if (el.type === "text") return null;
+  if (el.type === "text" || el.type === "axes") return null;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return null;
   const { size, measure } = el.label;

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { applyInput, makeAngles, makePolygon, parseInput } from "@geosimples/core/figure";
+import { addFunction, applyInput, makeAngles, makePolygon, parseInput } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { opOptions } from "@/store/prefsStore";
 
@@ -17,6 +17,12 @@ function insertExample() {
 }
 
 /** `pro`: the pro layout, where the input hides at the bottom and the tools are in a column on the left. */
+const GRAPH_EXAMPLE = "x^2 - 1";
+
+function insertGraph() {
+  useFigureStore.getState().run((doc) => addFunction(doc, GRAPH_EXAMPLE, "f", opOptions()), "none");
+}
+
 export function EmptyState({ pro = false }: { pro?: boolean }) {
   return (
     <div className="pointer-events-none absolute inset-0 grid place-items-center p-3 sm:p-6">
@@ -35,9 +41,14 @@ export function EmptyState({ pro = false }: { pro?: boolean }) {
           Depois selecione os objetos na prévia e use os botões {pro ? "à esquerda, ou o botão direito do mouse," : "acima"}{" "}
           para marcar ângulos, preencher o polígono ou criar circunferências.
         </p>
-        <Button size="sm" variant="outline" className="mt-1 sm:mt-0" onClick={insertExample}>
-          Inserir este exemplo
-        </Button>
+        <div className="mt-1 flex flex-wrap gap-2 sm:mt-0">
+          <Button size="sm" variant="outline" onClick={insertExample}>
+            Inserir este exemplo
+          </Button>
+          <Button size="sm" variant="ghost" onClick={insertGraph} title="Ou digite f(x)=x^2-1 na barra de pontos.">
+            Ou um gráfico: f(x) = x² − 1
+          </Button>
+        </div>
       </div>
     </div>
   );

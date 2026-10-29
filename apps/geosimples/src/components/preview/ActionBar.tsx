@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { emitCommand } from "@/lib/commands";
-import { Download, Redo2, Trash2, Undo2 } from "lucide-react";
+import { ChartSpline, Download, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -237,6 +237,14 @@ function Tools({ menuSide }: { menuSide: MenuSide }) {
           })}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <IconButton
+        label="Gráfico de função"
+        hint="Escreve y = na barra de pontos: complete com a expressão, como x^2 - 1 ou 2sen(x), e tecle Enter. Os eixos vêm junto."
+        onClick={actions.startGraph}
+      >
+        <ChartSpline />
+      </IconButton>
     </>
   );
 }

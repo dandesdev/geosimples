@@ -24,7 +24,7 @@ function WindowsMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <IconButton label="Janelas" hint="Mostrar ou esconder janelas, ou pô-las de volta à direita.">
+        <IconButton label="Janelas" hint="Mostrar ou esconder janelas, pô-las de volta à direita, ou voltar ao layout clássico.">
           <LayoutDashboard />
         </IconButton>
       </DropdownMenuTrigger>
@@ -43,6 +43,10 @@ function WindowsMenu() {
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => ws().resetWindows()}>Restaurar janelas</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => ws().setLayout("classic")}>
+          <PanelTop />
+          Voltar ao layout clássico
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -72,13 +76,6 @@ export function LeftBar() {
           onClick={() => ws().setTheme(nextTheme(dark))}
         >
           {dark ? <Sun /> : <Moon />}
-        </IconButton>
-        <IconButton
-          label="Layout clássico"
-          hint="Volta à página com a barra de ferramentas em cima e o painel à direita."
-          onClick={() => ws().setLayout("classic")}
-        >
-          <PanelTop />
         </IconButton>
         <IconButton
           label="Configurações"

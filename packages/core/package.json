@@ -8,7 +8,8 @@
   "sideEffects": false,
   "exports": {
     "./geo": "./src/geo/index.ts",
-    "./figure": "./src/figure/index.ts"
+    "./figure": "./src/figure/index.ts",
+    "./plot": "./src/plot/index.ts"
   },
   "scripts": {
     "test": "vitest run",

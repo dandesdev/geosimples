@@ -1,7 +1,9 @@
-import { DEFAULT_LABEL, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
+import { DEFAULT_AXES_STROKE, DEFAULT_LABEL, DEFAULT_PLOT_WINDOW, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
+import { MAX_EXPR_LENGTH } from "../plot";
 import { MEASURES } from "./labels";
 import type {
   Angle,
+  Axes,
   Circle,
   CircleConstruction,
   Dash,
@@ -10,6 +12,7 @@ import type {
   Fill,
   FillPattern,
   FreeText,
+  FunctionGraph,
   Label,
   LabelMeasure,
   MeasureKind,
@@ -34,6 +37,14 @@ const color = (x: unknown, fallback: string) => (typeof x === "string" && isVali
 const oneOf = <T extends string>(x: unknown, options: readonly T[], fallback: T): T =>
   options.includes(x as T) ? (x as T) : fallback;
 const ticks = (x: unknown): Ticks => (x === 1 || x === 2 || x === 3 ? x : 0);
+
+/** A [from, to] interval with from < to, or the fallback. */
+function interval(x: unknown, fallback: [number, number]): [number, number] {
+  if (!Array.isArray(x) || x.length !== 2) return fallback;
+  const a = coord(x[0]);
+  const b = coord(x[1]);
+  return a !== null && b !== null && a < b ? [a, b] : fallback;
+}
 
 function stroke(x: unknown): Stroke {
   const r = isObj(x) ? x : {};
@@ -220,6 +231,44 @@ export function normalizeDoc(input: unknown): FigureDoc {
           fill: fill(r.fill),
         };
         out.push(withLabel(poly, r));
+        break;
+      }
+      case "function": {
+        const expr = str(r.expr)?.trim() ?? "";
+        if (ids.has(id) || expr === "" || expr.length > MAX_EXPR_LENGTH) break;
+        ids.add(id);
+        out.push(
+          withLabel<FunctionGraph>(
+            {
+              id,
+              type: "function",
+              expr,
+              domain: interval(r.domain, DEFAULT_PLOT_WINDOW.x),
+              range: interval(r.range, DEFAULT_PLOT_WINDOW.y),
+              stroke: stroke(r.stroke),
+            },
+            r,
+          ),
+        );
+        break;
+      }
+      case "axes": {
+        if (ids.has(id)) break;
+        ids.add(id);
+        const names = Array.isArray(r.names) ? r.names : [];
+        const a: Axes = {
+          id,
+          type: "axes",
+          x: interval(r.x, DEFAULT_PLOT_WINDOW.x),
+          y: interval(r.y, DEFAULT_PLOT_WINDOW.y),
+          step: num(r.step, 0.01, 1000, 1),
+          numbers: r.numbers !== false,
+          grid: r.grid === true,
+          names: [str(names[0])?.slice(0, 20) ?? "x", str(names[1])?.slice(0, 20) ?? "y"],
+          stroke: isObj(r.stroke) ? stroke(r.stroke) : { ...DEFAULT_AXES_STROKE },
+          size: num(r.size, 4, 72, 8),
+        };
+        out.push(a);
         break;
       }
       case "text": {

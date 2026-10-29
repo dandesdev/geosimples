@@ -1,4 +1,5 @@
 import { LIMITS } from "./defaults";
+import { parseExpr } from "../plot";
 import type { Id } from "./types";
 import { add, dist, polar, type Vec } from "./vec";
 
@@ -22,6 +23,13 @@ export interface ParsedText {
   y: number;
 }
 
+/** A function graph to create, written f(x) = … or y = …. */
+export interface ParsedFunction {
+  /** "f" for f(x) = …, empty for y = …. */
+  name: string;
+  expr: string;
+}
+
 export type InputTokenKind = "name" | "point" | "ref" | "connector" | "text" | "error";
 
 /** A span of the input text, used to color it as the teacher types. */
@@ -43,6 +51,8 @@ export interface ParsedInput {
   segments: [number, number][];
   /** Free texts, written "texto"@(x;y). */
   texts: ParsedText[];
+  /** Graphs of functions, written f(x) = x^2 or y = 2x + 1. The whole input is then the function. */
+  functions: ParsedFunction[];
   tokens: InputToken[];
   errors: InputError[];
 }
@@ -73,6 +83,8 @@ const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
  * - `"texto"@(X;Y)` places a free text centered at a point; any point form works after `@`.
  */
 export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
+  const fn = parseFunctionInput(text);
+  if (fn) return fn;
   const nodes: InputNode[] = [];
   const segments: [number, number][] = [];
   const texts: ParsedText[] = [];
@@ -305,10 +317,37 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
 
   // Drop segments that would have no length.
   const kept = segments.filter(([p, q]) => dist(position(p), position(q)) > 0);
-  return { nodes, segments: kept, texts, tokens: tokens.sort((x, y) => x.start - y.start), errors };
+  return { nodes, segments: kept, texts, functions: [], tokens: tokens.sort((x, y) => x.start - y.start), errors };
 }
 
 /** Removes floating point noise like 2.9999999999999996. */
 function roundTiny(n: number): number {
   return Math.round(n * 1e9) / 1e9;
+}
+
+/** `f(x) = …` always; `y = …` unless what follows is a point, like y=(1;2). */
+const FUNCTION_INPUT = /^(\s*)([A-Za-z])\s*\(\s*x\s*\)\s*=|^(\s*)[yY]\s*=(?![^;:]*[;:])/;
+
+/**
+ * A function typed in the point input: f(x) = x^2 - 1, g(x)=2sen(x) or
+ * y = 2x + 1. Returns null for anything else, which is read as points.
+ */
+function parseFunctionInput(text: string): ParsedInput | null {
+  const m = FUNCTION_INPUT.exec(text);
+  if (!m) return null;
+  const head = m[0].length;
+  const start = (m[1] ?? m[3]).length;
+  const expr = text.slice(head);
+  const result: ParsedInput = { nodes: [], segments: [], texts: [], functions: [], tokens: [], errors: [] };
+  result.tokens.push({ kind: "name", start, end: head });
+  const parsed = parseExpr(expr);
+  if (parsed.ok) {
+    result.functions.push({ name: m[2] ?? "", expr: expr.trim() });
+    if (expr.trim()) result.tokens.push({ kind: "text", start: head, end: text.length });
+  } else {
+    const at = head + Math.min(parsed.at, Math.max(expr.length - 1, 0));
+    result.errors.push({ message: parsed.error, start: at, end: Math.max(at + 1, text.length) });
+    result.tokens.push({ kind: "error", start: at, end: Math.max(at + 1, text.length) });
+  }
+  return result;
 }

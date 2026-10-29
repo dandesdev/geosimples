@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  ChartSpline,
   CircleHelp,
   Download,
   Keyboard,
@@ -158,6 +159,10 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
         <Keyboard />
         Digitar pontos…
         <Keys action="focusInput" />
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={actions.startGraph}>
+        <ChartSpline />
+        Gráfico de função…
       </ContextMenuItem>
       <ContextMenuSeparator />
 

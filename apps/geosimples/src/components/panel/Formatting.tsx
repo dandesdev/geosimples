@@ -1,4 +1,13 @@
-import { AngleEditor, CircleEditor, PointEditor, PolygonEditor, SegmentEditor, TextEditor } from "./elementEditors";
+import {
+  AngleEditor,
+  AxesEditor,
+  CircleEditor,
+  FunctionEditor,
+  PointEditor,
+  PolygonEditor,
+  SegmentEditor,
+  TextEditor,
+} from "./elementEditors";
 import { useInspected } from "./inspected";
 
 /** Formatação: color, stroke, fill, marks and labels of the selected objects. */
@@ -20,6 +29,8 @@ export function Formatting() {
       {el.type === "circle" && <CircleEditor el={el} {...props} />}
       {el.type === "polygon" && <PolygonEditor el={el} {...props} />}
       {el.type === "text" && <TextEditor el={el} {...props} />}
+      {el.type === "function" && <FunctionEditor el={el} {...props} />}
+      {el.type === "axes" && <AxesEditor el={el} {...props} />}
     </>
   );
 }

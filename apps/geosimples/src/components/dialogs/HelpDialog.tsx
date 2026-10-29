@@ -66,6 +66,11 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             comprimento, o ângulo, o raio, a área ou o perímetro, que muda quando os pontos se movem.
           </li>
           <li>
+            <b>Gráficos.</b> Digite <code>f(x)=x^2-1</code> ou <code>y=2sen(x)</code> na barra de pontos, ou use o botão
+            Gráfico de função. Os eixos entram junto. Vale x², raiz(x), |x|, 1/x, sen, cos, tg, ln, log e decimais com
+            vírgula. Em Propriedades mude a expressão, onde a curva aparece e a janela, as marcas e a grade dos eixos.
+          </li>
+          <li>
             <b>Texto livre.</b> Em Rótulos e textos › Texto livre, ou na barra de pontos com <code>"Figura 1"@(2;-1)</code>.
             Arraste o texto no modo Mover pontos e mude fonte, tamanho e cor em Formatação.
           </li>

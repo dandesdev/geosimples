@@ -2,8 +2,10 @@ import {
   MEASURES,
   sectorRadii,
   type Angle,
+  type Axes,
   type Circle,
   type FreeText,
+  type FunctionGraph,
   type Point,
   type Polygon,
   type Segment,
@@ -144,6 +146,26 @@ export function TextEditor({ el, update }: EditorProps<FreeText>) {
     <div className="space-y-2">
       <Section title="Estilo">
         <TextStyleFields value={el} onChange={(patch, key) => update((t) => ({ ...t, ...patch }), key)} />
+      </Section>
+    </div>
+  );
+}
+
+export function FunctionEditor({ el, update, updateLabel, multi }: EditorProps<FunctionGraph>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor title="Traço da curva" stroke={el.stroke} onChange={(stroke, key) => update((f) => ({ ...f, stroke }), key)} />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} placeholder="Ex.: f, g, y = x²" />
+    </div>
+  );
+}
+
+export function AxesEditor({ el, update }: EditorProps<Axes>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor title="Traço dos eixos" stroke={el.stroke} onChange={(stroke, key) => update((a) => ({ ...a, stroke }), key)} />
+      <Section title="Números e nomes">
+        <RangeField label="Tamanho" value={el.size} min={5} max={16} step={0.5} format={pt} onChange={(size) => update((a) => ({ ...a, size }), "size")} />
       </Section>
     </div>
   );

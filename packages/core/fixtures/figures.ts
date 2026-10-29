@@ -10,8 +10,11 @@ import {
   DEFAULT_FILL,
   DEFAULT_LABEL,
   DEFAULT_POINT,
+  DEFAULT_AXES_STROKE,
   DEFAULT_STROKE,
   type Angle,
+  type Axes,
+  type FunctionGraph,
   type Circle,
   type Element,
   type FigureDoc,
@@ -253,6 +256,42 @@ export const FIXTURES: Fixture[] = [
     ]),
   },
 ];
+
+function axes(id: string, x: [number, number], y: [number, number], over: Partial<Axes> = {}): Axes {
+  return {
+    id,
+    type: "axes",
+    x,
+    y,
+    step: 1,
+    numbers: true,
+    grid: false,
+    names: ["x", "y"],
+    stroke: { ...DEFAULT_AXES_STROKE },
+    size: 8,
+    ...over,
+  };
+}
+
+function graph(id: string, expr: string, domain: [number, number], range: [number, number], name: string, over: Partial<FunctionGraph> = {}): FunctionGraph {
+  return { id, type: "function", expr, domain, range, stroke: stroke(), label: label(name), ...over };
+}
+
+FIXTURES.push({
+  name: "graphs",
+  doc: doc([
+    // fnplot: axes with a grid, a parabola cut by the range, 1/x broken at its asymptote, a dashed line.
+    axes("e1", [-4, 4], [-3, 5], { grid: true }),
+    graph("f1", "x^2 - 1", [-4, 4], [-3, 5], "f"),
+    graph("f2", "1/x", [-4, 4], [-3, 5], "g", { stroke: stroke({ color: "#1d4ed8" }) }),
+    graph("f3", "-x/2 + 1", [-4, 4], [-3, 5], "h", { stroke: stroke({ dash: "dashed", color: "#d62828" }) }),
+  ]),
+});
+FIXTURES.push({
+  name: "graphs-scale-0.5",
+  doc: doc([axes("e1", [-6.5, 6.5], [-2, 2], { step: 2, names: ["x", "f(x)"] }), graph("f1", "2sen(x)", [-6.5, 6.5], [-2, 2], "f")]),
+  scale: 0.5,
+});
 
 // Arcs and circle radii are in world units, so they must follow the export scale too.
 FIXTURES.push({ name: "circles-scale-0.5", doc: FIXTURES.find((f) => f.name === "circles")!.doc, scale: 0.5 });

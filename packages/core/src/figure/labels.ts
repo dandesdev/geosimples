@@ -1,4 +1,5 @@
 import { DEFAULT_LABEL } from "./defaults";
+import { functionLines } from "./plot";
 import { angleArc, centroid, pointMap, signedArea2 } from "./geometry";
 import type {
   Element,
@@ -102,6 +103,8 @@ export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   circle: ["radius"],
   polygon: ["area", "perimeter"],
   text: [],
+  function: [],
+  axes: [],
 };
 
 /** Value of a measure in world units (degrees for angles), or null when it can't be measured. */
@@ -148,7 +151,7 @@ export function newMeasure(el: Element, decimals: number, measure?: MeasureKind)
 
 /** The text a label shows now: its measure computed from the figure, or its static text. */
 export function labelText(doc: FigureDoc, el: Element): string {
-  if (el.type === "text" || !el.label) return "";
+  if (el.type === "text" || el.type === "axes" || !el.label) return "";
   const m = el.label.measure;
   if (!m) return el.label.text;
   const value = measureNumber(doc, el, m);
@@ -200,7 +203,7 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
 }
 
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
-  if (el.type === "text") return null;
+  if (el.type === "text" || el.type === "axes") return null;
   const label = el.label;
   if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);
@@ -256,6 +259,14 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       const vs = el.vertices.map((id) => pts.get(id)).filter((p): p is Point => !!p);
       if (vs.length < 3) return null;
       return { anchor: centroid(vs), offset: fixed ? scale(fixed, label.distance) : { x: 0, y: 0 } };
+    }
+    case "function": {
+      // The name goes by the right end of the curve, above it: where a textbook writes "f".
+      const lines = functionLines(el);
+      const last = lines[lines.length - 1];
+      if (!last) return null;
+      const end = last[last.length - 1];
+      return { anchor: end, offset: scale(fixed ?? unit({ x: 1, y: 1 }), label.distance) };
     }
   }
 }

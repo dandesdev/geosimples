@@ -198,7 +198,45 @@ export interface FreeText {
   label?: never;
 }
 
-export type Element = Point | Segment | Angle | Circle | Polygon | FreeText;
+/**
+ * The graph of y = f(x), from fnplot. Drawn over `domain` and cut where it
+ * leaves `range`, so asymptotes and steep parts stay inside the picture.
+ * Renderers sample `expr` themselves; nothing else is stored.
+ */
+export interface FunctionGraph {
+  id: Id;
+  type: "function";
+  /** As typed, like "x^2 - 1" or "2sen(x)". */
+  expr: string;
+  /** x from, to, in world units. */
+  domain: [number, number];
+  /** y from, to: the curve is not drawn outside it. */
+  range: [number, number];
+  stroke: Stroke;
+  /** Its name, like "f", near the right end of the curve. */
+  label?: Label;
+}
+
+/** Cartesian axes with arrows, ticks every `step` units, and an optional grid behind them. */
+export interface Axes {
+  id: Id;
+  type: "axes";
+  x: [number, number];
+  y: [number, number];
+  /** Units between ticks, on both axes. */
+  step: number;
+  /** Numbers under and beside the ticks. */
+  numbers: boolean;
+  grid: boolean;
+  /** Names at the arrow tips, like "x" and "y". Empty for none. */
+  names: [string, string];
+  stroke: Stroke;
+  /** Font size of numbers and names, in pt. */
+  size: number;
+  label?: never;
+}
+
+export type Element = Point | Segment | Angle | Circle | Polygon | FreeText | FunctionGraph | Axes;
 export type ElementType = Element["type"];
 
 export interface FigureDoc {

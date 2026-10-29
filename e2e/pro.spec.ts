@@ -89,7 +89,8 @@ test("pro layout: a window minimizes, closes and comes back from Janelas", async
   expect((await region.boundingBox())!.x).toBeLessThan(60);
 
   // Back to the classic page.
-  await page.getByRole("button", { name: "Layout clássico" }).click();
+  await page.getByRole("button", { name: "Janelas" }).click();
+  await page.getByRole("menuitem", { name: "Voltar ao layout clássico" }).click();
   await expect(page.getByRole("complementary", { name: "Painel" })).toBeVisible();
   // The classic page keeps the browser's own right-click menu.
   await page.getByRole("region", { name: "Prévia da figura" }).locator("svg.touch-none").click({ button: "right", position: { x: 20, y: 20 } });

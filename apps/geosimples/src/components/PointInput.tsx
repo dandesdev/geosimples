@@ -39,6 +39,7 @@ function runs(text: string, parsed: ParsedInput): { text: string; kind: InputTok
 }
 
 function summary(parsed: ParsedInput): string {
+  if (parsed.functions.length > 0) return "Gráfico da função. Enter para adicionar.";
   const fresh = parsed.nodes.filter((n) => n.kind === "new").length;
   const parts: string[] = [];
   if (fresh) parts.push(`${fresh} ${fresh === 1 ? "ponto novo" : "pontos novos"}`);
@@ -70,7 +71,13 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
 
   const parsed = useMemo(() => parseDraft(text, doc, selection), [text, doc, selection]);
   const syncScroll = () => setScroll(inputRef.current?.scrollLeft ?? 0);
-  useCommand("focusInput", () => inputRef.current?.focus());
+  useCommand("focusInput", () => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    // After a prefill like "f(x) = ", typing goes on at the end.
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
 
   const submit = () => {
     const { doc, selection, run } = useFigureStore.getState();
@@ -189,6 +196,9 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             </p>
             <p>
               <b>"texto"@(X;Y)</b> escreve um texto solto centrado no ponto: <code>"Figura 1"@(2;-1)</code>
+            </p>
+            <p>
+              <b>f(x)=</b> ou <b>y=</b> desenha o gráfico, com eixos: <code>f(x)=x^2-1</code>, <code>y=2sen(x)</code>
             </p>
           </TooltipContent>
         </Tooltip>

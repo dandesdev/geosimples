@@ -1,4 +1,4 @@
-import { PT_PER_CM, resolveColor } from "./defaults";
+import { AXES_GRID, PT_PER_CM, resolveColor } from "./defaults";
 import {
   angleArc,
   angleArcRadii,
@@ -8,7 +8,17 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { estimateTextWidth, labelPlacement, labelRuns, labelText, measureNumber, measureRuns, type LabelRun } from "./labels";
+import {
+  estimateTextWidth,
+  formatNumber,
+  labelPlacement,
+  labelRuns,
+  labelText,
+  measureNumber,
+  measureRuns,
+  type LabelRun,
+} from "./labels";
+import { axesOrigin, axisTicks, functionLines, gridValues } from "./plot";
 import type {
   Dash,
   Element,
@@ -132,15 +142,23 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   const k = PT_PER_CM * (options.scale ?? 1);
   const pts = pointMap(doc);
   const box = new BoxBuilder();
-  const layers: Record<"polygon" | "circle" | "angle" | "segment" | "point" | "label", Prim[]> = {
+  const layers: Record<
+    "grid" | "axes" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    Prim[]
+  > = {
+    grid: [],
+    axes: [],
     polygon: [],
     circle: [],
+    function: [],
     angle: [],
     segment: [],
     point: [],
     label: [],
   };
   const hits: Record<ElementType, Hit[]> = {
+    axes: [],
+    function: [],
     polygon: [],
     circle: [],
     angle: [],
@@ -331,6 +349,78 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         hits.polygon.push({ owner: el.id, type: "polygon", d, area: true });
         break;
       }
+      case "function": {
+        const stroke = paintStroke(el.stroke);
+        const d = functionLines(el)
+          .map((line) =>
+            line
+              .map((w, i) => {
+                const p = P(w);
+                box.add(p.x, p.y, stroke.width / 2);
+                return `${i === 0 ? "M" : "L"}${f(p.x)} ${f(p.y)}`;
+              })
+              .join(""),
+          )
+          .join("");
+        if (!d) break;
+        layers.function.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        hits.function.push({ owner: el.id, type: "function", d, area: false });
+        break;
+      }
+      case "axes": {
+        const stroke = paintStroke(el.stroke);
+        const o = axesOrigin(el);
+        const xs = axisTicks(el.x, el.step, o.x);
+        const ys = axisTicks(el.y, el.step, o.y);
+        if (el.grid) {
+          const lines = gridValues(el.x, el.step)
+            .map((x) => `M${f(x * k)} ${f(-el.y[0] * k)}L${f(x * k)} ${f(-el.y[1] * k)}`)
+            .concat(gridValues(el.y, el.step).map((y) => `M${f(el.x[0] * k)} ${f(-y * k)}L${f(el.x[1] * k)} ${f(-y * k)}`))
+            .join("");
+          layers.grid.push({ kind: "path", owner: el.id, d: lines, stroke: paintStroke(AXES_GRID), fill: null });
+        }
+        const x0 = P({ x: el.x[0], y: o.y });
+        const x1 = P({ x: el.x[1], y: o.y });
+        const y0 = P({ x: o.x, y: el.y[0] });
+        const y1 = P({ x: o.x, y: el.y[1] });
+        const d = `M${f(x0.x)} ${f(x0.y)}L${f(x1.x)} ${f(x1.y)}M${f(y0.x)} ${f(y0.y)}L${f(y1.x)} ${f(y1.y)}`;
+        layers.axes.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        // Arrowheads at the positive ends, as textbooks draw them.
+        const head = (tip: Vec, dx: number, dy: number) => {
+          const len = 4 + stroke.width * 2;
+          const half = len * 0.4;
+          const back = { x: tip.x - dx * len, y: tip.y - dy * len };
+          return `M${f(tip.x)} ${f(tip.y)}L${f(back.x - dy * half)} ${f(back.y + dx * half)}L${f(back.x + dy * half)} ${f(back.y - dx * half)}Z`;
+        };
+        layers.axes.push({
+          kind: "path",
+          owner: el.id,
+          d: head(x1, 1, 0) + head(y1, 0, -1),
+          stroke: null,
+          fill: { color: stroke.color, opacity: stroke.opacity, pattern: "solid", angle: 0 },
+        });
+        const tick = 2.5;
+        const tickD =
+          xs.map((x) => `M${f(x * k)} ${f(x0.y - tick)}L${f(x * k)} ${f(x0.y + tick)}`).join("") +
+          ys.map((y) => `M${f(y0.x - tick)} ${f(-y * k)}L${f(y0.x + tick)} ${f(-y * k)}`).join("");
+        if (tickD) layers.axes.push({ kind: "path", owner: el.id, d: tickD, stroke: { ...stroke, dash: "solid" }, fill: null });
+        for (const p of [x0, x1, y0, y1]) box.add(p.x, p.y, tick);
+        const text = (s: string, at: Vec) =>
+          textRect(layers.label, el.id, at, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
+        if (el.numbers) {
+          const gap = el.size * 0.9;
+          for (const x of xs) text(formatNumber(x), { x: x * k, y: x0.y + tick + gap * 0.7 });
+          for (const y of ys) {
+            const s = formatNumber(y);
+            text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * k });
+          }
+        }
+        const [xName, yName] = el.names;
+        if (xName) text(xName, { x: x1.x + 2, y: x1.y + el.size });
+        if (yName) text(yName, { x: y1.x + el.size * 0.9, y: y1.y });
+        hits.axes.push({ owner: el.id, type: "axes", d, area: false });
+        break;
+      }
       case "text": {
         const at = P(el);
         const r = textRect(layers.label, el.id, at, el.text, labelRuns(el.text, el.font), el.size, el.color, el.font, box);
@@ -348,14 +438,26 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
 
   return {
     prims: [
+      ...layers.grid,
+      ...layers.axes,
       ...layers.polygon,
       ...layers.circle,
+      ...layers.function,
       ...layers.angle,
       ...layers.segment,
       ...layers.point,
       ...layers.label,
     ],
-    hits: [...hits.polygon, ...hits.circle, ...hits.angle, ...hits.segment, ...hits.text, ...hits.point],
+    hits: [
+      ...hits.axes,
+      ...hits.polygon,
+      ...hits.circle,
+      ...hits.function,
+      ...hits.angle,
+      ...hits.segment,
+      ...hits.text,
+      ...hits.point,
+    ],
     box: box.box,
     k,
   };
@@ -368,7 +470,7 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text") return;
+  if (el.type === "text" || el.type === "axes") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;
