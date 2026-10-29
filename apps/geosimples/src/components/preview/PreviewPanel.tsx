@@ -213,8 +213,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const onContextMenu = (e: React.MouseEvent) => {
     const svg = svgRef.current;
     const onFigure = !!svg && e.target instanceof Node && svg.contains(e.target);
-    setMenuAt(onFigure ? pointAt(e.clientX, e.clientY) : null);
     const owner = onFigure ? ownerAt(e.target) : null;
+    setMenuAt(onFigure && !owner ? pointAt(e.clientX, e.clientY) : null);
     const store = useFigureStore.getState();
     if (owner && !store.selection.includes(owner)) store.pick(owner, false);
   };
@@ -406,8 +406,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
         )}
       >
         {!pro && <ActionBar layout={roomy ? "row" : "strip"} zoom={roomy ? null : zoom} />}
-        <PreviewMenu at={menuAt} zoom={zoom}>
-          <div ref={containerRef} className="relative min-h-0 flex-1" onContextMenu={onContextMenu}>
+        <PreviewMenu enabled={pro} at={menuAt} zoom={zoom}>
+          <div ref={containerRef} className="relative min-h-0 flex-1" onContextMenu={pro ? onContextMenu : undefined}>
             <svg
               ref={svgRef}
               className={cn(

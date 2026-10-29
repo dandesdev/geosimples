@@ -78,7 +78,6 @@ function ActionItem({
   return (
     <ContextMenuItem
       disabled={availability.reason !== null}
-      title={availability.reason ?? undefined}
       onSelect={() => {
         clearPreview();
         onSelect();
@@ -98,10 +97,13 @@ function ActionItem({
  * `at` is the spot clicked, in world units, for "Adicionar ponto aqui".
  */
 export function PreviewMenu({
+  enabled,
   at,
   zoom,
   children,
 }: {
+  /** Only the pro layout has it; the classic page keeps the browser's menu. */
+  enabled: boolean;
   at: Vec | null;
   zoom: ZoomControls | null;
   children: ReactNode;
@@ -110,7 +112,7 @@ export function PreviewMenu({
   const coarse = useCoarsePointer();
   return (
     <ContextMenu onOpenChange={(open) => !open && clearPreview()}>
-      <ContextMenuTrigger asChild disabled={coarse}>
+      <ContextMenuTrigger asChild disabled={!enabled || coarse}>
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-64" collisionPadding={8}>

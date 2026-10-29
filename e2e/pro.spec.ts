@@ -83,7 +83,15 @@ test("pro layout: a window minimizes, closes and comes back from Janelas", async
   await page.keyboard.press("Escape");
   await expect(region).toBeVisible();
 
+  // The window's own menu docks it too.
+  await region.getByRole("button", { name: "Opções da janela" }).click();
+  await page.getByRole("menuitem", { name: "Encaixar à esquerda" }).click();
+  expect((await region.boundingBox())!.x).toBeLessThan(60);
+
   // Back to the classic page.
   await page.getByRole("button", { name: "Layout clássico" }).click();
   await expect(page.getByRole("complementary", { name: "Painel" })).toBeVisible();
+  // The classic page keeps the browser's own right-click menu.
+  await page.getByRole("region", { name: "Prévia da figura" }).locator("svg.touch-none").click({ button: "right", position: { x: 20, y: 20 } });
+  await expect(page.getByRole("menu")).toHaveCount(0);
 });

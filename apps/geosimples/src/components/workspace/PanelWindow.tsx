@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, EllipsisVertical, Maximize2, Minimize2, X } from "lucide-react";
 import {
   ContextMenu,
@@ -18,20 +18,23 @@ import { cn } from "@/lib/utils";
 import { useWorkspaceStore, WINDOW_TITLES, type Rect, type WindowId } from "@/store/workspaceStore";
 import { windowMenuItems } from "./windowMenu";
 
-/** Small square buttons for the title bar. */
-function TitleButton({ label, onClick, children }: { label: string; onClick?: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground [&_svg]:h-3.5 [&_svg]:w-3.5"
-    >
-      {children}
-    </button>
-  );
-}
+/** Small square buttons for the title bar. Takes a ref and extra props, so it can open a menu. */
+const TitleButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }>(
+  function TitleButton({ label, children, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        title={label}
+        className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground [&_svg]:h-3.5 [&_svg]:w-3.5"
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  },
+);
 
 /** Which edges of a floating window resize it. */
 export type ResizeEdge = "e" | "s" | "se" | "w" | "sw";
@@ -90,7 +93,7 @@ export function PanelWindow({
         "flex min-h-0 min-w-0 flex-col overflow-hidden bg-card",
         variant === "column" && (collapsed || fit ? "flex-none" : "min-h-28 flex-1 basis-0"),
         variant === "row" && (collapsed ? "w-48 flex-none" : "min-w-56 flex-1 basis-0"),
-        variant === "float" && "absolute rounded-lg border shadow-xl",
+        variant === "float" && "absolute z-30 rounded-lg border shadow-xl",
         maximized && "absolute inset-0 z-40",
         dragging && "opacity-90 shadow-2xl ring-2 ring-primary/60",
       )}

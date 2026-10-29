@@ -177,7 +177,7 @@ export function ProWorkspace() {
   const startDockResize = (dock: Dock, e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const size0 = docks[dock];
+    const size0 = Math.min(docks[dock], (isColumn(dock) ? area.w : area.h) * 0.35);
     // Dragging toward the preview makes the dock bigger.
     const sign = dock === "left" || dock === "top" ? 1 : -1;
     track(
@@ -191,6 +191,8 @@ export function ProWorkspace() {
     const ids = docked(windows, dock).filter((id) => id !== maximized && id !== live?.id);
     if (ids.length === 0) return null;
     const column = isColumn(dock);
+    // Sizes saved on a wider screen still leave room for the preview.
+    const size = Math.min(docks[dock], (column ? area.w : area.h) * 0.35);
     const splitter = (
       <div
         role="separator"
@@ -211,7 +213,7 @@ export function ProWorkspace() {
           data-dock={dock}
           className={cn("flex shrink-0 overflow-hidden bg-card", column ? "flex-col divide-y" : "flex-row divide-x")}
           // The dock's size is the user's, dragged with the splitter.
-          style={column ? { width: docks[dock] } : { height: docks[dock] }}
+          style={column ? { width: size } : { height: size }}
         >
           {ids.map((id) => (
             <PanelWindow
