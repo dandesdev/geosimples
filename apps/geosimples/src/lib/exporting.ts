@@ -1,9 +1,11 @@
-import { toSvg, toTikz, type FigureDoc } from "@geosimples/core/figure";
+import { paperColor, toSvg, toTikz, type FigureDoc, type Paper } from "@geosimples/core/figure";
 
 export interface ExportSettings {
   scale: number;
   dpi: number;
+  /** "white" is the paper's color: gray when the export keeps the dark theme's colors. */
   background: "white" | "transparent";
+  paper: Paper;
 }
 
 export function downloadBlob(blob: Blob, fileName: string) {
@@ -17,8 +19,8 @@ export function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function svgText(doc: FigureDoc, scale: number, background: ExportSettings["background"]): string {
-  return toSvg(doc, { scale, background: background === "white" ? "#ffffff" : null });
+export function svgText(doc: FigureDoc, { scale, background, paper }: Omit<ExportSettings, "dpi">): string {
+  return toSvg(doc, { scale, paper, background: background === "white" ? paperColor(paper) : null });
 }
 
 export function tikzText(doc: FigureDoc, scale: number): string {
@@ -37,7 +39,7 @@ const MAX_PNG_SIDE = 8000;
 
 /** Renders the SVG to a PNG at the given resolution. */
 export async function pngBlob(doc: FigureDoc, s: ExportSettings): Promise<Blob> {
-  const svg = svgText(doc, s.scale, s.background);
+  const svg = svgText(doc, s);
   const { w, h } = svgSizePt(svg);
   let factor = s.dpi / 72;
   factor = Math.min(factor, MAX_PNG_SIDE / Math.max(w, h, 1));

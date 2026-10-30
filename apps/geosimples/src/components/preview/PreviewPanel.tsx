@@ -2,15 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addFunction,
   buildScene,
+  darkColor,
   formatNumber,
   movePoints,
   paddedBox,
+  paintScene,
+  paperColor,
   pointMap,
   sceneMarkup,
   type Box,
   type FigureDoc,
   type Hit,
   type Id,
+  type Paper,
   type ParsedInput,
   type Prim,
   type Vec,
@@ -25,6 +29,7 @@ import { SelectionSummary } from "./SelectionSummary";
 import { PreviewMenu } from "./PreviewMenu";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
+import { usePreviewPaper } from "@/lib/theme";
 import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
 import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camera";
@@ -37,6 +42,11 @@ const EMPTY_WORLD = { minX: -1, minY: -1, maxX: 6, maxY: 4 };
 /** Hit target sizes in screen px: a finger needs more room than a mouse. */
 const HIT_FINE = { point: 7, stroke: 14 };
 const HIT_COARSE = { point: 16, stroke: 28 };
+
+/** A helper color of the preview as it shows on its paper. */
+function onPaper(color: string, paper: Paper): string {
+  return paper === "dark" ? darkColor(color) : color;
+}
 
 type Gesture =
   | { kind: "none" }
@@ -104,8 +114,9 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   /** Modes where a click puts a point down. */
   const placing = mode === "add" || mode === "figure";
 
+  const paper = usePreviewPaper();
   const scene = useMemo(() => buildScene(doc, { scale }), [doc, scale]);
-  const markup = useMemo(() => sceneMarkup(scene), [scene]);
+  const markup = useMemo(() => sceneMarkup(paintScene(scene, paper)), [scene, paper]);
   const actionPreview = useFigureStore((s) => s.actionPreview);
   const actionMarkup = useMemo(() => {
     if (!actionPreview || actionPreview.ids.length === 0) return null;
@@ -426,11 +437,13 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               ref={svgRef}
               className={cn(
                 // touch-none keeps the browser from scrolling or zooming the page under the fingers.
-                "absolute inset-0 h-full w-full touch-none select-none bg-white [-webkit-touch-callout:none]",
+                "absolute inset-0 h-full w-full touch-none select-none [-webkit-touch-callout:none]",
                 mode === "pan" && "cursor-grab active:cursor-grabbing",
                 mode === "select" && "cursor-crosshair",
                 placing && "cursor-copy",
               )}
+              // The paper's color comes from core, which also colors the figure on it.
+              style={{ backgroundColor: paperColor(paper) }}
               viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
               preserveAspectRatio="xMidYMid meet"
               onPointerDown={onPointerDown}
@@ -442,7 +455,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               onMouseDown={(e) => e.button === 1 && e.preventDefault()}
               onAuxClick={(e) => e.preventDefault()}
             >
-              {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} />}
+              {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} paper={paper} />}
               <g dangerouslySetInnerHTML={{ __html: markup }} />
               {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
               <Overlay
@@ -453,8 +466,9 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 moveMode={mode === "move"}
                 doc={doc}
                 hit={coarse ? HIT_COARSE : HIT_FINE}
+                paper={paper}
               />
-              {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} />}
+              {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} paper={paper} />}
               {graphGhost && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: graphGhost.markup }} />}
               {placing && addAt && (
                 <AddMarker at={addAt} k={k} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
@@ -542,7 +556,7 @@ function toUser(svg: SVGSVGElement, clientX: number, clientY: number) {
   return { x: p.x, y: p.y };
 }
 
-function Grid({ k, vb, unitsPerPx }: { k: number; vb: View; unitsPerPx: number }) {
+function Grid({ k, vb, unitsPerPx, paper }: { k: number; vb: View; unitsPerPx: number; paper: Paper }) {
   // One line per world unit, or every 5 or 10 units when zoomed far out.
   const step = k / unitsPerPx < 8 ? (k * 5) / unitsPerPx < 8 ? 10 : 5 : 1;
   const s = k * step;
@@ -550,13 +564,13 @@ function Grid({ k, vb, unitsPerPx }: { k: number; vb: View; unitsPerPx: number }
     <g pointerEvents="none">
       <defs>
         <pattern id="gs-preview-grid" patternUnits="userSpaceOnUse" width={s} height={s} x={0} y={0}>
-          <path d={`M${s} 0H0V${s}`} fill="none" stroke="#e5e7eb" strokeWidth={unitsPerPx} />
+          <path d={`M${s} 0H0V${s}`} fill="none" stroke={onPaper("#e5e7eb", paper)} strokeWidth={unitsPerPx} />
         </pattern>
       </defs>
       <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#gs-preview-grid)" />
       <path
         d={`M${vb.x} 0H${vb.x + vb.w}M0 ${vb.y}V${vb.y + vb.h}`}
-        stroke="#cbd5e1"
+        stroke={onPaper("#cbd5e1", paper)}
         strokeWidth={unitsPerPx * 1.2}
       />
     </g>
@@ -571,6 +585,7 @@ function Overlay({
   moveMode,
   doc,
   hit,
+  paper,
 }: {
   hits: Hit[];
   selection: Id[];
@@ -580,6 +595,7 @@ function Overlay({
   doc: FigureDoc;
   /** Hit target sizes in screen px. They only change the preview, never the export. */
   hit: { point: number; stroke: number };
+  paper: Paper;
 }) {
   const selected = new Set(selection);
   const hidden = new Set(
@@ -595,7 +611,7 @@ function Overlay({
           return (
             <g key={h.owner} data-owner={h.owner} className={moveMode ? "cursor-move" : "cursor-pointer"}>
               {hidden.has(h.owner) && (
-                <circle cx={h.x} cy={h.y} r={3 * px} fill="none" stroke="#94a3b8" strokeWidth={px} strokeDasharray={`${2 * px} ${2 * px}`} />
+                <circle cx={h.x} cy={h.y} r={3 * px} fill="none" stroke={onPaper("#94a3b8", paper)} strokeWidth={px} strokeDasharray={`${2 * px} ${2 * px}`} />
               )}
               {isSel && (
                 <circle cx={h.x} cy={h.y} r={Math.max(h.r + 3 * px, 6 * px)} fill={PRIMARY} fillOpacity={0.25} stroke={PRIMARY} strokeWidth={1.5 * px} />
@@ -669,7 +685,7 @@ function unionBox(a: Box | null, b: Box | null): Box | null {
 }
 
 /** Dashed preview of what the point input would add. */
-function DraftGhost({ parsed, k, px }: { parsed: ParsedInput; k: number; px: number }) {
+function DraftGhost({ parsed, k, px, paper }: { parsed: ParsedInput; k: number; px: number; paper: Paper }) {
   const at = (i: number) => ({ x: parsed.nodes[i].x * k, y: -parsed.nodes[i].y * k });
   return (
     <g pointerEvents="none">
@@ -695,7 +711,7 @@ function DraftGhost({ parsed, k, px }: { parsed: ParsedInput; k: number; px: num
         const c = at(i);
         return (
           <g key={i}>
-            <circle cx={c.x} cy={c.y} r={4 * px} fill="white" stroke={PRIMARY} strokeWidth={1.5 * px} />
+            <circle cx={c.x} cy={c.y} r={4 * px} fill={paperColor(paper)} stroke={PRIMARY} strokeWidth={1.5 * px} />
             {n.label && (
               <text x={c.x + 7 * px} y={c.y - 7 * px} fontSize={12 * px} fill={PRIMARY} fontFamily="Inter, system-ui, sans-serif">
                 {n.label}

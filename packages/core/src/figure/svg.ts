@@ -1,4 +1,5 @@
 import { buildScene, type Box, type PaintFill, type PaintStroke, type Prim, type Scene } from "./render";
+import { paintScene, type Paper } from "./paper";
 import type { FigureDoc } from "./types";
 
 /** Pattern spacing and mark sizes in pt, shared with the TikZ export. */
@@ -92,6 +93,8 @@ export interface SvgOptions {
   margin?: number;
   /** Background color, or null for transparent. Default null. */
   background?: string | null;
+  /** The paper the colors are meant for. Default "print". */
+  paper?: Paper;
 }
 
 export function paddedBox(box: Box | null, margin: number): Box {
@@ -101,7 +104,7 @@ export function paddedBox(box: Box | null, margin: number): Box {
 
 /** A standalone SVG file. Sizes are in pt, so it prints at the figure's real size. */
 export function toSvg(doc: FigureDoc, options: SvgOptions = {}): string {
-  const scene = buildScene(doc, { scale: options.scale });
+  const scene = paintScene(buildScene(doc, { scale: options.scale }), options.paper ?? "print");
   const b = paddedBox(scene.box, options.margin ?? 6);
   const w = Math.max(b.maxX - b.minX, 1);
   const h = Math.max(b.maxY - b.minY, 1);

@@ -19,6 +19,8 @@ import {
   type ExportSettings,
 } from "@/lib/exporting";
 import { useFigureStore } from "@/store/figureStore";
+import { useWorkspaceStore, type ExportColors } from "@/store/workspaceStore";
+import { EXPORT_COLORS, EXPORT_COLORS_HELP, useDarkTheme, useExportPaper } from "@/lib/theme";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 
 function sizeOf(svg: string) {
@@ -59,15 +61,17 @@ function ExportBody() {
   // Exports are named after the figure, like "Triângulo.png".
   const fileBase = figureFileName(name).slice(0, -FIGURE_FILE_EXTENSION.length);
 
+  const paper = useExportPaper();
   const exportSettings: ExportSettings = {
     scale: settings.scale,
     dpi: settings.pngDpi,
     background: settings.pngBackground,
+    paper,
   };
   const tikz = useMemo(() => tikzText(doc, settings.scale), [doc, settings.scale]);
   const svg = useMemo(
-    () => svgText(doc, settings.scale, settings.pngBackground),
-    [doc, settings.scale, settings.pngBackground],
+    () => svgText(doc, { scale: settings.scale, background: settings.pngBackground, paper }),
+    [doc, settings.scale, settings.pngBackground, paper],
   );
   const previewUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
@@ -159,6 +163,7 @@ function ExportBody() {
             ]}
             onChange={(v) => setSetting("pngDpi", Number(v))}
           />
+          <ColorsChoice />
           <BackgroundChoice />
           <FigurePreview url={previewUrl} />
           <div className="flex flex-wrap justify-end gap-2">
@@ -180,6 +185,7 @@ function ExportBody() {
         </TabsContent>
 
         <TabsContent value="svg" className="space-y-3">
+          <ColorsChoice />
           <BackgroundChoice />
           <FigurePreview url={previewUrl} />
           <div className="flex flex-wrap justify-end gap-2">
@@ -202,15 +208,32 @@ function ExportBody() {
   );
 }
 
+/** Only in the dark theme: in the light theme both choices give the same file. */
+function ColorsChoice() {
+  const dark = useDarkTheme();
+  const colors = useWorkspaceStore((s) => s.exportColors);
+  if (!dark) return null;
+  return (
+    <Choice
+      label="Cores"
+      value={colors}
+      options={EXPORT_COLORS}
+      onChange={(next: ExportColors) => useWorkspaceStore.getState().setExportColors(next)}
+      help={EXPORT_COLORS_HELP}
+    />
+  );
+}
+
 function BackgroundChoice() {
   const background = useFigureStore((s) => s.settings.pngBackground);
   const setSetting = useFigureStore((s) => s.setSetting);
+  const themed = useExportPaper() === "dark";
   return (
     <Choice
       label="Fundo"
       value={background}
       options={[
-        { value: "white", label: "Branco" },
+        { value: "white", label: themed ? "Papel do tema" : "Branco" },
         { value: "transparent", label: "Transparente" },
       ]}
       onChange={(v) => setSetting("pngBackground", v)}

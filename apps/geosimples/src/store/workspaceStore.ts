@@ -4,6 +4,8 @@ import { createJSONStorage, persist } from "zustand/middleware";
 /** "classic" is the default page; "pro" fills the window with panels that dock, tab and float. */
 export type Layout = "classic" | "pro";
 export type Theme = "light" | "dark" | "system";
+/** Colors of PNG and SVG exports: as printed, or as the theme shows the figure. */
+export type ExportColors = "print" | "theme";
 
 /** The pro layout's panels, in their default order down the right side. */
 export const PANEL_IDS = ["figure", "properties", "formatting", "labels"] as const;
@@ -39,6 +41,7 @@ export const isToolbar = (id: string): id is ToolbarId => (TOOLBAR_IDS as readon
 interface WorkspaceState {
   layout: Layout;
   theme: Theme;
+  exportColors: ExportColors;
   /** In the pro layout, the point input slides away until the pointer nears the bottom or it gets focus. */
   inputAutoHide: boolean;
   /** The pro layout's arrangement, as the dock saves it. Null means the default arrangement. */
@@ -48,6 +51,7 @@ interface WorkspaceState {
   visible: DockItemId[];
   setLayout: (layout: Layout) => void;
   setTheme: (theme: Theme) => void;
+  setExportColors: (colors: ExportColors) => void;
   setInputAutoHide: (on: boolean) => void;
   setDock: (dock: object | null) => void;
   setDockState: (open: DockItemId[], visible: DockItemId[]) => void;
@@ -58,12 +62,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set) => ({
       layout: "classic",
       theme: "light",
+      exportColors: "print",
       inputAutoHide: true,
       dock: null,
       open: [],
       visible: [],
       setLayout: (layout) => set({ layout }),
       setTheme: (theme) => set({ theme }),
+      setExportColors: (exportColors) => set({ exportColors }),
       setInputAutoHide: (inputAutoHide) => set({ inputAutoHide }),
       setDock: (dock) => set({ dock }),
       setDockState: (open, visible) => set({ open, visible }),
@@ -72,7 +78,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       name: "geosimples-workspace",
       storage: createJSONStorage(() => localStorage),
       version: 3,
-      partialize: ({ layout, theme, inputAutoHide, dock }) => ({ layout, theme, inputAutoHide, dock }),
+      partialize: ({ layout, theme, exportColors, inputAutoHide, dock }) => ({ layout, theme, exportColors, inputAutoHide, dock }),
       // Version 1 kept its own window positions, and version 2 had other toolbars: the dock starts from its default arrangement.
       migrate: (saved) => {
         const { layout, theme, inputAutoHide } = (saved ?? {}) as Partial<WorkspaceState>;
