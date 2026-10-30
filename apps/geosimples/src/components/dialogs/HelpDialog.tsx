@@ -77,9 +77,11 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           {!touch && (
             <li>
               <b>Layout profissional.</b> Em Configurações › Aparência, ou no botão ao lado do nome do GeoSimples. A
-              prévia ocupa a tela, as ferramentas ficam numa coluna à esquerda, e Propriedades, Formatação e os outros
-              painéis viram janelas: arraste pelo título até uma borda para encaixar, ou solte sobre a prévia para
-              flutuar. O botão direito do mouse na prévia mostra todas as ações. Há também o tema escuro.
+              prévia ocupa a tela e cada painel vai para onde você quiser: arraste pela aba até a parte de cima ou
+              de baixo de outro painel para empilhar, até as abas dele para juntar, até uma borda da janela, ou solte
+              sobre a prévia para flutuar. As barras de ferramentas também: arraste pelos pontinhos. Em cima ou
+              embaixo, elas ficam deitadas. O botão direito do mouse na prévia mostra todas as ações; Janelas põe
+              tudo de volta no lugar. Há também o tema escuro.
             </li>
           )}
           <li>

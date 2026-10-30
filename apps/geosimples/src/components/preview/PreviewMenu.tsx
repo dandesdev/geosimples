@@ -44,11 +44,12 @@ import type { ActionId } from "@/store/prefsStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
 import {
   useWorkspaceStore,
-  WINDOW_IDS,
-  WINDOW_TITLES,
+  DOCK_ITEM_IDS,
+  DOCK_ITEM_TITLES,
   type Layout,
   type Theme,
 } from "@/store/workspaceStore";
+import { resetLayout, setItemOpen } from "@/components/workspace/dock";
 import { CIRCLE_OPTIONS, CONSTRUCTIONS, MODES } from "./tools";
 import type { ZoomControls } from "./ZoomBar";
 
@@ -135,7 +136,7 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
   const av = useAvailability();
   const layout = useWorkspaceStore((s) => s.layout);
   const theme = useWorkspaceStore((s) => s.theme);
-  const windows = useWorkspaceStore((s) => s.windows);
+  const open = useWorkspaceStore((s) => s.open);
   const desktop = useSidePanelBeside();
   const dark = useDarkTheme();
   const isEmpty = doc.elements.length === 0;
@@ -329,17 +330,13 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
             Janelas
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-56">
-            {WINDOW_IDS.map((id) => (
-              <ContextMenuCheckboxItem
-                key={id}
-                checked={!windows[id].closed}
-                onCheckedChange={(on) => ws().setClosed(id, !on)}
-              >
-                {WINDOW_TITLES[id]}
+            {DOCK_ITEM_IDS.map((id) => (
+              <ContextMenuCheckboxItem key={id} checked={open.includes(id)} onCheckedChange={(on) => setItemOpen(id, on)}>
+                {DOCK_ITEM_TITLES[id]}
               </ContextMenuCheckboxItem>
             ))}
             <ContextMenuSeparator />
-            <ContextMenuItem inset onSelect={() => ws().resetWindows()}>
+            <ContextMenuItem inset onSelect={resetLayout}>
               Restaurar janelas
             </ContextMenuItem>
           </ContextMenuSubContent>

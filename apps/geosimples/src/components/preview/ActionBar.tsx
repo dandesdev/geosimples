@@ -26,7 +26,7 @@ import { CONSTRUCTION_KINDS, previewProps, useAvailability, type Availability } 
 import { useFigureStore } from "@/store/figureStore";
 import { cn } from "@/lib/utils";
 
-const Divider = ({ className, vertical = false }: { className?: string; vertical?: boolean }) => (
+export const Divider = ({ className, vertical = false }: { className?: string; vertical?: boolean }) => (
   <div
     className={cn("shrink-0 bg-border", vertical ? "my-1 h-px w-6" : "mx-1 h-6 w-px", className)}
     aria-hidden="true"
@@ -116,10 +116,10 @@ const act = (fn: () => void) => () => {
 };
 
 
-/** Where the toolbar's menus open: below a row, to the right of the pro layout's column. */
-type MenuSide = "bottom" | "right";
+/** Where the toolbar's menus open: below the classic row; in the pro layout, away from the edge the toolbar sits on. */
+export type MenuSide = "top" | "right" | "bottom" | "left";
 
-function Tools({ menuSide }: { menuSide: MenuSide }) {
+export function Tools({ menuSide }: { menuSide: MenuSide }) {
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const av = useAvailability();
   const anyCircle = CIRCLE_OPTIONS.some((o) => !av[`circle-${o.mode}`].reason);
@@ -249,7 +249,7 @@ function Tools({ menuSide }: { menuSide: MenuSide }) {
   );
 }
 
-function DeleteButton() {
+export function DeleteButton() {
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
   return (
@@ -265,7 +265,7 @@ function DeleteButton() {
   );
 }
 
-function History() {
+export function History() {
   const canUndo = useFigureStore((s) => s.past.length > 0);
   const canRedo = useFigureStore((s) => s.future.length > 0);
   const store = useFigureStore.getState;
@@ -281,37 +281,30 @@ function History() {
   );
 }
 
-/**
- * The figure's tools. `layout` is "row" over the preview, "strip" on phones
- * (one row that scrolls sideways, with the zoom controls, `zoom`, that don't
- * fit over the preview) or "column" in the pro layout's tool column.
- */
-export function ActionBar({ layout, zoom = null }: { layout: "row" | "strip" | "column"; zoom?: ZoomControls | null }) {
+/** Export as a square button, for the pro layout's toolbars. */
+export function ExportIconButton() {
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
+  return (
+    <IconButton
+      label="Exportar"
+      hint="TikZ, SVG ou PNG."
+      shortcut="export"
+      onClick={() => emitCommand("export")}
+      disabled={isEmpty}
+      className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+    >
+      <Download />
+    </IconButton>
+  );
+}
 
-  if (layout === "column") {
-    return (
-      <div role="toolbar" aria-label="Ações da figura" aria-orientation="vertical" className="flex flex-col items-center gap-0.5">
-        <IconButton
-          label="Exportar"
-          hint="TikZ, SVG ou PNG."
-          shortcut="export"
-          onClick={() => emitCommand("export")}
-          disabled={isEmpty}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-        >
-          <Download />
-        </IconButton>
-        <Divider vertical />
-        <History />
-        <DeleteButton />
-        <Divider vertical />
-        <Tools menuSide="right" />
-        <Divider vertical />
-        <ModeSwitch vertical />
-      </div>
-    );
-  }
+/**
+ * The figure's tools over the preview. `layout` is "row", or "strip" on phones:
+ * one row that scrolls sideways, with the zoom controls (`zoom`) that don't
+ * fit over the preview.
+ */
+export function ActionBar({ layout, zoom = null }: { layout: "row" | "strip"; zoom?: ZoomControls | null }) {
+  const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
 
   return (
     <div

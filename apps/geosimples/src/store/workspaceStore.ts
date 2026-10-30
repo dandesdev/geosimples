@@ -1,109 +1,54 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-/** "classic" is the default page; "pro" fills the window with a tool column and movable windows. */
+/** "classic" is the default page; "pro" fills the window with panels that dock, tab and float. */
 export type Layout = "classic" | "pro";
 export type Theme = "light" | "dark" | "system";
 
-/** The windows of the pro layout, in their default order. */
-export const WINDOW_IDS = ["figure", "properties", "formatting", "labels"] as const;
-export type WindowId = (typeof WINDOW_IDS)[number];
+/** The pro layout's panels, in their default order down the right side. */
+export const PANEL_IDS = ["figure", "properties", "formatting", "labels"] as const;
+export type PanelId = (typeof PANEL_IDS)[number];
 
-export const WINDOW_TITLES: Record<WindowId, string> = {
+export const PANEL_TITLES: Record<PanelId, string> = {
   figure: "Figura",
   properties: "Propriedades",
   formatting: "Formatação",
   labels: "Rótulos e textos",
 };
 
-export const DOCK_NAMES: Record<Dock, string> = {
-  left: "à esquerda",
-  right: "à direita",
-  top: "em cima",
-  bottom: "embaixo",
+/** The pro layout's toolbars: the tool column, in pieces that dock and float on their own. */
+export const TOOLBAR_IDS = ["tools-file", "tools-build", "tools-app"] as const;
+export type ToolbarId = (typeof TOOLBAR_IDS)[number];
+
+export const TOOLBAR_TITLES: Record<ToolbarId, string> = {
+  "tools-file": "Arquivo e histórico",
+  "tools-build": "Ferramentas",
+  "tools-app": "Janelas e ajuda",
 };
 
-/** A window docked on an edge of the work area, or floating over the preview. */
-export type Dock = "left" | "right" | "top" | "bottom";
-export type Place = Dock | "float";
-export const DOCKS: Dock[] = ["left", "right", "top", "bottom"];
+/** Everything the Janelas menu opens and closes. */
+export type DockItemId = PanelId | ToolbarId;
+export const DOCK_ITEM_IDS: DockItemId[] = [...PANEL_IDS, ...TOOLBAR_IDS];
+export const DOCK_ITEM_TITLES: Record<DockItemId, string> = { ...PANEL_TITLES, ...TOOLBAR_TITLES };
 
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface WindowState {
-  place: Place;
-  /** Position in its dock. */
-  order: number;
-  /** Only the title bar shows. */
-  collapsed: boolean;
-  /** Hidden; the Janelas menu opens it again. */
-  closed: boolean;
-  /** Where it floats, in px from the work area's top left. Kept while docked, for the next time it floats. */
-  rect: Rect;
-  /** Stacking among floating windows: the higher, the more in front. */
-  z: number;
-}
-
-/** Docks are this many px across: width for left and right, height for top and bottom. */
-export type DockSizes = Record<Dock, number>;
-
-export const DOCK_LIMITS = { min: 200, max: 640 };
-
-const DEFAULT_DOCK_SIZES: DockSizes = { left: 320, right: 340, top: 240, bottom: 240 };
-
-function defaultWindows(): Record<WindowId, WindowState> {
-  return Object.fromEntries(
-    WINDOW_IDS.map((id, i) => [
-      id,
-      {
-        place: "right",
-        order: i,
-        collapsed: false,
-        closed: false,
-        rect: { x: 80 + i * 32, y: 60 + i * 32, w: 320, h: 420 },
-        z: i,
-      },
-    ]),
-  ) as Record<WindowId, WindowState>;
-}
+export const isToolbar = (id: string): id is ToolbarId => (TOOLBAR_IDS as readonly string[]).includes(id);
 
 interface WorkspaceState {
   layout: Layout;
   theme: Theme;
   /** In the pro layout, the point input slides away until the pointer nears the bottom or it gets focus. */
   inputAutoHide: boolean;
-  windows: Record<WindowId, WindowState>;
-  docks: DockSizes;
-  /** The window filling the work area, if any. */
-  maximized: WindowId | null;
+  /** The pro layout's arrangement, as the dock saves it. Null means the default arrangement. */
+  dock: object | null;
+  /** Panels and toolbars open in the pro layout right now, and those in view (not a hidden tab). Not saved: the dock reports them. */
+  open: DockItemId[];
+  visible: DockItemId[];
   setLayout: (layout: Layout) => void;
   setTheme: (theme: Theme) => void;
   setInputAutoHide: (on: boolean) => void;
-  /** Docks a window at `index` in a dock (the end by default), or floats it at `rect`. */
-  place: (id: WindowId, place: Place, opts?: { index?: number; rect?: Rect }) => void;
-  setRect: (id: WindowId, rect: Rect) => void;
-  setCollapsed: (id: WindowId, collapsed: boolean) => void;
-  setClosed: (id: WindowId, closed: boolean) => void;
-  setMaximized: (id: WindowId | null) => void;
-  /** Brings a floating window to the front. */
-  focus: (id: WindowId) => void;
-  setDockSize: (dock: Dock, size: number) => void;
-  resetWindows: () => void;
+  setDock: (dock: object | null) => void;
+  setDockState: (open: DockItemId[], visible: DockItemId[]) => void;
 }
-
-/** Windows in a dock, top to bottom or left to right. */
-export function docked(windows: Record<WindowId, WindowState>, dock: Dock): WindowId[] {
-  return WINDOW_IDS.filter((id) => windows[id].place === dock && !windows[id].closed).sort(
-    (a, b) => windows[a].order - windows[b].order,
-  );
-}
-
-const clampDock = (size: number) => Math.round(Math.min(DOCK_LIMITS.max, Math.max(DOCK_LIMITS.min, size)));
 
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
@@ -111,66 +56,25 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       layout: "classic",
       theme: "light",
       inputAutoHide: true,
-      windows: defaultWindows(),
-      docks: DEFAULT_DOCK_SIZES,
-      maximized: null,
+      dock: null,
+      open: [],
+      visible: [],
       setLayout: (layout) => set({ layout }),
       setTheme: (theme) => set({ theme }),
       setInputAutoHide: (inputAutoHide) => set({ inputAutoHide }),
-      place: (id, place, opts = {}) =>
-        set((s) => {
-          const windows = { ...s.windows };
-          const top = Math.max(...WINDOW_IDS.map((w) => windows[w].z)) + 1;
-          const current = windows[id];
-          if (place === "float") {
-            windows[id] = { ...current, place, closed: false, rect: opts.rect ?? current.rect, z: top };
-          } else {
-            // Renumber the dock with the window inserted, so orders stay 0, 1, 2…
-            const others = docked(windows, place).filter((w) => w !== id);
-            const index = Math.min(Math.max(opts.index ?? others.length, 0), others.length);
-            others.splice(index, 0, id);
-            others.forEach((w, order) => {
-              windows[w] = { ...windows[w], order };
-            });
-            windows[id] = { ...windows[id], place, closed: false };
-          }
-          return { windows, maximized: s.maximized === id ? null : s.maximized };
-        }),
-      setRect: (id, rect) => set((s) => ({ windows: { ...s.windows, [id]: { ...s.windows[id], rect } } })),
-      setCollapsed: (id, collapsed) =>
-        set((s) => ({
-          windows: { ...s.windows, [id]: { ...s.windows[id], collapsed } },
-          maximized: collapsed && s.maximized === id ? null : s.maximized,
-        })),
-      setClosed: (id, closed) =>
-        set((s) => ({
-          windows: { ...s.windows, [id]: { ...s.windows[id], closed, collapsed: closed ? s.windows[id].collapsed : false } },
-          maximized: closed && s.maximized === id ? null : s.maximized,
-        })),
-      setMaximized: (maximized) =>
-        set((s) => ({
-          maximized,
-          windows: maximized ? { ...s.windows, [maximized]: { ...s.windows[maximized], collapsed: false } } : s.windows,
-        })),
-      focus: (id) =>
-        set((s) => {
-          const top = Math.max(...WINDOW_IDS.map((w) => s.windows[w].z));
-          if (s.windows[id].z === top) return s;
-          return { windows: { ...s.windows, [id]: { ...s.windows[id], z: top + 1 } } };
-        }),
-      setDockSize: (dock, size) => set((s) => ({ docks: { ...s.docks, [dock]: clampDock(size) } })),
-      resetWindows: () => set({ windows: defaultWindows(), docks: DEFAULT_DOCK_SIZES, maximized: null }),
+      setDock: (dock) => set({ dock }),
+      setDockState: (open, visible) => set({ open, visible }),
     }),
     {
       name: "geosimples-workspace",
       storage: createJSONStorage(() => localStorage),
-      version: 1,
-      // Saved data from an older build may miss windows added since.
-      merge: (saved, current) => {
-        const s = (saved ?? {}) as Partial<WorkspaceState>;
-        const windows = { ...current.windows };
-        for (const id of WINDOW_IDS) if (s.windows?.[id]) windows[id] = { ...windows[id], ...s.windows[id] };
-        return { ...current, ...s, windows, docks: { ...current.docks, ...s.docks } };
+      version: 2,
+      partialize: ({ layout, theme, inputAutoHide, dock }) => ({ layout, theme, inputAutoHide, dock }),
+      // Version 1 kept its own window positions; the dock starts from its default arrangement instead.
+      migrate: (saved) => {
+        const { layout, theme, inputAutoHide } = (saved ?? {}) as Partial<WorkspaceState>;
+        const kept = Object.entries({ layout, theme, inputAutoHide }).filter(([, v]) => v !== undefined);
+        return { ...Object.fromEntries(kept), dock: null } as WorkspaceState;
       },
     },
   ),
