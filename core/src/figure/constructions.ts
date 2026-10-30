@@ -3,13 +3,15 @@ import {
   angleArc,
   bisectorDirection,
   constructionParents,
-  crossings,
+  curveCrossings,
   distanceToLine,
+  isCurve,
   lineIntersection,
   pointMap,
   projectOntoLine,
 } from "./geometry";
 import { nextPointNames, withText } from "./labels";
+import { notablePoints } from "./plot";
 import {
   angleExists,
   deleteElements,
@@ -24,7 +26,7 @@ import {
   type OpOptions,
   type OpResult,
 } from "./ops";
-import type { Circle, Element, FigureDoc, Id, Point, PointConstruction, Segment, Stroke } from "./types";
+import type { Circle, Element, FigureDoc, Id, NotableFeature, Point, PointConstruction, Segment, Stroke } from "./types";
 import { add, dist, dot, mid, perp, polar, scale, sub, type Vec } from "./vec";
 
 /** The classic constructions, as offered by the editor's Construções menu. */
@@ -78,11 +80,11 @@ function draft(doc: FigureDoc, opts: OpOptions) {
   };
 
   return {
-    /** Adds a point that follows its construction, or finds the one already there. */
-    point(at: Vec, construction: PointConstruction, hidden = false): Id {
+    /** Adds a point that follows its construction, or finds the one already there. `label` overrides automatic names. */
+    point(at: Vec, construction: PointConstruction, hidden = false, label?: string): Id {
       const existing = findConstructed(working, construction, at);
       if (existing) return existing.id;
-      const name = !hidden && opts.autoName ? nextPointNames(working, 1)[0] : undefined;
+      const name = hidden ? undefined : (label ?? (opts.autoName ? nextPointNames(working, 1)[0] : undefined));
       const p: Point = {
         id: nextId("point"),
         type: "point",
@@ -615,24 +617,22 @@ export function setCircleArc(doc: FigureDoc, ids: Id[], on: boolean): OpResult {
 const MAX_INTERSECTED = 12;
 
 /**
- * Points where the selected segments and circles cross each other. Crossings
- * at points already in the figure are skipped.
+ * Points where the selected segments, circles, graphs and vertical lines
+ * cross each other. Crossings at points already in the figure are skipped.
  */
 export function makeIntersection(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
   const byId = new Map(doc.elements.map((e) => [e.id, e]));
-  const curves = selection
-    .map((id) => byId.get(id))
-    .filter((e): e is Segment | Circle => e?.type === "segment" || e?.type === "circle");
-  if (curves.length < 2) return fail(doc, "Selecione dois segmentos ou circunferências que se cruzem.");
-  if (curves.length > MAX_INTERSECTED) {
-    return fail(doc, `Selecione no máximo ${MAX_INTERSECTED} segmentos ou circunferências.`);
+  const curves = selection.map((id) => byId.get(id)).filter(isCurve);
+  if (curves.length < 2) {
+    return fail(doc, "Selecione dois objetos que se cruzem: segmentos, circunferências, gráficos ou retas verticais.");
   }
+  if (curves.length > MAX_INTERSECTED) return fail(doc, `Selecione no máximo ${MAX_INTERSECTED} objetos.`);
   const pts = pointMap(doc);
   const d = draft(doc, opts);
   let crossed = 0;
   for (let i = 0; i < curves.length; i++) {
     for (let j = i + 1; j < curves.length; j++) {
-      for (const x of crossings(curves[i], curves[j], pts)) {
+      for (const x of curveCrossings(curves[i], curves[j], pts)) {
         if (!x.inside) continue;
         crossed++;
         const taken = d.doc.elements.some((e) => e.type === "point" && dist(e, x.point) < SAME);
@@ -643,6 +643,48 @@ export function makeIntersection(doc: FigureDoc, selection: Id[], opts: OpOption
   }
   if (crossed === 0) return fail(doc, "Os objetos selecionados não se cruzam.");
   return d.result("Os objetos já se cruzam em pontos da figura.");
+}
+
+const SUBSCRIPT = "₀₁₂₃₄₅₆₇₈₉";
+const subscript = (n: number) => [...String(n)].map((d) => SUBSCRIPT[Number(d)]).join("");
+
+/** Names textbooks give notable points: x₁, x₂ for roots, V for the vertex. The y crossing goes unnamed. */
+function notableName(feature: NotableFeature, index: number, count: number): string | undefined {
+  if (feature === "root") return `x${subscript(index + 1)}`;
+  if (feature === "extremum") return count === 1 ? "V" : `V${subscript(index + 1)}`;
+  return undefined;
+}
+
+const NONE_FOUND: Record<NotableFeature, string> = {
+  root: "O gráfico não tem raízes na parte desenhada.",
+  extremum: "O gráfico não tem máximos nem mínimos na parte desenhada.",
+  yAxis: "O gráfico não cruza o eixo y na parte desenhada.",
+};
+
+const ALREADY: Record<NotableFeature, string> = {
+  root: "As raízes já estão marcadas.",
+  extremum: "Os máximos e mínimos já estão marcados.",
+  yAxis: "O corte no eixo y já está marcado.",
+};
+
+/**
+ * Marks the roots, turning points or y-axis crossing of the selected graphs.
+ * They follow each graph's expression and go away when it no longer has them.
+ */
+export function markNotable(doc: FigureDoc, selection: Id[], feature: NotableFeature, opts: OpOptions = {}): OpResult {
+  const graphs = selectedOfType(doc, selection, "function");
+  if (graphs.length === 0) return fail(doc, "Selecione um gráfico.");
+  const d = draft(doc, opts);
+  let found = 0;
+  for (const g of graphs) {
+    const at = notablePoints(g, feature);
+    found += at.length;
+    at.forEach((p, index) => {
+      d.point(p, { kind: "notable", graph: g.id, feature, index }, false, notableName(feature, index, at.length));
+    });
+  }
+  if (found === 0) return fail(doc, NONE_FOUND[feature]);
+  return d.result(ALREADY[feature]);
 }
 
 /** Makes constructed points free: they stay where they are and stop following their parents. */

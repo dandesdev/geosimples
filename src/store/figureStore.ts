@@ -6,6 +6,7 @@ import {
   emptyDoc,
   latestFigure,
   LIBRARY_KEY,
+  settleDoc,
   uniqueName,
   untitledName,
   type FigureDoc,
@@ -15,6 +16,7 @@ import {
   type KeyValueStorage,
   type OpResult,
   type QuickFigure,
+  type Settled,
   NO_QUICK_FIGURE,
 } from "@geosimples/core/figure";
 
@@ -116,6 +118,24 @@ interface LibrarySlice {
 }
 
 let lastCommit: { key: string; at: number } | null = null;
+
+/** "x₁, x₂ e V", or "2 pontos" when they have no names. */
+function listNames(names: string[]): string {
+  const named = names.filter(Boolean);
+  if (named.length < names.length) return names.length === 1 ? "1 ponto" : `${names.length} pontos`;
+  return named.length > 1 ? `${named.slice(0, -1).join(", ")} e ${named[named.length - 1]}` : named[0];
+}
+
+/** Says which marks went away with what they marked, with a way back, and what's left to mark. */
+function announce(settled: Settled, undo: () => void) {
+  const n = settled.dropped.length;
+  if (n > 0) {
+    toast(`${listNames(settled.dropped)} ${n === 1 ? "foi apagado" : "foram apagados"}: o que ${n === 1 ? "marcava" : "marcavam"} deixou de existir.`, {
+      action: { label: "Desfazer", onClick: undo },
+    });
+  }
+  for (const note of settled.notes) toast(note);
+}
 let transientBase: FigureDoc | null = null;
 
 const pruneSelection = (doc: FigureDoc, selection: Id[]) => {
@@ -308,9 +328,12 @@ export const useFigureStore = create<FigureState>()(
       multiSelect: false,
       quickFigure: NO_QUICK_FIGURE,
 
-      commit: (doc, coalesceKey) => {
+      commit: (next, coalesceKey) => {
         const state = get();
-        if (doc === state.doc) return;
+        if (next === state.doc) return;
+        // Roots, crossings and points on graphs that no longer exist go in the same undo step.
+        const settled = settleDoc(state.doc, next);
+        const doc = settled.doc;
         const now = Date.now();
         const merge =
           coalesceKey !== undefined &&
@@ -324,6 +347,7 @@ export const useFigureStore = create<FigureState>()(
           future: [],
           selection: pruneSelection(doc, state.selection),
         });
+        announce(settled, () => get().undo());
       },
 
       run: (op, select = "created") => {
@@ -345,9 +369,13 @@ export const useFigureStore = create<FigureState>()(
         const base = transientBase;
         transientBase = null;
         lastCommit = null;
-        const { doc, past } = get();
-        if (!base || base === doc) return;
-        set({ past: [...past, base].slice(-HISTORY_LIMIT), future: [] });
+        const { doc: dragged, past, selection } = get();
+        if (!base || base === dragged) return;
+        // Settled at the end only: a crossing lost mid-drag can come back before the drop.
+        const settled = settleDoc(base, dragged);
+        const doc = settled.doc;
+        set({ doc, past: [...past, base].slice(-HISTORY_LIMIT), future: [], selection: pruneSelection(doc, selection) });
+        announce(settled, () => get().undo());
       },
 
       toggleSelect: (id) =>

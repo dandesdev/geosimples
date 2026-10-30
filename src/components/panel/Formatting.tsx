@@ -6,6 +6,7 @@ import {
   PointEditor,
   PolygonEditor,
   SegmentEditor,
+  NumberLineEditor,
   TextEditor,
   VerticalLineEditor,
 } from "./elementEditors";
@@ -32,6 +33,7 @@ export function Formatting() {
       {el.type === "text" && <TextEditor el={el} {...props} />}
       {el.type === "function" && <FunctionEditor el={el} {...props} />}
       {el.type === "vline" && <VerticalLineEditor el={el} {...props} />}
+      {el.type === "numberline" && <NumberLineEditor el={el} {...props} />}
       {el.type === "axes" && <AxesEditor el={el} {...props} />}
     </>
   );

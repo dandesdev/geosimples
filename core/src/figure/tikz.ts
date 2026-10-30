@@ -274,6 +274,30 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         if (el.names[1]) sections.label.push(node(el.names[1], yEnd, { x: el.size * 0.9, y: 0 }));
         break;
       }
+      case "numberline": {
+        const from = at({ x: el.x[0], y: el.y });
+        const tip = at({ x: el.x[1], y: el.y });
+        sections.axes.push(`\\draw${opts(strokeOpts(el.stroke))} (${from}) -- (${tip});`);
+        const len = 4 + el.stroke.width * 2;
+        const half = len * 0.4;
+        const headOpts = [color(el.stroke.color)];
+        if (el.stroke.opacity < 1) headOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
+        sections.axes.push(
+          `\\fill${opts(headOpts)} (${tip}) -- ${shifted(tip, { x: -len, y: half })} -- ${shifted(tip, { x: -len, y: -half })} -- cycle;`,
+        );
+        const tick = 2.5;
+        const xs = axisTicks(el.x, el.step, NaN);
+        const ticks = xs.map((x) => at({ x, y: el.y })).map((b) => `${shifted(b, { x: 0, y: -tick })} -- ${shifted(b, { x: 0, y: tick })}`);
+        if (ticks.length) sections.axes.push(`\\draw${opts(strokeOpts({ ...el.stroke, dash: "solid" }))} ${ticks.join(" ")};`);
+        if (el.numbers) {
+          for (const x of xs) {
+            sections.label.push(
+              `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(at({ x, y: el.y }), { x: 0, y: -(tick + el.size * 0.9) })} {${labelToLatex(formatNumber(x), "serif")}};`,
+            );
+          }
+        }
+        break;
+      }
       case "text":
         sections.label.push(
           `\\node${opts(textOptions(el.color, el.size, el.font, color))} at (${at(el)}) {${labelToLatex(el.text, el.font)}};`,
@@ -310,7 +334,7 @@ function textOptions(c: string, size: number, font: LabelFont, color: (c: string
 }
 
 function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
-  if (el.type === "text" || el.type === "axes") return null;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return null;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return null;
   const { size, measure } = el.label;

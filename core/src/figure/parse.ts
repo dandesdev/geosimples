@@ -35,6 +35,14 @@ export interface ParsedLine {
   x: number;
 }
 
+/** An interval to mark on the number line, written [-2; 3[ or ]-∞; 1]. Null ends are infinite. */
+export interface ParsedInterval {
+  from: number | null;
+  to: number | null;
+  /** Whether each end belongs to the interval. */
+  closed: [boolean, boolean];
+}
+
 /** A point to create on a graph, written P = f(2) or f(2). */
 export interface ParsedGraphPoint {
   graph: Id;
@@ -70,6 +78,8 @@ export interface ParsedInput {
   lines: ParsedLine[];
   /** Points on graphs, written P = f(2). The whole input is then the point. */
   graphPoints: ParsedGraphPoint[];
+  /** Intervals on the number line, written [-2; 3[. The whole input is then the interval. */
+  intervals: ParsedInterval[];
   tokens: InputToken[];
   errors: InputError[];
 }
@@ -102,7 +112,8 @@ const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
  * - `"texto"@(X;Y)` places a free text centered at a point; any point form works after `@`.
  */
 export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
-  const whole = parseFunctionInput(text) ?? parseLineInput(text) ?? parseGraphPointInput(text, ctx);
+  const whole =
+    parseFunctionInput(text) ?? parseLineInput(text) ?? parseGraphPointInput(text, ctx) ?? parseIntervalInput(text);
   if (whole) return whole;
   const nodes: InputNode[] = [];
   const segments: [number, number][] = [];
@@ -343,6 +354,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     functions: [],
     lines: [],
     graphPoints: [],
+    intervals: [],
     tokens: tokens.sort((x, y) => x.start - y.start),
     errors,
   };
@@ -387,6 +399,7 @@ const emptyInput = (): ParsedInput => ({
   functions: [],
   lines: [],
   graphPoints: [],
+  intervals: [],
   tokens: [],
   errors: [],
 });
@@ -456,5 +469,48 @@ function parseGraphPointInput(text: string, ctx: InputContext): ParsedInput | nu
   const argStart = text.indexOf("(", nameStart) + 1;
   const x = withValue(result, constant(arg, argStart), argStart, argStart + arg.length);
   if (x !== null) result.graphPoints.push({ graph: graph.id, x, label: label.slice(0, LIMITS.labelLength) });
+  return result;
+}
+
+/** `[a; b]` with either bracket turned: [ closes the start, ] opens it, and the other way at the end. */
+const INTERVAL_INPUT = /^(\s*)([[\]])([^;[\]]*);([^;[\]]*)([[\]])\s*$/;
+
+/** -∞, +∞, -inf, inf: an end that runs off the number line. */
+const INFINITY = /^\s*([+-]?)\s*(?:∞|inf)\s*$/i;
+
+/** An interval on the number line, like [-2; 3[ or ]-∞; 1/2]. Returns null for anything else. */
+function parseIntervalInput(text: string): ParsedInput | null {
+  const m = INTERVAL_INPUT.exec(text);
+  if (!m) return null;
+  const [, lead, open, first, second, close] = m;
+  const result = emptyInput();
+  const start = lead.length;
+  const firstAt = start + 1;
+  const secondAt = firstAt + first.length + 1;
+  const closeAt = text.trimEnd().length - 1;
+  result.tokens.push({ kind: "name", start, end: firstAt }, { kind: "name", start: closeAt, end: closeAt + 1 });
+  const end = (raw: string, at: number, side: "-" | "+"): number | null | undefined => {
+    const inf = INFINITY.exec(raw);
+    if (inf) {
+      if (inf[1] !== (side === "-" ? "-" : "+") && !(side === "+" && inf[1] === "")) {
+        result.errors.push({ message: side === "-" ? "O início só pode ser -∞." : "O fim só pode ser +∞.", start: at, end: at + raw.length });
+        result.tokens.push({ kind: "error", start: at, end: at + raw.length });
+        return undefined;
+      }
+      result.tokens.push({ kind: "text", start: at, end: at + raw.length });
+      return null;
+    }
+    const v = withValue(result, constant(raw, at), at, at + raw.length);
+    return v === null ? undefined : v;
+  };
+  const from = end(first, firstAt, "-");
+  const to = end(second, secondAt, "+");
+  if (from === undefined || to === undefined) return result;
+  if (from !== null && to !== null && !(from < to)) {
+    result.errors.push({ message: "O início do intervalo precisa ser menor que o fim.", start, end: text.length });
+    return result;
+  }
+  // An infinite end is never included, whatever the bracket says.
+  result.intervals.push({ from, to, closed: [open === "[" && from !== null, close === "]" && to !== null] });
   return result;
 }

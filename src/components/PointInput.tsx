@@ -43,6 +43,7 @@ function summary(parsed: ParsedInput): string {
   if (parsed.functions.length > 0) return "Gráfico da função. Enter para adicionar.";
   if (parsed.lines.length > 0) return "Reta vertical. Enter para adicionar.";
   if (parsed.graphPoints.length > 0) return "Ponto sobre o gráfico. Enter para adicionar.";
+  if (parsed.intervals.length > 0) return "Intervalo na reta numérica. Enter para adicionar.";
   const fresh = parsed.nodes.filter((n) => n.kind === "new").length;
   const parts: string[] = [];
   if (fresh) parts.push(`${fresh} ${fresh === 1 ? "ponto novo" : "pontos novos"}`);
@@ -213,6 +214,9 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             </p>
             <p>
               <b>Nome=f(a)</b> põe um ponto sobre o gráfico de f: <code>P=f(2)</code>
+            </p>
+            <p>
+              <b>[a; b]</b> marca um intervalo na reta numérica; <b>]</b> e <b>[</b> viradas para fora deixam a ponta aberta: <code>[-2; 3[</code>, <code>]-∞; 1]</code>
             </p>
           </TooltipContent>
         </Tooltip>

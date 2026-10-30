@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { counts, leaveInput, pointInput, savedFigure, toolbarButton } from "./helpers";
+import { boxSelectAll, clickAlong, counts, leaveInput, pointInput, savedFigure, toolbarButton } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -204,4 +204,75 @@ test("Escape leaves the input bar and drops an untouched y = ", async ({ page })
   await input.press("Escape");
   await expect(input).not.toBeFocused();
   await expect(input).toHaveValue("A=(1;1)");
+});
+
+test("roots follow the formula, and go away with a way back when it has none", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2-1");
+  await input.press("Enter");
+  // The new graph comes in selected.
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Raízes/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+
+  await clickAlong(page, "f1", 0.85);
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  const expr = page.getByRole("textbox", { name: "Expressão da função" });
+  await expr.fill("x^2-4");
+  await expr.press("Enter");
+  await expect.poll(async () => (await saved(page, "p1"))?.x).toBe(-2);
+
+  await expr.fill("x^2+1");
+  await expr.press("Enter");
+  await expect(page.getByText("x₁ e x₂ foram apagados: o que marcavam deixou de existir.")).toBeVisible();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
+  await page.getByRole("button", { name: "Desfazer" }).last().click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+});
+
+test("two graphs cross through Construções › Interseção", async ({ page }) => {
+  const input = pointInput(page);
+  for (const f of ["y=x", "y=2-x"]) {
+    await input.fill(f);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await boxSelectAll(page);
+  await toolbarButton(page, "Construções").click();
+  await page.getByRole("menuitem", { name: /Interseção/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 2, point: 1 });
+  const doc = (await savedFigure(page))!;
+  expect(doc.elements.find((e) => e.type === "point")).toMatchObject({ x: 1, y: 1 });
+});
+
+test("a number line takes intervals typed in the input bar", async ({ page }) => {
+  const input = pointInput(page);
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Reta numérica/ }).click();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("[");
+  await page.keyboard.type("-2; 3[");
+  await expect(page.getByText("Intervalo na reta numérica. Enter para adicionar.")).toBeVisible();
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toEqual({ numberline: 1, segment: 1, point: 2 });
+  const doc = (await savedFigure(page))!;
+  const shapes = (doc.elements as unknown as { type: string; shape?: string }[]).filter((e) => e.type === "point").map((e) => e.shape);
+  expect(shapes).toEqual(["dot", "ring"]);
+});
+
+test("a square turns into four functions", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("A=(0;0)--B=(1;0)--C=(1;1)--D=(0;1)--");
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toEqual({ point: 4, segment: 4 });
+  await leaveInput(page);
+  await boxSelectAll(page);
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Transformar em funções/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, point: 4, function: 2, vline: 2 });
+  const doc = (await savedFigure(page))!;
+  const exprs = (doc.elements as unknown as { type: string; expr?: string; x?: number }[])
+    .filter((e) => e.type === "function" || e.type === "vline")
+    .map((e) => e.expr ?? `x = ${e.x}`);
+  expect(exprs).toEqual(["0", "x = 1", "1", "x = 0"]);
 });

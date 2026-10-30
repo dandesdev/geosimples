@@ -55,7 +55,7 @@ export const CONSTRUCTIONS: Record<ConstructionKind, { Icon: ComponentType; titl
   intersection: {
     Icon: IntersectionIcon,
     title: "Interseção",
-    hint: "Marca onde segmentos e circunferências selecionados se cruzam.",
+    hint: "Marca onde segmentos, circunferências, gráficos e retas verticais selecionados se cruzam.",
   },
 };
 

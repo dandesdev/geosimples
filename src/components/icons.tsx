@@ -203,6 +203,54 @@ export const GuidesIcon = (p: IconProps) => (
   </Icon>
 );
 
+/* A parabola over a centered x axis, for the notable points. */
+const MidAxis = () => <path d="M2 14 L22 14" strokeWidth={1.1} />;
+const Parabola = () => <path d="M5 4 C8 22 16 22 19 4" />;
+
+export const RootsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <MidAxis />
+    <Parabola />
+    <Dot cx={7.3} cy={14} />
+    <Dot cx={16.7} cy={14} />
+  </Icon>
+);
+
+export const ExtremumIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <MidAxis />
+    <Parabola />
+    <Dot cx={12} cy={17.5} />
+  </Icon>
+);
+
+export const YInterceptIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 3 L9 21" strokeWidth={1.1} />
+    <path d="M3 18 L21 6" />
+    <Dot cx={9} cy={14} />
+  </Icon>
+);
+
+export const NumberLineIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 14 L21 14 M18 11.5 L21 14 L18 16.5" strokeWidth={1.1} />
+    <path d="M4 12.5 V15.5" strokeWidth={1.1} />
+    <path d="M7 14 L15 14" strokeWidth={2.6} />
+    <circle cx={7} cy={14} r={1.9} fill="currentColor" stroke="none" />
+    <circle cx={15} cy={14} r={1.9} className="fill-background" strokeWidth={1.2} />
+  </Icon>
+);
+
+export const ToFunctionsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 9 L3 3 L9 3" strokeWidth={1.1} strokeDasharray="2 2" />
+    <path d="M10 14 L12.5 16.5 L10 19" strokeWidth={1.2} />
+    <path d="M14 21 C15 12 18 10 21 9" />
+    <path d="M3 13 C6 13 6 4 9 4" strokeWidth={1.1} />
+  </Icon>
+);
+
 export const Logo = (p: IconProps) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...p}>
     <path d="M4 19 L12 5 L20 19 Z" fill="currentColor" fillOpacity={0.18} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />

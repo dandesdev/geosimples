@@ -90,14 +90,25 @@ export type PointConstruction =
    */
   | { kind: "perpendicular"; points: [Id, Id]; along: number; across: number; fixed?: true }
   /**
-   * Where two segments or circles cross. With two crossings, `index` 0 is the
-   * one nearer the first end of a segment, or left of center-to-center for two circles.
+   * Where two curves cross: segments, circles, function graphs and vertical
+   * lines. Between segments and circles, `index` 0 is the crossing nearer the
+   * first end of a segment, or left of center-to-center for two circles. When
+   * a graph or vertical line is one of them, crossings count left to right
+   * (bottom to top at the same x), and the point is deleted when its crossing is gone.
    */
-  | { kind: "intersection"; of: [Id, Id]; index: 0 | 1 }
+  | { kind: "intersection"; of: [Id, Id]; index: number }
   /** An end of a circle's arc: its start (0) or its end (1). Outer ends of a sector's radii. */
   | { kind: "arcEnd"; circle: Id; end: 0 | 1 }
   /** On the graph of a function, at (x, f(x)). Dragging it moves x. */
-  | { kind: "onGraph"; graph: Id; x: number };
+  | { kind: "onGraph"; graph: Id; x: number }
+  /**
+   * A notable point of a graph: its `index`-th root, turning point (max or
+   * min) or crossing with the y axis, left to right. It follows the
+   * expression, and is deleted when the graph no longer has it.
+   */
+  | { kind: "notable"; graph: Id; feature: NotableFeature; index: number };
+
+export type NotableFeature = "root" | "extremum" | "yAxis";
 
 export interface Point {
   id: Id;
@@ -265,7 +276,34 @@ export interface Axes {
   label?: never;
 }
 
-export type Element = Point | Segment | Angle | Circle | Polygon | FreeText | FunctionGraph | VerticalLine | Axes;
+/**
+ * A number line: one horizontal axis at height `y`, from x[0] to x[1], with an
+ * arrow, ticks every `step` and numbers, for intervals and inequalities.
+ */
+export interface NumberLine {
+  id: Id;
+  type: "numberline";
+  x: [number, number];
+  y: number;
+  step: number;
+  numbers: boolean;
+  stroke: Stroke;
+  /** Font size of the numbers, in pt. */
+  size: number;
+  label?: never;
+}
+
+export type Element =
+  | Point
+  | Segment
+  | Angle
+  | Circle
+  | Polygon
+  | FreeText
+  | FunctionGraph
+  | VerticalLine
+  | Axes
+  | NumberLine;
 export type ElementType = Element["type"];
 
 export interface FigureDoc {

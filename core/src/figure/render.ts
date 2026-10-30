@@ -170,6 +170,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   };
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
+    numberline: [],
     function: [],
     vline: [],
     polygon: [],
@@ -470,6 +471,36 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         hits.axes.push({ owner: el.id, type: "axes", d, area: false });
         break;
       }
+      case "numberline": {
+        const stroke = paintStroke(el.stroke);
+        const a = P({ x: el.x[0], y: el.y });
+        const b = P({ x: el.x[1], y: el.y });
+        const d = `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`;
+        layers.axes.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        const len = 4 + stroke.width * 2;
+        const half = len * 0.4;
+        layers.axes.push({
+          kind: "path",
+          owner: el.id,
+          d: `M${f(b.x)} ${f(b.y)}L${f(b.x - len)} ${f(b.y - half)}L${f(b.x - len)} ${f(b.y + half)}Z`,
+          stroke: null,
+          fill: { color: stroke.color, opacity: stroke.opacity, pattern: "solid", angle: 0 },
+        });
+        const tick = 2.5;
+        const xs = axisTicks(el.x, el.step, NaN);
+        const tickD = xs.map((x) => `M${f(x * k)} ${f(a.y - tick)}L${f(x * k)} ${f(a.y + tick)}`).join("");
+        if (tickD) layers.axes.push({ kind: "path", owner: el.id, d: tickD, stroke: solid(stroke), fill: null });
+        box.add(a.x, a.y, tick);
+        box.add(b.x, b.y, half);
+        if (el.numbers) {
+          for (const x of xs) {
+            const s = formatNumber(x);
+            textRect(layers.label, el.id, { x: x * k, y: a.y + tick + el.size * 0.9 }, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
+          }
+        }
+        hits.numberline.push({ owner: el.id, type: "numberline", d, area: false });
+        break;
+      }
       case "text": {
         const at = P(el);
         const r = textRect(layers.label, el.id, at, el.text, labelRuns(el.text, el.font), el.size, el.color, el.font, box);
@@ -500,6 +531,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     ],
     hits: [
       ...hits.axes,
+      ...hits.numberline,
       ...hits.polygon,
       ...hits.circle,
       ...hits.function,
@@ -521,7 +553,7 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text" || el.type === "axes") return;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;

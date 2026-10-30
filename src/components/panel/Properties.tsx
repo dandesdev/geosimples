@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 import {
   DEFAULT_GUIDE_STROKE,
+  functionValue,
+  moveNumberLine,
   piText,
   piWindow,
   setAxesWindow,
@@ -8,8 +10,10 @@ import {
   type Axes,
   type EndMark,
   type FunctionGraph,
+  type NumberLine,
   type VerticalLine,
 } from "@geosimples/core/figure";
+import { toast } from "sonner";
 import { parseExpr } from "@geosimples/core/plot";
 import {
   angleArc,
@@ -60,6 +64,7 @@ export function Properties() {
       {/* Keyed, so a half-typed expression stays with its graph when the selection changes. */}
       {el.type === "function" && <FunctionProperties key={el.id} el={el} {...props} />}
       {el.type === "vline" && <VerticalLineProperties el={el} {...props} />}
+      {el.type === "numberline" && <NumberLineProperties el={el} {...props} />}
       {el.type === "axes" && <AxesProperties el={el} {...props} />}
     </div>
   );
@@ -120,7 +125,15 @@ function PointPlace({ el, update, multi, doc }: EditorProps<Point>) {
           <NumberInput
             ariaLabel="x do ponto no gráfico"
             value={c.x}
-            onChange={(x) => update((p) => (p.construction?.kind === "onGraph" ? { ...p, construction: { ...p.construction, x } } : p), "graph-x")}
+            onChange={(x) => {
+              const graph = doc.elements.find((g) => g.id === c.graph);
+              // Where f is undefined the point would have nowhere to go.
+              if (graph?.type === "function" && functionValue(graph.expr, x) === null) {
+                toast.error(`${graph.label?.text || "A função"} não está definida em x = ${formatNumber(x)}.`);
+                return;
+              }
+              update((p) => (p.construction?.kind === "onGraph" ? { ...p, construction: { ...p.construction, x } } : p), "graph-x");
+            }}
           />
         </Field>
         <Readout label="y = f(x)" value={formatNumber(el.y, decimals)} />
@@ -452,6 +465,27 @@ function VerticalLineProperties({ el, update, multi }: EditorProps<VerticalLine>
       </Field>
       <IntervalFields label="y de" value={el.range} onChange={(range) => update((l) => ({ ...l, range }), "range")} />
       <Hint>Tracejada, marca uma assíntota. O traço muda em Formatação.</Hint>
+    </Section>
+  );
+}
+
+function NumberLineProperties({ el, update, multi }: EditorProps<NumberLine>) {
+  if (multi) return <Hint>Com várias retas numéricas selecionadas, a janela se ajusta uma por vez.</Hint>;
+  const moveTo = (y: number) => {
+    const store = useFigureStore.getState();
+    store.commit(moveNumberLine(store.doc, el.id, y), `${el.id}:y`);
+  };
+  return (
+    <Section title="Reta numérica">
+      <IntervalFields label="x de" value={el.x} onChange={(x) => update((l) => ({ ...l, x }), "x")} />
+      <Field label="Altura (y)">
+        <NumberInput ariaLabel="Altura da reta numérica" value={el.y} onChange={moveTo} />
+      </Field>
+      <Field label="De quanto em quanto">
+        <NumberInput ariaLabel="Distância entre marcas" value={el.step} min={0.01} onChange={(step) => update((l) => ({ ...l, step }), "step")} />
+      </Field>
+      <SwitchField label="Números" checked={el.numbers} onChange={(numbers) => update((l) => ({ ...l, numbers }), "numbers")} />
+      <Hint>Intervalos: digite [-2; 3[ ou ]-∞; 1] na barra de entrada. Mudar a altura leva os intervalos junto.</Hint>
     </Section>
   );
 }

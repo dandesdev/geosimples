@@ -9,6 +9,7 @@ import {
   type Point,
   type Polygon,
   type Segment,
+  type NumberLine,
   type Ticks,
   type VerticalLine,
 } from "@geosimples/core/figure";
@@ -166,6 +167,17 @@ export function VerticalLineEditor({ el, update, updateLabel, multi }: EditorPro
     <div className="space-y-2">
       <StrokeEditor title="Traço da reta" stroke={el.stroke} onChange={(stroke, key) => update((l) => ({ ...l, stroke }), key)} />
       <LabelEditor multi={multi} label={el.label} onChange={updateLabel} placeholder="Ex.: x = 2" />
+    </div>
+  );
+}
+
+export function NumberLineEditor({ el, update }: EditorProps<NumberLine>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor title="Traço da reta" stroke={el.stroke} onChange={(stroke, key) => update((l) => ({ ...l, stroke }), key)} />
+      <Section title="Números">
+        <RangeField label="Tamanho" value={el.size} min={5} max={16} step={0.5} format={pt} onChange={(size) => update((l) => ({ ...l, size }), "size")} />
+      </Section>
     </div>
   );
 }

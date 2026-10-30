@@ -25,6 +25,7 @@ import type {
   FreeText,
   Id,
   Point,
+  NumberLine,
   Polygon,
   Segment,
   VerticalLine,
@@ -88,6 +89,7 @@ const PREFIX: Record<ElementType, string> = {
   function: "f",
   vline: "r",
   axes: "e",
+  numberline: "n",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
@@ -104,11 +106,11 @@ export function idMaker(doc: FigureDoc) {
   };
 }
 
-function withElements(doc: FigureDoc, elements: Element[]): FigureDoc {
+export function withElements(doc: FigureDoc, elements: Element[]): FigureDoc {
   return { ...doc, elements };
 }
 
-function roomFor(doc: FigureDoc, count: number): boolean {
+export function roomFor(doc: FigureDoc, count: number): boolean {
   return doc.elements.length + count <= LIMITS.elements;
 }
 
@@ -144,6 +146,10 @@ export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions 
     return addFunction(doc, f.expr, f.name, opts);
   }
   if (parsed.lines.length > 0) return addVerticalLine(doc, parsed.lines[0].x, opts);
+  if (parsed.intervals.length > 0) {
+    const [i] = parsed.intervals;
+    return addInterval(doc, i.from, i.to, i.closed, opts);
+  }
   if (parsed.graphPoints.length > 0) {
     const [p] = parsed.graphPoints;
     return addPointOnGraph(doc, p.graph, p.x, p.label, opts);
@@ -437,6 +443,7 @@ function referencedPoints(el: Element): Id[] {
     case "function":
     case "vline":
     case "axes":
+    case "numberline":
       return [];
     case "segment":
       return [el.a, el.b];
@@ -524,8 +531,12 @@ export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number
   const elements = doc.elements.map((el) => {
     const m = byId.get(el.id);
     if (!m || (el.type !== "point" && el.type !== "text")) return el;
-    if (el.type === "point" && el.construction?.kind === "onGraph") {
-      return { ...el, construction: { ...el.construction, x: m.x } };
+    const c = el.type === "point" ? el.construction : undefined;
+    if (c?.kind === "onGraph") {
+      const graph = doc.elements.find((g) => g.id === c.graph);
+      // Past where f is defined, like √x left of 0, the point waits at its last x.
+      if (graph?.type === "function" && functionValue(graph.expr, m.x) === null) return el;
+      return { ...el, construction: { ...c, x: m.x } };
     }
     return { ...el, x: m.x, y: m.y };
   });
@@ -896,13 +907,97 @@ export function addVerticalLine(doc: FigureDoc, x: number, opts: OpOptions = {})
   return withAxes(doc, line, axes, !existing);
 }
 
+/** Lowest y the figure reaches, roughly: where a new number line goes under it. */
+function figureBottom(doc: FigureDoc): number | null {
+  const pts = pointMap(doc);
+  let low = Infinity;
+  for (const el of doc.elements) {
+    if (el.type === "point" || el.type === "text") low = Math.min(low, el.y);
+    else if (el.type === "axes") low = Math.min(low, el.y[0]);
+    else if (el.type === "function" || el.type === "vline") low = Math.min(low, el.range[0]);
+    else if (el.type === "numberline") low = Math.min(low, el.y);
+    else if (el.type === "circle") low = Math.min(low, (pts.get(el.center)?.y ?? Infinity) - el.radius);
+  }
+  return Number.isFinite(low) ? low : null;
+}
+
+/** A number line from -5 to 5, at y = 0 in an empty figure or under everything else. */
+export function addNumberLine(doc: FigureDoc): OpResult {
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const bottom = figureBottom(doc);
+  const line: NumberLine = {
+    id: idMaker(doc)("numberline"),
+    type: "numberline",
+    x: [-5, 5],
+    y: bottom === null ? 0 : Math.floor(bottom) - 2,
+    step: 1,
+    numbers: true,
+    stroke: { ...DEFAULT_AXES_STROKE },
+    size: 9,
+  };
+  return ok(withElements(doc, [...doc.elements, line]), [line.id]);
+}
+
+/** Moves a number line up or down, with the interval marks that sit on it. */
+export function moveNumberLine(doc: FigureDoc, id: Id, y: number): FigureDoc {
+  const line = doc.elements.find((e): e is NumberLine => e.id === id && e.type === "numberline");
+  if (!line || !Number.isFinite(y)) return doc;
+  const on = (p: Point) => !p.construction && Math.abs(p.y - line.y) < 1e-9 && p.x >= line.x[0] - 1e-9 && p.x <= line.x[1] + 1e-9;
+  const elements = doc.elements.map((el): Element => {
+    if (el.id === id) return { ...line, y };
+    return el.type === "point" && on(el) ? { ...el, y } : el;
+  });
+  return resolveConstructions(withElements(doc, elements));
+}
+
+/** Width in pt of the stroke that marks an interval over a number line. */
+const INTERVAL_WIDTH = 2.4;
+
+/**
+ * An interval on the figure's number line: a thick stroke from `from` to `to`
+ * (null for -∞ and +∞, which run to the line's ends), with a closed dot where
+ * an end belongs to it and an open one where it doesn't.
+ */
+export function addInterval(
+  doc: FigureDoc,
+  from: number | null,
+  to: number | null,
+  closed: [boolean, boolean],
+  opts: OpOptions = {},
+): OpResult {
+  const line = doc.elements.find((e): e is NumberLine => e.type === "numberline");
+  if (!line) return fail(doc, "Crie uma reta numérica antes: Gráficos › Reta numérica.");
+  const a = from ?? line.x[0];
+  const b = to ?? line.x[1];
+  if (!(a < b)) return fail(doc, "O início do intervalo precisa ser menor que o fim.");
+  if (!roomFor(doc, 3)) return fail(doc, LIMIT_ERROR);
+  const styles = stylesOf(opts);
+  const nextId = idMaker(doc);
+  const end = (x: number, infinite: boolean, isClosed: boolean): Point => ({
+    id: nextId("point"),
+    type: "point",
+    x,
+    y: line.y,
+    // An infinite end has no mark: the stroke just runs to the arrow.
+    shape: infinite ? "none" : isClosed ? "dot" : "ring",
+    size: Math.max(styles.point.size, 2.4),
+    color: styles.point.color,
+  });
+  const p = end(a, from === null, closed[0]);
+  const q = end(b, to === null, closed[1]);
+  const s = newSegment(nextId("segment"), p.id, q.id, opts);
+  const mark: Segment = { ...s, stroke: { ...s.stroke, width: INTERVAL_WIDTH, dash: "solid" } };
+  // The stroke goes under its end dots, so an open one shows hollow.
+  return ok(withElements(doc, [...doc.elements, mark, p, q]), [mark.id, p.id, q.id]);
+}
+
 /** Adds `el` and, when `fresh`, the axes it was given, first so everything else draws over them. */
 function withAxes(doc: FigureDoc, el: Element, axes: Axes, fresh: boolean): OpResult {
   const elements = fresh ? [axes, ...doc.elements, el] : [...doc.elements, el];
   return ok(withElements(doc, elements), fresh ? [el.id, axes.id] : [el.id]);
 }
 
-function newAxes(id: Id): Axes {
+export function newAxes(id: Id): Axes {
   return {
     id,
     type: "axes",

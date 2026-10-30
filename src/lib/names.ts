@@ -1,4 +1,4 @@
-import type { Element, ElementType, FigureDoc, Id, PointConstruction } from "@geosimples/core/figure";
+import { formatNumber, type Element, type ElementType, type FigureDoc, type Id, type PointConstruction } from "@geosimples/core/figure";
 
 export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title: string }> = {
   point: { one: "ponto", many: "pontos", title: "Ponto" },
@@ -9,6 +9,7 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   text: { one: "texto", many: "textos", title: "Texto" },
   function: { one: "gráfico", many: "gráficos", title: "Gráfico" },
   vline: { one: "reta vertical", many: "retas verticais", title: "Reta vertical" },
+  numberline: { one: "reta numérica", many: "retas numéricas", title: "Reta numérica" },
   axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
 };
 
@@ -31,8 +32,11 @@ function elementName(byId: Map<Id, Element>, id: Id): string {
   if (el.label?.text) return el.label.text;
   if (el.type === "segment") return `${elementName(byId, el.a)}${elementName(byId, el.b)}`;
   if (el.type === "circle") return `a circunferência de centro ${elementName(byId, el.center)}`;
+  if (el.type === "vline") return `x = ${formatNumber(el.x)}`;
   return el.id;
 }
+
+const NOTABLE_NAMES = { root: "Raiz", extremum: "Máximo ou mínimo", yAxis: "Corte no eixo y" } as const;
 
 /** "Ponto médio de A e B", for the point editor. */
 export function describeConstruction(doc: FigureDoc, c: PointConstruction): string {
@@ -54,5 +58,7 @@ export function describeConstruction(doc: FigureDoc, c: PointConstruction): stri
       return `${c.end === 0 ? "Início" : "Fim"} do arco de ${name(c.circle)}`;
     case "onGraph":
       return `No gráfico de ${name(c.graph)}`;
+    case "notable":
+      return `${NOTABLE_NAMES[c.feature]} de ${name(c.graph)}`;
   }
 }

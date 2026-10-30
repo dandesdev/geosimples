@@ -237,7 +237,9 @@ class Parser {
 }
 
 const FNS: Record<FnName, (v: number) => number> = {
-  sqrt: Math.sqrt,
+  // A float hair below zero, like r² - r² written with decimals, is still 0:
+  // otherwise a half circle loses its ends.
+  sqrt: (v) => (v < 0 && v > -1e-9 ? 0 : Math.sqrt(v)),
   abs: Math.abs,
   ln: Math.log,
   log: Math.log10,

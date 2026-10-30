@@ -8,6 +8,9 @@ import {
   pointOnSelectedGraph,
   selectedOfType,
   toggleGuides,
+  markNotable,
+  toFunctions,
+  type NotableFeature,
   type CircleMode,
   type ConstructionKind,
   type FigureDoc,
@@ -27,7 +30,9 @@ export type CheckId =
   | `circle-${CircleMode}`
   | `construct-${ConstructionKind}`
   | "graphPoint"
-  | "guides";
+  | "guides"
+  | `notable-${NotableFeature}`
+  | "toFunctions";
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -37,6 +42,8 @@ export interface Availability {
 }
 
 const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircle"];
+
+export const NOTABLE_FEATURES: NotableFeature[] = ["root", "extremum", "yAxis"];
 
 export const CONSTRUCTION_KINDS: ConstructionKind[] = [
   "midpoint",
@@ -85,7 +92,11 @@ export function useAvailability(): Record<CheckId, Availability> {
       polygon: check(doc, fillShapes(doc, selection, opts), text),
       graphPoint: check(doc, pointOnSelectedGraph(doc, selection, opts), text),
       guides: check(doc, toggleGuides(doc, selection), text),
+      toFunctions: check(doc, toFunctions(doc, selection, opts), text),
     } as Record<CheckId, Availability>;
+    for (const feature of NOTABLE_FEATURES) {
+      out[`notable-${feature}`] = check(doc, markNotable(doc, selection, feature, opts), text);
+    }
     for (const mode of CIRCLE_MODES) {
       out[`circle-${mode}`] = check(doc, makeCircle(doc, selection, mode, opts), text);
     }

@@ -17,6 +17,10 @@ import {
   pointMap,
   pointOnSelectedGraph,
   toggleGuides,
+  addNumberLine,
+  markNotable,
+  toFunctions,
+  type NotableFeature,
   pointOnSegment,
   quickFigureStep,
   NO_QUICK_FIGURE,
@@ -52,7 +56,7 @@ const selectedPoints = (doc: FigureDoc, selection: Id[]) =>
   selectedOfType(doc, selection, "point").map((p) => p.id);
 
 /** Text typed in for the teacher to finish in the input bar, like "y = ". Text already there stays. */
-export const PREFILLS = ["y = ", "x = "];
+export const PREFILLS = ["y = ", "x = ", "["];
 
 function startInput(prefill: string) {
   const store = useFigureStore.getState();
@@ -86,6 +90,18 @@ export const actions = {
 
   /** A point on the selected graph, at a whole x; its x is set in Propriedades. */
   pointOnGraph: () => perform((doc, sel) => pointOnSelectedGraph(doc, sel, opOptions())),
+
+  /** Roots, turning points or the y crossing of the selected graphs, as points that follow them. */
+  markNotable: (feature: NotableFeature) => perform((doc, sel) => markNotable(doc, sel, feature, opOptions())),
+
+  /** Selected segments, polygons and circles become graphs and vertical lines. */
+  toFunctions: () => perform((doc, sel) => toFunctions(doc, sel, opOptions())),
+
+  /** A number line under the figure, then "[" in the input bar for its first interval. */
+  addNumberLine: () => {
+    if (!perform((doc) => addNumberLine(doc))) return;
+    startInput("[");
+  },
 
   /** Dashed lines from the selected points to the axes, or none when they all have them. */
   toggleGuides: () => perform((doc, sel) => toggleGuides(doc, sel), "keep"),

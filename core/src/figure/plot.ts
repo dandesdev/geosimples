@@ -1,6 +1,6 @@
-import { parseExpr, sampleFunction, type Pt } from "../plot";
+import { findExtrema, findRoots, parseExpr, sampleFunction, type Pt } from "../plot";
 import { formatNumber } from "./labels";
-import type { Axes, FunctionGraph } from "./types";
+import type { Axes, FunctionGraph, NotableFeature } from "./types";
 
 /**
  * Geometry of fnplot's elements in world units, shared by the scene, the
@@ -25,8 +25,8 @@ export function functionLines(el: Pick<FunctionGraph, "expr" | "domain" | "range
 
 const compiled = new Map<string, ((x: number) => number) | null>();
 
-/** f(x) for a graph's expression, or null where it is undefined or doesn't parse. */
-export function functionValue(expr: string, x: number): number | null {
+/** The expression as a function of x (NaN where undefined), or null when it doesn't parse. */
+export function graphFn(expr: string): ((x: number) => number) | null {
   let fn = compiled.get(expr);
   if (fn === undefined) {
     const parsed = parseExpr(expr);
@@ -34,9 +34,51 @@ export function functionValue(expr: string, x: number): number | null {
     if (compiled.size >= CACHE_SIZE) compiled.delete(compiled.keys().next().value!);
     compiled.set(expr, fn);
   }
+  return fn;
+}
+
+/** f(x) for a graph's expression, or null where it is undefined or doesn't parse. */
+export function functionValue(expr: string, x: number): number | null {
+  const fn = graphFn(expr);
   if (!fn) return null;
   const y = fn(x);
   return Number.isFinite(y) ? y : null;
+}
+
+const notableCache = new Map<string, Pt[]>();
+
+const inside = (v: number, [a, b]: [number, number]) => v >= a - 1e-9 && v <= b + 1e-9;
+
+/**
+ * A graph's roots, turning points or crossing with the y axis, left to right,
+ * where its curve shows (inside its domain and y cut).
+ */
+export function notablePoints(
+  graph: Pick<FunctionGraph, "expr" | "domain" | "range">,
+  feature: NotableFeature,
+): Pt[] {
+  const key = `${feature}\u0000${graph.expr}\u0000${graph.domain.join(",")}\u0000${graph.range.join(",")}`;
+  const hit = notableCache.get(key);
+  if (hit) return hit;
+  const fn = graphFn(graph.expr);
+  let out: Pt[] = [];
+  if (fn) {
+    if (feature === "root") {
+      out = inside(0, graph.range) ? findRoots(fn, graph.domain).map((x) => ({ x, y: 0 })) : [];
+    } else if (feature === "extremum") {
+      // A rise across the whole y window between neighbors is an asymptote.
+      const jump = graph.range[1] - graph.range[0];
+      out = findExtrema(fn, graph.domain, jump)
+        .filter((e) => inside(e.y, graph.range))
+        .map(({ x, y }) => ({ x, y }));
+    } else {
+      const y = functionValue(graph.expr, 0);
+      out = inside(0, graph.domain) && y !== null && inside(y, graph.range) ? [{ x: 0, y }] : [];
+    }
+  }
+  if (notableCache.size >= CACHE_SIZE) notableCache.delete(notableCache.keys().next().value!);
+  notableCache.set(key, out);
+  return out;
 }
 
 /**

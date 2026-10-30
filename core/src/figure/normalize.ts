@@ -17,6 +17,8 @@ import type {
   Label,
   LabelMeasure,
   MeasureKind,
+  NotableFeature,
+  NumberLine,
   Point,
   PointConstruction,
   Polygon,
@@ -291,6 +293,23 @@ export function normalizeDoc(input: unknown): FigureDoc {
         out.push(a);
         break;
       }
+      case "numberline": {
+        const y = coord(r.y);
+        if (ids.has(id) || y === null) break;
+        ids.add(id);
+        const line: NumberLine = {
+          id,
+          type: "numberline",
+          x: interval(r.x, DEFAULT_PLOT_WINDOW.x),
+          y,
+          step: num(r.step, 0.01, 1000, 1),
+          numbers: r.numbers !== false,
+          stroke: isObj(r.stroke) ? stroke(r.stroke) : { ...DEFAULT_AXES_STROKE },
+          size: num(r.size, 4, 72, 9),
+        };
+        out.push(line);
+        break;
+      }
       case "text": {
         const x = coord(r.x);
         const y = coord(r.y);
@@ -337,8 +356,8 @@ function pointConstruction(
 ): PointConstruction | undefined {
   if (!isObj(x)) return undefined;
   const isPoint = (id: unknown): id is string => id !== self && types.get(id as string) === "point";
-  const isCurve = (id: unknown): id is string =>
-    id !== self && (types.get(id as string) === "segment" || types.get(id as string) === "circle");
+  const CURVES = ["segment", "circle", "function", "vline"];
+  const isCurve = (id: unknown): id is string => id !== self && CURVES.includes(types.get(id as string) ?? "");
   const pair = (v: unknown): [string, string] | null =>
     Array.isArray(v) && v.length === 2 && v.every(isPoint) ? [v[0], v[1]] : null;
   const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -376,12 +395,20 @@ function pointConstruction(
     case "intersection": {
       const of = x.of;
       if (!Array.isArray(of) || of.length !== 2 || !of.every(isCurve) || of[0] === of[1]) return undefined;
-      return { kind: "intersection", of: [of[0], of[1]], index: x.index === 1 ? 1 : 0 };
+      const index = typeof x.index === "number" && Number.isInteger(x.index) ? Math.min(Math.max(x.index, 0), 199) : 0;
+      return { kind: "intersection", of: [of[0], of[1]], index };
     }
     case "arcEnd": {
       const circle = x.circle;
       if (typeof circle !== "string" || circle === self || types.get(circle) !== "circle") return undefined;
       return { kind: "arcEnd", circle, end: x.end === 1 ? 1 : 0 };
+    }
+    case "notable": {
+      const graph = x.graph;
+      const feature = oneOf<NotableFeature>(x.feature, ["root", "extremum", "yAxis"], "root");
+      const index = typeof x.index === "number" && Number.isInteger(x.index) ? Math.min(Math.max(x.index, 0), 199) : 0;
+      if (typeof graph !== "string" || types.get(graph) !== "function") return undefined;
+      return { kind: "notable", graph, feature, index };
     }
     case "onGraph": {
       const graph = x.graph;
