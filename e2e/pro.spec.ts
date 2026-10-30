@@ -16,10 +16,20 @@ const panel = (page: Page, id: string) => page.locator(`[data-panel="${id}"]`);
 const group = (page: Page, title: string) => tab(page, title).locator("xpath=ancestor::*[contains(@class,'dv-groupview')][1]");
 const box = async (l: Locator) => (await l.boundingBox())!;
 
-/** Presses on `from` and moves to `to` in small steps, like a hand; `beforeDrop` looks at the page before letting go. */
-async function drag(page: Page, from: Locator, to: { x: number; y: number }, beforeDrop?: () => Promise<void>) {
+/**
+ * Presses on `from` (its middle, or `grabX` px from its left: a tab cut short by
+ * the tab strip shows only its start) and moves to `to` in small steps, like a
+ * hand; `beforeDrop` looks at the page before letting go.
+ */
+async function drag(
+  page: Page,
+  from: Locator,
+  to: { x: number; y: number },
+  beforeDrop?: () => Promise<void>,
+  grabX?: number,
+) {
   const b = await box(from);
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.move(b.x + (grabX ?? b.width / 2), b.y + b.height / 2);
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2 + 12, b.y + b.height / 2 + 12, { steps: 4 });
   await page.mouse.move(to.x, to.y, { steps: 16 });
@@ -325,7 +335,8 @@ test("pro layout: two full-height panel columns on both sides of the preview sti
   // The closing menu blocks the pointer until it is gone.
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
-  await drag(page, tab(page, "Rótulos e textos"), at(props, 0.5, 0.92));
+  // Its tab may be cut short in Formatação's narrow strip: grab its start.
+  await drag(page, tab(page, "Rótulos e textos"), at(props, 0.5, 0.92), undefined, 20);
   const after = await box(group(page, "Propriedades"));
   const labels = await box(panel(page, "labels"));
   expect(Math.abs(labels.x - after.x)).toBeLessThanOrEqual(1);
