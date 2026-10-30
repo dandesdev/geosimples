@@ -196,3 +196,67 @@ test("pro layout: toolbars sharing a column fit their buttons when one leaves or
   expect(file.x).toBeLessThan(10);
   expect(file.y).toBeGreaterThan(tools.y);
 });
+
+test("pro layout: the right panels keep their width when toolbars move, and only their splitter changes it", async ({ page }) => {
+  const width = async () => Math.round((await box(panel(page, "properties"))).width);
+  const start = await width();
+  const preview = () => box(page.getByRole("region", { name: "Prévia da figura" }));
+  // Toolbars moved around: onto the preview's left part, across its top, to the window's left edge,
+  // floating, and along the bottom. The dock used to hand the freed width to the right panels.
+  let p = await preview();
+  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(p, 0.03, 0.5));
+  p = await preview();
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(p, 0.5, 0.02));
+  await drag(page, page.getByLabel("Arrastar Ferramentas"), { x: 3, y: 400 });
+  p = await preview();
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(p, 0.5, 0.5));
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), { x: 600, y: page.viewportSize()!.height - 3 });
+  await expect.poll(width).toBe(start);
+
+  // The splitter between the preview and the panels does change it, and the new width stays.
+  const right = await box(group(page, "Propriedades"));
+  const sash = await page.locator(".dv-sash").evaluateAll(
+    (els, x) =>
+      els
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => Math.abs(r.left + r.width / 2 - x) < 6 && r.height > 300)
+        .map((r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 }))[0],
+    right.x,
+  );
+  await page.mouse.move(sash.x, sash.y);
+  await page.mouse.down();
+  await page.mouse.move(sash.x - 100, sash.y, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(width).toBeGreaterThan(start + 90);
+  const wider = await width();
+  await drag(page, page.getByLabel("Arrastar Janelas e ajuda"), { x: 3, y: 300 });
+  await expect.poll(width).toBe(wider);
+
+  // A narrower window takes the room from the preview, not from the panels.
+  await page.setViewportSize({ width: 1200, height: 820 });
+  await expect.poll(width).toBe(wider);
+});
+
+test("pro layout: panels never split a column side by side, and drop overlays don't animate", async ({ page }) => {
+  const props = await box(group(page, "Propriedades"));
+  // Over the left part of Propriedades, stacked in the right column: no overlay, nothing happens.
+  await drag(page, tab(page, "Figura"), at(props, 0.08, 0.6), async () => {
+    await page.waitForTimeout(200);
+    await expect(page.locator(".dv-drop-target-anchor.dv-drop-target-left, .dv-drop-target-anchor.dv-drop-target-right")).toHaveCount(0);
+  });
+  const figure = await box(panel(page, "figure"));
+  const after = await box(panel(page, "properties"));
+  expect(Math.abs(figure.x - after.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(figure.width - after.width)).toBeLessThanOrEqual(1);
+  expect(figure.y).toBeLessThan(after.y);
+
+  // Below Formatação it still goes, and its overlay shows up at its final size at once.
+  const target = await box(group(page, "Formatação"));
+  await drag(page, tab(page, "Figura"), at(target, 0.5, 0.92), async () => {
+    const overlay = page.locator(".dv-drop-target-anchor.dv-drop-target-bottom");
+    await expect(overlay).toBeVisible();
+    const durations = await overlay.evaluate((el) => getComputedStyle(el).transitionDuration.split(",").map((d) => parseFloat(d)));
+    expect(durations.every((d) => d === 0)).toBe(true);
+  });
+  expect((await box(panel(page, "figure"))).y).toBeGreaterThan((await box(group(page, "Formatação"))).y);
+});
