@@ -36,9 +36,9 @@ jobs:
         with:
           name: fixtures-${{ matrix.engine }}
           path: |
-            packages/core/fixtures/out/*.pdf
-            packages/core/fixtures/out/*.svg
-            packages/core/fixtures/out/*.tex
-            packages/core/fixtures/out/*.tikz
-            packages/core/fixtures/out/*.log
-            packages/core/fixtures/out/compare.html
+            core/fixtures/out/*.pdf
+            core/fixtures/out/*.svg
+            core/fixtures/out/*.tex
+            core/fixtures/out/*.tikz
+            core/fixtures/out/*.log
+            core/fixtures/out/compare.html

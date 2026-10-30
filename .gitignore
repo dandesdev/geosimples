@@ -33,7 +33,7 @@ dist-ssr
 *.tsbuildinfo
 
 # Export fixtures written by `npm run fixtures`
-packages/core/fixtures/out/
+core/fixtures/out/
 
 # Playwright
 test-results/
