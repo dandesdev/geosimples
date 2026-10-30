@@ -24,8 +24,8 @@ export const TAB_STRIP = 30;
 const RIGHT_COLUMN = 340;
 /** A panel dropped on an edge of the window takes this many px across, as its overlay shows. */
 export const EDGE_PANEL = 300;
-/** How close (px) to an edge of the window a drag must come to dock on it. */
-export const EDGE_REACH = 24;
+/** How close (px) to an edge of the window a drag must come to dock on it: less than a tab strip, so tabs at the top still take drops. */
+export const EDGE_REACH = 12;
 
 /** The overlay for an edge of the window, as big as what is dragged will be once dropped. */
 export const edgeOverlay = (toolbar: boolean) => ({
@@ -44,13 +44,18 @@ const widths = new Map<string, number>();
 let settling = false;
 const widthTried = new Map<string, string>();
 
-/** A panel group whose width is kept: in the grid, not the preview nor a toolbar, and not spanning the window. */
+/**
+ * A panel group whose width is kept: in the grid, not the preview nor a
+ * toolbar, not spanning the window, and not stacked with the preview (its
+ * width is the preview's then).
+ */
 function keepsWidth(target: DockviewApi, group: DockviewGroupPanel) {
   return (
     group.api.location.type === "grid" &&
     !isPreviewGroup(group) &&
     !isToolbarGroup(group) &&
-    group.api.width < target.width * 0.9
+    group.api.width < target.width * 0.9 &&
+    !inLineWith(group).some(isPreviewGroup)
   );
 }
 
@@ -64,13 +69,19 @@ export function keepWidths(target: DockviewApi) {
   if (settling || target.hasMaximizedGroup()) return;
   for (const g of target.groups) {
     if (!keepsWidth(target, g)) continue;
-    const was = widths.get(g.id);
     const now = Math.round(g.api.width);
+    // A group new to a column (a tab group, one dropped above or below) takes the column's width.
+    const mate = inLineWith(g).find((m) => widths.has(m.id));
+    const was = widths.get(g.id) ?? (mate ? widths.get(mate.id) : undefined);
     if (was === undefined) {
       widths.set(g.id, now);
       continue;
     }
-    if (Math.abs(now - was) <= 1) continue;
+    widths.set(g.id, was);
+    if (Math.abs(now - was) <= 1) {
+      widthTried.delete(g.id);
+      continue;
+    }
     // One try per width: a window too narrow to give it back must not loop.
     const key = `${now}>${Math.round(was)}`;
     if (widthTried.get(g.id) === key) continue;
@@ -122,8 +133,21 @@ export function settleSplitter(target: DockviewApi) {
  */
 export function splitsLine(group: DockviewGroupPanel | undefined, position: string) {
   if (!group || group.api.location.type !== "grid" || isPreviewGroup(group)) return false;
-  if (position === "left" || position === "right") return inLineWith(group).length > 0;
-  if (position === "top" || position === "bottom") return inLineWith(group, true).length > 0;
+  // A group as tall as the dock is a column of its own: it splits freely.
+  const fullHeight = !!api && group.api.height >= api.height - 2;
+  if (position === "left" || position === "right") return !fullHeight && inLineWith(group).length > 0;
+  // A row is panels side by side, touching; the preview, toolbars, or a panel across the window don't make one.
+  if (position === "top" || position === "bottom") {
+    const r = group.element.getBoundingClientRect();
+    return (
+      !fullHeight &&
+      inLineWith(group, true).some((g) => {
+        const b = g.element.getBoundingClientRect();
+        const touches = Math.abs(b.left - r.right) < 2 || Math.abs(b.right - r.left) < 2;
+        return touches && !isPreviewGroup(g) && !isToolbarGroup(g);
+      })
+    );
+  }
   return false;
 }
 
@@ -137,7 +161,11 @@ export function fitFigure(target: DockviewApi) {
   const height = TAB_STRIP + 52;
   const now = Math.round(figure.group.api.height);
   // One try per height: a column that can't give Figura exactly this height must not loop.
-  if (Math.abs(now - height) <= 1 || figureTried === now) return;
+  if (Math.abs(now - height) <= 1) {
+    figureTried = -1;
+    return;
+  }
+  if (figureTried === now) return;
   figureTried = now;
   figure.group.api.setSize({ height });
 }
@@ -238,19 +266,24 @@ export function orientToolbar(group: DockviewGroupPanel) {
   const row = toolbarIsRow(group);
   const where = group.api.location.type;
   const key = `${row ? "row" : "column"} ${where}`;
-  if (shaped.get(group.id) === key) return;
+  if (shaped.get(group.id) === key) return false;
   shaped.set(group.id, key);
   if (group.api.getHeaderPosition() !== (row ? "left" : "top")) group.api.setHeaderPosition(row ? "left" : "top");
-  if (where !== "grid") return;
+  if (where !== "grid") return true;
   group.api.setConstraints(
+    // Every limit is set: a toolbar that turned must lose the ones it had the other way.
     row
-      ? { minimumHeight: TOOLBAR_SIZE, maximumHeight: TOOLBAR_SIZE, minimumWidth: GRIP_SIZE + TOOLBAR_SIZE }
-      : { minimumWidth: TOOLBAR_SIZE, maximumWidth: TOOLBAR_SIZE, minimumHeight: GRIP_SIZE + TOOLBAR_SIZE },
+      ? { minimumHeight: TOOLBAR_SIZE, maximumHeight: TOOLBAR_SIZE, minimumWidth: GRIP_SIZE + TOOLBAR_SIZE, maximumWidth: Number.MAX_SAFE_INTEGER }
+      : { minimumWidth: TOOLBAR_SIZE, maximumWidth: TOOLBAR_SIZE, minimumHeight: GRIP_SIZE + TOOLBAR_SIZE, maximumHeight: Number.MAX_SAFE_INTEGER },
   );
+  return true;
 }
 
 export function orientToolbars(target: DockviewApi) {
-  for (const group of target.groups) if (isToolbarGroup(group)) orientToolbar(group);
+  let turned = false;
+  for (const group of target.groups) if (isToolbarGroup(group) && orientToolbar(group)) turned = true;
+  // A toolbar that turned held its old size limits until now: widths it blocked can be put back again.
+  if (turned) widthTried.clear();
 }
 
 /** How long a toolbar's buttons are, grip included, along the way it lies. */
@@ -279,7 +312,11 @@ export function fitToolbars(target: DockviewApi) {
     if (line.at(-1) === group) continue;
     const want = toolbarLength(group, row);
     const now = Math.round(row ? group.api.width : group.api.height);
-    if (want === null || Math.abs(now - want) <= 1) continue;
+    if (want === null) continue;
+    if (Math.abs(now - want) <= 1) {
+      fitted.delete(group.id);
+      continue;
+    }
     const key = `${now}>${want}`;
     if (fitted.get(group.id) === key) continue;
     fitted.set(group.id, key);

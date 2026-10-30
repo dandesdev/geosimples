@@ -124,8 +124,9 @@ export function ProWorkspace() {
       const toPreview = isPreviewGroup(e.group);
       const into = e.kind === "tab" || e.kind === "header_space" || (e.kind === "content" && e.position === "center");
       setFloatHere(toPreview && into);
-      // Never two panels side by side inside one column: no overlay, so no drop.
-      if (e.kind === "content" && splitsLine(e.group, e.position)) e.preventDefault();
+      // Never two panels side by side inside one column: no overlay, so no drop. Toolbars line up freely.
+      const panels = !draggingToolbar(api, e) && !isToolbarGroup(e.group);
+      if (e.kind === "content" && panels && splitsLine(e.group, e.position)) e.preventDefault();
       if (toPreview || !into) return;
       // Toolbars and panels don't share a group: a toolbar can't become a tab, nor take one.
       if (draggingToolbar(api, e) || isToolbarGroup(e.group)) e.preventDefault();
@@ -136,9 +137,11 @@ export function ProWorkspace() {
     const data = e.getData();
     const dropped = () =>
       data?.panelId ? e.api.getPanel(data.panelId)?.group : e.api.groups.find((g) => g.id === data?.groupId);
-    // The dropped group, and the one it split, keep their new widths; every other panel column keeps its own.
+    // Dropped on a window edge or beside a group, the dropped group (and the one it split) keep their new
+    // widths; every other drop, and every other panel column, keeps the widths there were.
     // Dropped on an edge of the window, it takes the size the overlay showed.
-    settle(e.api, () => [dropped(), e.group], e.kind === "edge" ? e.position : undefined);
+    const sets = e.kind === "edge" || (e.kind === "content" && (e.position === "left" || e.position === "right"));
+    settle(e.api, () => (sets ? [dropped(), e.group] : []), e.kind === "edge" ? e.position : undefined);
     if (!isPreviewGroup(e.group) || e.position !== "center") return;
     // Dropped on the preview, a panel or toolbar floats where it was let go.
     e.preventDefault();
@@ -155,7 +158,9 @@ export function ProWorkspace() {
       ref={rootRef}
       data-float-here={floatHere || undefined}
       onPointerDownCapture={(e) => {
-        if ((e.target as Element).closest(".dv-sash") && apiRef.current) settleSplitter(apiRef.current);
+        // Only a splitter between columns (taller than wide) sets widths.
+        const sash = (e.target as Element).closest(".dv-sash");
+        if (sash && sash.clientHeight > sash.clientWidth && apiRef.current) settleSplitter(apiRef.current);
       }}
       className={cn("h-dvh overflow-hidden bg-background", floatHere && "geo-float-here")}
     >

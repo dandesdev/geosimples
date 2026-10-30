@@ -260,3 +260,71 @@ test("pro layout: panels never split a column side by side, and drop overlays do
   });
   expect((await box(panel(page, "figure"))).y).toBeGreaterThan((await box(group(page, "Formatação"))).y);
 });
+
+test("pro layout: a panel alone in its column takes others above and below, and leaving it doesn't widen the right panels", async ({ page }) => {
+  // Propriedades' group: it stays visible when another tab joins it.
+  const width = async () => Math.round((await box(group(page, "Propriedades"))).width);
+  /** The empty end of Propriedades' tab strip: dropped there, a panel joins it as a tab. */
+  const strip = async () => {
+    const g = await box(group(page, "Propriedades"));
+    return { x: g.x + g.width * 0.6, y: g.y + 15 };
+  };
+  const start = await width();
+  // Formatação on the window's left edge: a column of its own, full height.
+  await drag(page, tab(page, "Formatação"), { x: 3, y: 400 });
+  const alone = await box(panel(page, "formatting"));
+  expect(alone.x).toBeLessThan(10);
+  // Figura goes below it: the column stacks, it doesn't refuse.
+  await drag(page, tab(page, "Figura"), at(await box(group(page, "Formatação")), 0.5, 0.92));
+  const figure = await box(panel(page, "figure"));
+  expect(Math.abs(figure.x - alone.x)).toBeLessThanOrEqual(1);
+  expect(figure.y).toBeGreaterThan(alone.y);
+  await expect.poll(width).toBe(start);
+
+  // Both back into the right column, as tabs of Propriedades: its width stays.
+  await drag(page, tab(page, "Figura"), await strip());
+  await drag(page, tab(page, "Formatação"), await strip());
+  expect((await box(panel(page, "formatting"))).x).toBeGreaterThan(page.viewportSize()!.width / 2);
+  await expect.poll(width).toBe(start);
+});
+
+test("pro layout: with a toolbar along the bottom, a lone panel group still takes panels above and below", async ({ page }) => {
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), { x: 600, y: page.viewportSize()!.height - 3 });
+  const strip = async () => {
+    const g = await box(group(page, "Propriedades"));
+    return { x: g.x + g.width * 0.6, y: g.y + 15 };
+  };
+  // Every panel but Propriedades joins it as a tab: one group, not as tall as the window, beside the preview.
+  for (const title of ["Figura", "Formatação", "Rótulos e textos"]) await drag(page, tab(page, title), await strip());
+  // Rótulos e textos out again, below it.
+  await drag(page, tab(page, "Rótulos e textos"), at(await box(group(page, "Propriedades")), 0.5, 0.92));
+  const lone = await box(group(page, "Propriedades"));
+  const labels = await box(panel(page, "labels"));
+  expect(Math.abs(labels.x - lone.x)).toBeLessThanOrEqual(1);
+  expect(labels.y).toBeGreaterThan(lone.y + lone.height - 5);
+});
+
+test("pro layout: two full-height panel columns on both sides of the preview still take panels above and below", async ({ page }) => {
+  // Figura and Rótulos closed, Formatação joins Propriedades: the right column is one group, as tall as the window.
+  for (const title of ["Figura", "Rótulos e textos"]) {
+    await tab(page, title).hover();
+    await page.getByRole("button", { name: `Fechar ${title}` }).click();
+  }
+  const g = await box(group(page, "Propriedades"));
+  await drag(page, tab(page, "Formatação"), { x: g.x + g.width * 0.6, y: g.y + 15 });
+  // Formatação to the window's left edge: a second full-height column, across the preview.
+  await drag(page, tab(page, "Formatação"), { x: 3, y: 400 });
+  expect((await box(panel(page, "formatting"))).x).toBeLessThan(10);
+  const props = await box(group(page, "Propriedades"));
+  expect(props.height).toBeGreaterThan(page.viewportSize()!.height - 5);
+
+  // Rótulos e textos back (it opens beside Formatação), then below Propriedades: it stacks.
+  await page.getByRole("button", { name: "Janelas" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Rótulos e textos" }).click();
+  await page.keyboard.press("Escape");
+  await drag(page, tab(page, "Rótulos e textos"), at(props, 0.5, 0.92));
+  const after = await box(group(page, "Propriedades"));
+  const labels = await box(panel(page, "labels"));
+  expect(Math.abs(labels.x - after.x)).toBeLessThanOrEqual(1);
+  expect(labels.y).toBeGreaterThan(after.y + after.height - 5);
+});
