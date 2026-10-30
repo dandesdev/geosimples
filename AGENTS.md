@@ -9,25 +9,25 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 ## Architecture
 
 - **Layout**: kept from v1 (tikzgenerator), Adobe-like: a large preview with the action bar on top and zoom on its edge, the point input below it, and a side panel with three accordions: Propriedades (measures, constructions and geometry of the selection), Formatação (looks only) and Rótulos e textos (auto labels, free text). Sections inside them open and close from their titles.
-- **Figure model**: `FigureDoc` v1 in `packages/core/src/figure/types.ts`. World units are cm at scale 1, Y up. Visual sizes (stroke, point, angle radius, labels) are in pt. Styles are stored in full on each element, so saved figures never change look.
+- **Figure model**: `FigureDoc` v1 in `core/src/figure/types.ts`. World units are cm at scale 1, Y up. Visual sizes (stroke, point, angle radius, labels) are in pt. Styles are stored in full on each element, so saved figures never change look.
 - **One renderer**: `buildScene` (core) lays the figure out in pt. The preview injects the same markup that `toSvg` writes, so the preview is the export. `toTikz` writes TikZ from the doc with the same geometry helpers.
-- **Editing operations** are pure functions in `packages/core/src/figure/ops.ts` and return `{ doc, created, error }`. The app wraps them in `src/lib/actions.ts` and shows errors as toasts.
-- **Store**: `apps/geosimples/src/store/figureStore.ts` (Zustand). Undo history starts from the loaded doc. Edits with the same key within 1 s merge into one undo step, and a drag is one step.
-- **Figure library**: every figure is kept in localStorage (`geosimples-library` index plus one `geosimples-figure:<id>` key per doc; logic in `packages/core/src/figure/library.ts`). The open figure autosaves; switching figures starts a fresh undo history. Files (`.geosimples.json`) and share links (`#figura=`, deflate-raw + base64url) are in `packages/core/src/figure/file.ts` and always open as a new figure.
+- **Editing operations** are pure functions in `core/src/figure/ops.ts` and return `{ doc, created, error }`. The app wraps them in `src/lib/actions.ts` and shows errors as toasts.
+- **Store**: `src/store/figureStore.ts` (Zustand). Undo history starts from the loaded doc. Edits with the same key within 1 s merge into one undo step, and a drag is one step.
+- **Figure library**: every figure is kept in localStorage (`geosimples-library` index plus one `geosimples-figure:<id>` key per doc; logic in `core/src/figure/library.ts`). The open figure autosaves; switching figures starts a fresh undo history. Files (`.geosimples.json`) and share links (`#figura=`, deflate-raw + base64url) are in `core/src/figure/file.ts` and always open as a new figure.
 - **Stack**: React 19 + TypeScript + React Compiler, Tailwind CSS v4, shadcn/ui (Radix), Zustand, sonner.
 
 ## Repository Layout
 
-npm workspaces monorepo. The services plan is in `.ai/SERVICES.md`.
+The editor sits at the root, and the engine is its one npm workspace, `core`. The services plan is in `.ai/SERVICES.md`.
 
-- `apps/geosimples`: the Vite + React editor
-- `packages/core` (`@geosimples/core`): framework-free figure model and geometry
+- `src/`: the Vite + React editor
+- `core/` (`@geosimples/core`): framework-free figure model and geometry
   - `@geosimples/core/figure`: FigureDoc, ops, parser, labels, scene, SVG and TikZ export (used by the editor)
   - `@geosimples/core/geo`: older solvers from the canvas-tool editor, kept for later constructions
-- Root scripts: `npm run build`, `npm test` (vitest for core), `npm run typecheck`, `npm run lint`
+- Root scripts: `npm run build`, `npm test` (vitest for core and the editor), `npm run typecheck`, `npm run lint`
 - Deploy: Vercel, configured in `vercel.json`
 
-Rules for `packages/core`: no React, no DOM, relative imports only (no `@/`). Its tsconfig has no DOM lib, so browser globals are a type error there.
+Rules for `core`: no React, no DOM, relative imports only (no `@/`). Its tsconfig has no DOM lib, so browser globals are a type error there.
 
 ## Agent Persona
 
@@ -93,14 +93,14 @@ Usage: `text-primary/50`, `bg-primary`, `border-destructive`
 ## File Conventions
 
 1. **Components**: React function components with TypeScript props
-2. **Store**: `apps/geosimples/src/store/figureStore.ts`
-3. **Types**: figure types in `packages/core/src/figure/types.ts`
+2. **Store**: `src/store/figureStore.ts`
+3. **Types**: figure types in `core/src/figure/types.ts`
 4. **Styles**: Tailwind classes and semantic colors. Inline styles only for values that come from data (like color swatches)
 5. **Text**: user-facing text in Brazilian Portuguese, code and comments in English
 
 ## Workflow
 
-1. Geometry and figure changes go in `packages/core/src/figure` with tests in `figure.test.ts`
+1. Geometry and figure changes go in `core/src/figure` with tests in `figure.test.ts`
 2. The editor only calls core through ops, the scene and the exporters
 3. Check with `npm test`, `npm run typecheck`, `npm run lint` and `npm run build`
 

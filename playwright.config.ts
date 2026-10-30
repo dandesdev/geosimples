@@ -19,7 +19,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1366, height: 820 } } }],
   webServer: {
-    command: `npm run preview -w apps/geosimples -- --port ${PORT} --strictPort`,
+    command: `npm run preview -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !CI,
     timeout: 60_000,
