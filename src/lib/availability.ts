@@ -5,7 +5,9 @@ import {
   fillShapes,
   makeAngles,
   makeCircle,
+  pointOnSelectedGraph,
   selectedOfType,
+  toggleGuides,
   type CircleMode,
   type ConstructionKind,
   type FigureDoc,
@@ -23,7 +25,9 @@ export type CheckId =
   | "angle"
   | "polygon"
   | `circle-${CircleMode}`
-  | `construct-${ConstructionKind}`;
+  | `construct-${ConstructionKind}`
+  | "graphPoint"
+  | "guides";
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -79,6 +83,8 @@ export function useAvailability(): Record<CheckId, Availability> {
       closeContour: check(doc, connectPoints(doc, points, true, opts), text),
       angle: check(doc, makeAngles(doc, selection, opts), text),
       polygon: check(doc, fillShapes(doc, selection, opts), text),
+      graphPoint: check(doc, pointOnSelectedGraph(doc, selection, opts), text),
+      guides: check(doc, toggleGuides(doc, selection), text),
     } as Record<CheckId, Availability>;
     for (const mode of CIRCLE_MODES) {
       out[`circle-${mode}`] = check(doc, makeCircle(doc, selection, mode, opts), text);

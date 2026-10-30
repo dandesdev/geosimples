@@ -95,7 +95,9 @@ export type PointConstruction =
    */
   | { kind: "intersection"; of: [Id, Id]; index: 0 | 1 }
   /** An end of a circle's arc: its start (0) or its end (1). Outer ends of a sector's radii. */
-  | { kind: "arcEnd"; circle: Id; end: 0 | 1 };
+  | { kind: "arcEnd"; circle: Id; end: 0 | 1 }
+  /** On the graph of a function, at (x, f(x)). Dragging it moves x. */
+  | { kind: "onGraph"; graph: Id; x: number };
 
 export interface Point {
   id: Id;
@@ -109,6 +111,11 @@ export interface Point {
   label?: Label;
   /** Absent for free points. */
   construction?: PointConstruction;
+  /**
+   * Dashed lines from the point to both axes of the figure, the way
+   * textbooks show f(a). Absent for none, or when there are no axes.
+   */
+  guides?: Stroke;
 }
 
 export type Ticks = 0 | 1 | 2 | 3;
@@ -198,6 +205,9 @@ export interface FreeText {
   label?: never;
 }
 
+/** How a function graph ends at each end of its domain: a closed dot is included, an open one is not. */
+export type EndMark = "none" | "closed" | "open";
+
 /**
  * The graph of y = f(x), from fnplot. Drawn over `domain` and cut where it
  * leaves `range`, so asymptotes and steep parts stay inside the picture.
@@ -213,7 +223,21 @@ export interface FunctionGraph {
   /** y from, to: the curve is not drawn outside it. */
   range: [number, number];
   stroke: Stroke;
+  /** Dots at the start and end of the domain, sized from the stroke. Absent for none. */
+  ends?: [EndMark, EndMark];
   /** Its name, like "f", near the right end of the curve. */
+  label?: Label;
+}
+
+/** The vertical line x = a, over `range`. Dashed, it marks an asymptote. */
+export interface VerticalLine {
+  id: Id;
+  type: "vline";
+  x: number;
+  /** y from, to. */
+  range: [number, number];
+  stroke: Stroke;
+  /** Near its top end. */
   label?: Label;
 }
 
@@ -225,6 +249,11 @@ export interface Axes {
   y: [number, number];
   /** Units between ticks, on both axes. */
   step: number;
+  /**
+   * When set, the x axis counts in multiples of π instead, with a tick every
+   * `xPi`·π (0.5 for π/2), for trigonometry. `step` then only applies to y.
+   */
+  xPi?: number;
   /** Numbers under and beside the ticks. */
   numbers: boolean;
   grid: boolean;
@@ -236,7 +265,7 @@ export interface Axes {
   label?: never;
 }
 
-export type Element = Point | Segment | Angle | Circle | Polygon | FreeText | FunctionGraph | Axes;
+export type Element = Point | Segment | Angle | Circle | Polygon | FreeText | FunctionGraph | VerticalLine | Axes;
 export type ElementType = Element["type"];
 
 export interface FigureDoc {

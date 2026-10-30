@@ -92,10 +92,10 @@ function AppearanceSettings() {
         help={EXPORT_COLORS_HELP}
       />
       <SwitchField
-        label="Esconder a barra de pontos"
+        label="Esconder a barra de entrada"
         checked={inputAutoHide}
         onChange={(on) => ws().setInputAutoHide(on)}
-        help="No layout profissional, a barra de pontos some até o mouse chegar à borda de baixo da prévia, ou até você teclar /."
+        help="No layout profissional, a barra de entrada some até o mouse chegar à borda de baixo da prévia, ou até você teclar /."
       />
       <Field label="Janelas">
         <Button variant="outline" size="sm" className="justify-self-start" onClick={resetLayout}>

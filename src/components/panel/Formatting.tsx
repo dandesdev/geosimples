@@ -7,6 +7,7 @@ import {
   PolygonEditor,
   SegmentEditor,
   TextEditor,
+  VerticalLineEditor,
 } from "./elementEditors";
 import { useInspected } from "./inspected";
 
@@ -30,6 +31,7 @@ export function Formatting() {
       {el.type === "polygon" && <PolygonEditor el={el} {...props} />}
       {el.type === "text" && <TextEditor el={el} {...props} />}
       {el.type === "function" && <FunctionEditor el={el} {...props} />}
+      {el.type === "vline" && <VerticalLineEditor el={el} {...props} />}
       {el.type === "axes" && <AxesEditor el={el} {...props} />}
     </>
   );

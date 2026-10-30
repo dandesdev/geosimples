@@ -8,6 +8,7 @@ import type {
   CircleConstruction,
   Dash,
   Element,
+  EndMark,
   FigureDoc,
   Fill,
   FillPattern,
@@ -22,6 +23,7 @@ import type {
   Segment,
   Stroke,
   Ticks,
+  VerticalLine,
 } from "./types";
 
 type Raw = Record<string, unknown>;
@@ -36,6 +38,7 @@ const idOk = (x: unknown): x is string => typeof x === "string" && /^[A-Za-z][A-
 const color = (x: unknown, fallback: string) => (typeof x === "string" && isValidColor(x) ? x : fallback);
 const oneOf = <T extends string>(x: unknown, options: readonly T[], fallback: T): T =>
   options.includes(x as T) ? (x as T) : fallback;
+const endMark = (x: unknown): EndMark => oneOf<EndMark>(x, ["none", "closed", "open"], "none");
 const ticks = (x: unknown): Ticks => (x === 1 || x === 2 || x === 3 ? x : 0);
 
 /** A [from, to] interval with from < to, or the fallback. */
@@ -142,6 +145,7 @@ export function normalizeDoc(input: unknown): FigureDoc {
           shape: oneOf(r.shape, ["dot", "ring", "none"] as const, "dot"),
           size: num(r.size, 0.3, 20, 1.8),
           color: color(r.color, "ink"),
+          ...(isObj(r.guides) ? { guides: stroke(r.guides) } : {}),
         };
         out.push(withLabel(p, r));
         break;
@@ -246,7 +250,22 @@ export function normalizeDoc(input: unknown): FigureDoc {
               domain: interval(r.domain, DEFAULT_PLOT_WINDOW.x),
               range: interval(r.range, DEFAULT_PLOT_WINDOW.y),
               stroke: stroke(r.stroke),
+              ...(Array.isArray(r.ends) && r.ends.length === 2
+                ? { ends: [endMark(r.ends[0]), endMark(r.ends[1])] as [EndMark, EndMark] }
+                : {}),
             },
+            r,
+          ),
+        );
+        break;
+      }
+      case "vline": {
+        const x = coord(r.x);
+        if (ids.has(id) || x === null) break;
+        ids.add(id);
+        out.push(
+          withLabel<VerticalLine>(
+            { id, type: "vline", x, range: interval(r.range, DEFAULT_PLOT_WINDOW.y), stroke: stroke(r.stroke) },
             r,
           ),
         );
@@ -267,6 +286,7 @@ export function normalizeDoc(input: unknown): FigureDoc {
           names: [str(names[0])?.slice(0, 20) ?? "x", str(names[1])?.slice(0, 20) ?? "y"],
           stroke: isObj(r.stroke) ? stroke(r.stroke) : { ...DEFAULT_AXES_STROKE },
           size: num(r.size, 4, 72, 8),
+          ...(typeof r.xPi === "number" && r.xPi > 0 ? { xPi: num(r.xPi, 1 / 12, 4, 0.5) } : {}),
         };
         out.push(a);
         break;
@@ -362,6 +382,12 @@ function pointConstruction(
       const circle = x.circle;
       if (typeof circle !== "string" || circle === self || types.get(circle) !== "circle") return undefined;
       return { kind: "arcEnd", circle, end: x.end === 1 ? 1 : 0 };
+    }
+    case "onGraph": {
+      const graph = x.graph;
+      const at = coord(x.x);
+      if (typeof graph !== "string" || types.get(graph) !== "function" || at === null) return undefined;
+      return { kind: "onGraph", graph, x: at };
     }
   }
   return undefined;

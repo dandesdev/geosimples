@@ -177,6 +177,32 @@ export const IntersectionIcon = (p: IconProps) => (
   </Icon>
 );
 
+/* Graph tools: thin axes in the corner, the curve or mark on top. */
+const MiniAxes = () => <path d="M3 21 L21 21 M3 21 L3 3" strokeWidth={1.1} />;
+
+export const GraphPointIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <MiniAxes />
+    <path d="M5 19 C9 18 13 13 20 5" />
+    <Dot cx={14} cy={11.5} />
+  </Icon>
+);
+
+export const VerticalLineIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <MiniAxes />
+    <path d="M14 4 L14 19" strokeDasharray="2.5 2" />
+  </Icon>
+);
+
+export const GuidesIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <MiniAxes />
+    <path d="M14 9 L14 20 M14 9 L4 9" strokeWidth={1.1} strokeDasharray="2 2" />
+    <Dot cx={14} cy={9} />
+  </Icon>
+);
+
 export const Logo = (p: IconProps) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...p}>
     <path d="M4 19 L12 5 L20 19 Z" fill="currentColor" fillOpacity={0.18} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />

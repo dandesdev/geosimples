@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { applyInput, type InputTokenKind, type ParsedInput } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PREFILLS } from "@/lib/actions";
 import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
 import { useMediaQuery } from "@/lib/useMediaQuery";
@@ -40,6 +41,8 @@ function runs(text: string, parsed: ParsedInput): { text: string; kind: InputTok
 
 function summary(parsed: ParsedInput): string {
   if (parsed.functions.length > 0) return "Gráfico da função. Enter para adicionar.";
+  if (parsed.lines.length > 0) return "Reta vertical. Enter para adicionar.";
+  if (parsed.graphPoints.length > 0) return "Ponto sobre o gráfico. Enter para adicionar.";
   const fresh = parsed.nodes.filter((n) => n.kind === "new").length;
   const parts: string[] = [];
   if (fresh) parts.push(`${fresh} ${fresh === 1 ? "ponto novo" : "pontos novos"}`);
@@ -52,9 +55,10 @@ function summary(parsed: ParsedInput): string {
 }
 
 /**
- * `floating`: over the preview, in the pro layout. The message line shows only
- * when there is one, and Escape leaves the input so it can hide again.
- * `extra` goes before the Adicionar button.
+ * The input bar, for points, functions and lines. `floating`: over the
+ * preview, in the pro layout, where the message line shows only when there
+ * is one. Escape leaves the input (so the pro one can hide again) and drops
+ * a "y = " the teacher didn't go on with. `extra` goes before the Adicionar button.
  */
 export function PointInput({ floating = false, extra }: { floating?: boolean; extra?: ReactNode }) {
   const text = useFigureStore((s) => s.inputDraft);
@@ -112,7 +116,7 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
         }}
       >
         <label htmlFor="point-input" className="sr-only">
-          Adicionar pontos
+          Pontos e funções
         </label>
         <div className="relative min-w-0 flex-1 overflow-hidden">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -140,7 +144,9 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             onScroll={syncScroll}
             onSelect={syncScroll}
             onKeyDown={(e) => {
-              if (floating && e.key === "Escape") e.currentTarget.blur();
+              if (e.key !== "Escape") return;
+              if (PREFILLS.some((p) => p.trim() === text.trim())) setText("");
+              e.currentTarget.blur();
             }}
             autoComplete="off"
             autoCorrect="off"
@@ -160,7 +166,7 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
           <TooltipTrigger asChild>
             <button
               type="button"
-              aria-label="Como digitar pontos"
+              aria-label="Como digitar"
               aria-expanded={helpHovered || helpPinned}
               ref={helpRef}
               onClick={() => setHelpPinned((v) => !v)}
@@ -201,6 +207,12 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             </p>
             <p>
               <b>f(x)=</b> ou <b>y=</b> desenha o gráfico, com eixos: <code>f(x)=x^2-1</code>, <code>y=2sen(x)</code>
+            </p>
+            <p>
+              <b>x=</b> traça uma reta vertical, tracejada como assíntota: <code>x=2</code>, <code>x=pi/2</code>
+            </p>
+            <p>
+              <b>Nome=f(a)</b> põe um ponto sobre o gráfico de f: <code>P=f(2)</code>
             </p>
           </TooltipContent>
         </Tooltip>

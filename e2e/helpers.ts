@@ -29,7 +29,7 @@ export async function counts(page: Page): Promise<Record<string, number>> {
 }
 
 export function pointInput(page: Page) {
-  return page.getByRole("textbox", { name: "Adicionar pontos" });
+  return page.getByRole("textbox", { name: "Pontos e funções" });
 }
 
 export function toolbarButton(page: Page, name: string) {

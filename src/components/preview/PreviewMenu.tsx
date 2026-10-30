@@ -158,7 +158,7 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
       )}
       <ContextMenuItem onSelect={() => emitCommand("focusInput")}>
         <Keyboard />
-        Digitar pontos…
+        Digitar pontos ou funções…
         <Keys action="focusInput" />
       </ContextMenuItem>
       <ContextMenuItem onSelect={actions.startGraph}>

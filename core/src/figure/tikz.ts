@@ -9,9 +9,19 @@ import {
   type OffsetLine,
 } from "./geometry";
 import { estimateTextWidth, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
-import { axesOrigin, axisTicks, functionLines, gridValues } from "./plot";
+import {
+  axesOrigin,
+  axesStepX,
+  axisTicks,
+  endDotRadius,
+  functionEnds,
+  functionLines,
+  gridValues,
+  pointGuides,
+  xTickText,
+} from "./plot";
 import { PATTERN } from "./svg";
-import type { Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
+import type { Axes, Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
 
 export interface TikzOptions {
@@ -82,11 +92,12 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       .join("\n");
 
   const sections: Record<
-    "coords" | "axes" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    "coords" | "axes" | "guide" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
     string[]
   > = {
     coords: [],
     axes: [],
+    guide: [],
     polygon: [],
     circle: [],
     function: [],
@@ -95,6 +106,8 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
     point: [],
     label: [],
   };
+
+  const axes = doc.elements.find((e): e is Axes => e.type === "axes");
 
   for (const p of pts.values()) sections.coords.push(`\\coordinate (${p.id}) at (${at(p)});`);
 
@@ -107,6 +120,10 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
           sections.point.push(
             `\\filldraw[draw=${color(el.color)}, fill=white, line width=0.6pt] (${el.id}) circle[radius=${n(el.size)}pt];`,
           );
+        }
+        if (el.guides && axes) {
+          const lines = pointGuides(el, axes).map(([, b]) => `(${el.id}) -- (${at(b)})`);
+          if (lines.length) sections.guide.push(`\\draw${opts(strokeOpts(el.guides))} ${lines.join(" ")};`);
         }
         break;
       case "segment": {
@@ -196,14 +213,30 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
           }
           sections.function.push(`\\draw${opts(strokeOpts(el.stroke))} plot coordinates {\n  ${coords.join("\n  ")}\n};`);
         }
+        const r = n(endDotRadius(el.stroke.width));
+        const dotColor = color(el.stroke.color);
+        const dotOpacity = el.stroke.opacity < 1 ? [`fill opacity=${n(el.stroke.opacity)}`] : [];
+        for (const end of functionEnds(el)) {
+          // An open dot is filled white, like a ring point, so the curve doesn't show through.
+          sections.function.push(
+            end.open
+              ? `\\filldraw[draw=${dotColor}, fill=white, line width=${n(Math.max(0.6, el.stroke.width * 0.8))}pt] (${at(end.at)}) circle[radius=${r}pt];`
+              : `\\fill${opts([dotColor, ...dotOpacity])} (${at(end.at)}) circle[radius=${r}pt];`,
+          );
+        }
         break;
       }
+      case "vline":
+        sections.function.push(
+          `\\draw${opts(strokeOpts(el.stroke))} (${at({ x: el.x, y: el.range[0] })}) -- (${at({ x: el.x, y: el.range[1] })});`,
+        );
+        break;
       case "axes": {
         const o = axesOrigin(el);
-        const xs = axisTicks(el.x, el.step, o.x);
+        const xs = axisTicks(el.x, axesStepX(el), o.x);
         const ys = axisTicks(el.y, el.step, o.y);
         if (el.grid) {
-          const grid = gridValues(el.x, el.step)
+          const grid = gridValues(el.x, axesStepX(el))
             .map((x) => `(${at({ x, y: el.y[0] })}) -- (${at({ x, y: el.y[1] })})`)
             .concat(gridValues(el.y, el.step).map((y) => `(${at({ x: el.x[0], y })}) -- (${at({ x: el.x[1], y })})`));
           sections.axes.push(`\\draw${opts(strokeOpts(AXES_GRID))} ${grid.join(" ")};`);
@@ -231,7 +264,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
           `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(base, offset)} {${labelToLatex(text, "serif")}};`;
         if (el.numbers) {
           const gap = el.size * 0.9;
-          for (const x of xs) sections.label.push(node(formatNumber(x), at({ x, y: o.y }), { x: 0, y: -(tick + gap * 0.7) }));
+          for (const x of xs) sections.label.push(node(xTickText(el, x), at({ x, y: o.y }), { x: 0, y: -(tick + gap * 0.7) }));
           for (const y of ys) {
             const s = formatNumber(y);
             sections.label.push(node(s, at({ x: o.x, y }), { x: -(tick + 2 + estimateTextWidth(s, el.size) / 2), y: 0 }));
@@ -261,7 +294,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   // SVG's default miter limit: sharp corners get beveled instead of drawing long spikes.
   lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
-  const order = ["coords", "axes", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
+  const order = ["coords", "axes", "guide", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
   lines.push("\\end{tikzpicture}");
   return lines.join("\n") + "\n";

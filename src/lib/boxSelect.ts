@@ -42,6 +42,8 @@ export function elementsInBox(doc: FigureDoc, k: number, box: Box): Id[] {
         const lines = functionLines(el);
         return lines.length > 0 && lines.every((l) => l.every((p) => inside(p.x * k, -p.y * k)));
       }
+      case "vline":
+        return inside(el.x * k, -el.range[1] * k) && inside(el.x * k, -el.range[0] * k);
       case "axes":
         return inside(el.x[0] * k, -el.y[1] * k) && inside(el.x[1] * k, -el.y[0] * k);
       case "text": {

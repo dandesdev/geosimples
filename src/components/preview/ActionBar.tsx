@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -18,7 +19,10 @@ import {
   CloseLoopIcon,
   ConnectIcon,
   ConstructionsIcon,
+  GraphPointIcon,
+  GuidesIcon,
   PolygonIcon,
+  VerticalLineIcon,
 } from "@/components/icons";
 import { CIRCLE_OPTIONS, CONSTRUCTIONS } from "./tools";
 import { actions } from "@/lib/actions";
@@ -109,6 +113,9 @@ function ToolStrip({ children }: { children: React.ReactNode }) {
 
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
+/** Menu items that need no selection, like the ones that start typing in the input bar. */
+const ALWAYS: Availability = { reason: null, preview: null };
+
 /** Runs an action after clearing its hover preview, which would be stale afterwards. */
 const act = (fn: () => void) => () => {
   clearPreview();
@@ -125,7 +132,14 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
   const anyCircle = CIRCLE_OPTIONS.some((o) => !av[`circle-${o.mode}`].reason);
   const anyConnect = !av.connect.reason || !av.closeContour.reason;
   const anyConstruction = CONSTRUCTION_KINDS.some((kind) => !av[`construct-${kind}`].reason);
+  const anyGraphTool = !av.graphPoint.reason || !av.guides.reason;
   const menu = { side: menuSide, align: "start" } as const;
+  /** Set by the items that go on in the input bar, so the closing menu leaves focus there. */
+  const toInput = useRef(false);
+  const startTyping = (start: () => void) => () => {
+    toInput.current = true;
+    start();
+  };
   return (
     <>
       <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
@@ -238,13 +252,58 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <IconButton
-        label="Gráfico de função"
-        hint="Escreve y = na barra de pontos: complete com a expressão, como x^2 - 1 ou 2sen(x), e tecle Enter. Os eixos vêm junto."
-        onClick={actions.startGraph}
-      >
-        <ChartSpline />
-      </IconButton>
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label="Gráficos"
+            hint="Função, reta vertical, ponto sobre o gráfico e linhas até os eixos."
+            ready={anyGraphTool}
+          >
+            <ChartSpline />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          {...menu}
+          className="w-80"
+          onCloseAutoFocus={(e) => {
+            if (!toInput.current) return;
+            toInput.current = false;
+            // The input bar has the focus now; the menu button would take it back.
+            e.preventDefault();
+          }}
+        >
+          <DropdownMenuLabel>Gráficos</DropdownMenuLabel>
+          <MenuItem
+            icon={<ChartSpline />}
+            title="Nova função…"
+            hint="Escreve y = na barra de entrada: complete com x^2 - 1 ou 2sen(x) e tecle Enter. Os eixos vêm junto."
+            availability={ALWAYS}
+            onSelect={startTyping(actions.startGraph)}
+          />
+          <MenuItem
+            icon={<VerticalLineIcon />}
+            title="Reta vertical…"
+            hint="Escreve x = na barra de entrada, para x = 2 ou x = pi/2. Vem tracejada, como uma assíntota."
+            availability={ALWAYS}
+            onSelect={startTyping(actions.startVerticalLine)}
+          />
+          <DropdownMenuSeparator />
+          <MenuItem
+            icon={<GraphPointIcon />}
+            title="Ponto sobre o gráfico"
+            hint="No gráfico selecionado; o x se ajusta em Propriedades. Também: P=f(2) na barra, ou clique na curva em Adicionar pontos."
+            availability={av.graphPoint}
+            onSelect={actions.pointOnGraph}
+          />
+          <MenuItem
+            icon={<GuidesIcon />}
+            title="Linhas até os eixos"
+            hint="Tracejadas, do ponto até cada eixo, como para marcar f(a). Liga e desliga nos pontos selecionados."
+            availability={av.guides}
+            onSelect={actions.toggleGuides}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
 }

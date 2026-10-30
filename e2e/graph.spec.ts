@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { counts, pointInput, toolbarButton } from "./helpers";
+import { counts, leaveInput, pointInput, savedFigure, toolbarButton } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -13,8 +13,9 @@ test("a function typed in the point input draws its graph with axes, and exports
   await input.press("Enter");
   await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
 
-  // The toolbar button starts another one, over the same axes.
-  await toolbarButton(page, "Gráfico de função").click();
+  // The Gráficos menu starts another one, over the same axes.
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Nova função/ }).click();
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("y = ");
   await page.keyboard.type("2sen(x)");
@@ -78,4 +79,129 @@ test("a half-typed expression stays with its graph when another one is selected"
   await clickOn("f2", 0.25);
   await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
   await expect(expr).toHaveValue("-x");
+});
+
+/** The saved element with this id, with whatever fields it has. */
+async function saved(page: import("@playwright/test").Page, id: string) {
+  const doc = await savedFigure(page);
+  return (doc?.elements.find((e) => e.id === id) ?? null) as Record<string, unknown> | null;
+}
+
+test("vertical lines and points on graphs are typed in the input bar", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x");
+  await input.press("Enter");
+  await input.fill("x = 2");
+  await expect(page.getByText("Reta vertical. Enter para adicionar.")).toBeVisible();
+  await input.press("Enter");
+  await input.fill("P = f(1)");
+  await expect(page.getByText("Ponto sobre o gráfico. Enter para adicionar.")).toBeVisible();
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, vline: 1, point: 1 });
+  await expect.poll(() => saved(page, "p1")).toMatchObject({ x: 1, y: 1, construction: { kind: "onGraph", graph: "f1", x: 1 } });
+
+  // The point follows the graph when its expression changes.
+  await page.locator('[data-owner="p1"]').click();
+  await expect(page.getByText(/Selecionados: 1 ponto/)).toBeVisible();
+  await expect(page.getByText(/No gráfico de f/)).toBeVisible();
+  // y = x crosses its box corner to corner.
+  const curve = page.locator('[data-owner="f1"]').first();
+  const box = (await curve.boundingBox())!;
+  await curve.click({ position: { x: box.width * 0.75, y: box.height * 0.25 } });
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  const expr = page.getByRole("textbox", { name: "Expressão da função" });
+  await expr.fill("x + 1");
+  await expr.press("Enter");
+  await expect.poll(() => saved(page, "p1")).toMatchObject({ x: 1, y: 2 });
+});
+
+test("the Gráficos menu puts a point on the selected graph, with lines to the axes", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x");
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
+  // Without a graph selected, the item says what it needs.
+  await leaveInput(page);
+  await page.keyboard.press("Escape");
+  await toolbarButton(page, "Gráficos").click();
+  await expect(page.getByRole("menuitem", { name: /Ponto sobre o gráfico/ })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  const line = page.locator('[data-owner="f1"]').first();
+  const box = (await line.boundingBox())!;
+  await line.click({ position: { x: box.width * 0.75, y: box.height * 0.25 } });
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Ponto sobre o gráfico/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+
+  // The new point is selected: its x moves it along the graph.
+  const x = page.getByRole("textbox", { name: "x do ponto no gráfico" });
+  await x.fill("3");
+  await x.press("Enter");
+  await expect.poll(() => saved(page, "p1")).toMatchObject({ x: 3, y: 3 });
+
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Linhas até os eixos/ }).click();
+  await expect.poll(() => saved(page, "p1")).toMatchObject({ guides: { dash: "dashed" } });
+  await expect(page.getByRole("switch", { name: "Linhas até os eixos" })).toBeChecked();
+});
+
+test("in Adicionar pontos, a click on a curve puts the point on the graph", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x");
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
+  await leaveInput(page);
+  await toolbarButton(page, "Adicionar pontos").click();
+  const line = page.locator('[data-owner="f1"]').first();
+  const box = (await line.boundingBox())!;
+  await line.click({ position: { x: box.width * 0.75, y: box.height * 0.25 } });
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+  const point = (await saved(page, "p1"))!;
+  expect(point.construction).toMatchObject({ kind: "onGraph", graph: "f1" });
+  expect(point.y).toBeCloseTo(point.x as number, 6);
+});
+
+test("axes count x in π, and graph ends get open or closed dots", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=sen(x)");
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
+
+  // sen x crosses the middle of its box at the origin.
+  const curve = page.locator('[data-owner="f1"]').first();
+  const curveBox = (await curve.boundingBox())!;
+  await curve.click({ position: { x: curveBox.width * 0.5, y: curveBox.height * 0.5 } });
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  await page.getByRole("group", { name: "No início" }).getByRole("radio", { name: "Bolinha aberta" }).click();
+  await expect.poll(() => saved(page, "f1")).toMatchObject({ ends: ["open", "none"] });
+
+  const axes = page.locator('[data-owner="e1"]').first();
+  const box = (await axes.boundingBox())!;
+  await axes.click({ position: { x: box.width * 0.9, y: box.height / 2 } });
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  await page.getByRole("radio", { name: "Múltiplos de π" }).click();
+  await expect.poll(() => saved(page, "e1")).toMatchObject({ xPi: 0.5 });
+
+  await toolbarButton(page, "Exportar").click();
+  const tikz = page.getByRole("dialog", { name: "Exportar figura" }).getByRole("textbox", { name: "Código TikZ" });
+  await expect(tikz).toHaveValue(/\{\$\\pi \/2\$\}/);
+  await expect(tikz).toHaveValue(/fill=white/);
+});
+
+test("Escape leaves the input bar and drops an untouched y = ", async ({ page }) => {
+  const input = pointInput(page);
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Nova função/ }).click();
+  await expect(input).toHaveValue("y = ");
+  await input.press("Escape");
+  await expect(input).not.toBeFocused();
+  await expect(input).toHaveValue("");
+
+  // Typed text stays.
+  await input.fill("A=(1;1)");
+  await input.press("Escape");
+  await expect(input).not.toBeFocused();
+  await expect(input).toHaveValue("A=(1;1)");
 });

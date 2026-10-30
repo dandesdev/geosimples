@@ -1,4 +1,5 @@
-import type { Angle, Circle, Element, FigureDoc, Id, Point, PointConstruction, Segment } from "./types";
+import { functionValue } from "./plot";
+import type { Angle, Circle, Element, FigureDoc, FunctionGraph, Id, Point, PointConstruction, Segment } from "./types";
 import {
   add,
   cross,
@@ -252,9 +253,11 @@ export function resolveConstructions(doc: FigureDoc): FigureDoc {
   const pts = pointMap(doc);
   const circles = new Map<Id, Circle>();
   const segments = new Map<Id, Segment>();
+  const graphs = new Map<Id, FunctionGraph>();
   for (const el of doc.elements) {
     if (el.type === "circle") circles.set(el.id, el);
     else if (el.type === "segment") segments.set(el.id, el);
+    else if (el.type === "function") graphs.set(el.id, el);
   }
   const replacePoint = (p: Point) => {
     const i = elements.findIndex((e) => e.id === p.id);
@@ -279,7 +282,7 @@ export function resolveConstructions(doc: FigureDoc): FigureDoc {
           moved = true;
         }
       } else if (el.type === "point" && el.construction) {
-        const at = constructedPosition(el.construction, pts, segments, circles);
+        const at = constructedPosition(el.construction, pts, segments, circles, graphs);
         if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
         if (Math.abs(at.x - el.x) < 1e-12 && Math.abs(at.y - el.y) < 1e-12) continue;
         const next = { ...el, x: at.x, y: at.y };
@@ -428,6 +431,7 @@ export function constructedPosition(
   pts: Map<Id, Point>,
   segments: Map<Id, Segment>,
   circles: Map<Id, Circle>,
+  graphs: Map<Id, FunctionGraph> = new Map(),
 ): Vec | null {
   switch (c.kind) {
     case "midpoint": {
@@ -467,6 +471,12 @@ export function constructedPosition(
       if (!circle?.arc || !center) return null;
       return add(center, polar(circle.radius, c.end === 0 ? circle.arc.start : circle.arc.end));
     }
+    case "onGraph": {
+      // Where f is undefined at x now, the point stays where it was, like a lost intersection.
+      const graph = graphs.get(c.graph);
+      const y = graph ? functionValue(graph.expr, c.x) : null;
+      return y === null ? null : { x: c.x, y };
+    }
   }
 }
 
@@ -484,5 +494,7 @@ export function constructionParents(c: PointConstruction): Id[] {
       return c.of;
     case "arcEnd":
       return [c.circle];
+    case "onGraph":
+      return [c.graph];
   }
 }

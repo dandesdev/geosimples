@@ -13,7 +13,10 @@ import {
   makeCircle,
   markPerpendicularBisector,
   fillShapes,
+  addPointOnGraph,
   pointMap,
+  pointOnSelectedGraph,
+  toggleGuides,
   pointOnSegment,
   quickFigureStep,
   NO_QUICK_FIGURE,
@@ -48,6 +51,16 @@ function perform(
 const selectedPoints = (doc: FigureDoc, selection: Id[]) =>
   selectedOfType(doc, selection, "point").map((p) => p.id);
 
+/** Text typed in for the teacher to finish in the input bar, like "y = ". Text already there stays. */
+export const PREFILLS = ["y = ", "x = "];
+
+function startInput(prefill: string) {
+  const store = useFigureStore.getState();
+  if (store.inputDraft.trim() === "") store.setInputDraft(prefill);
+  // After the input shows the new text, so the caret lands at its end.
+  requestAnimationFrame(() => emitCommand("focusInput"));
+}
+
 export const actions = {
   connect: (closed: boolean) =>
     perform((doc, sel) => connectPoints(doc, selectedPoints(doc, sel), closed, opOptions()), "keep"),
@@ -65,12 +78,29 @@ export const actions = {
   /** Turns constructed points into free points that no longer follow their parents. */
   freePoints: (ids: Id[]) => perform((doc) => freePoints(doc, ids), "keep"),
 
-  /** Starts a graph: "y = " in the point input, ready for the expression. Text already typed stays. */
-  startGraph: () => {
+  /** Starts a graph: "y = " in the input bar, ready for the expression. Text already typed stays. */
+  startGraph: () => startInput("y = "),
+
+  /** Starts a vertical line: "x = " in the input bar, ready for the number. */
+  startVerticalLine: () => startInput("x = "),
+
+  /** A point on the selected graph, at a whole x; its x is set in Propriedades. */
+  pointOnGraph: () => perform((doc, sel) => pointOnSelectedGraph(doc, sel, opOptions())),
+
+  /** Dashed lines from the selected points to the axes, or none when they all have them. */
+  toggleGuides: () => perform((doc, sel) => toggleGuides(doc, sel), "keep"),
+
+  /** A point on a graph where the preview was clicked, in Adicionar pontos. */
+  addPointOnGraphAt: (graph: Id, x: number) => {
     const store = useFigureStore.getState();
-    if (store.inputDraft.trim() === "") store.setInputDraft("y = ");
-    // After the input shows the new text, so the caret lands at its end.
-    requestAnimationFrame(() => emitCommand("focusInput"));
+    const before = store.selection;
+    const result = store.run((doc) => addPointOnGraph(doc, graph, x, "", opOptions()), "keep");
+    if (result.error) {
+      toast.error(result.error);
+      return false;
+    }
+    if (activePrefs().behavior.selectAdded) store.select([...before, ...result.created]);
+    return true;
   },
 
   deleteSelected: () => {

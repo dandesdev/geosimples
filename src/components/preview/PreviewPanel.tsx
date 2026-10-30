@@ -390,7 +390,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     if (g.kind === "press" && placing && !(mode === "add" && point)) {
       // Keep the view still, so the next point lands where the next click is.
       if (autoFit) placeCamera(vb);
+      const graph = g.owner && store.doc.elements.some((e) => e.id === g.owner && e.type === "function") ? g.owner : null;
       if (mode === "figure") actions.quickFigureAt(point ?? pointAt(g.x, g.y));
+      // A click on a curve puts the point on it, so it follows the graph.
+      else if (graph) actions.addPointOnGraphAt(graph, pointAt(g.x, g.y).x);
       else actions.addPointAt(pointAt(g.x, g.y));
     } else if (g.kind === "press") {
       if (g.owner) store.pick(g.owner, g.additive);

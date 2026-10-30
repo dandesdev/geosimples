@@ -86,6 +86,18 @@ test("pro layout: / brings the point input without moving the preview", async ({
   expect(await box(preview)).toEqual(before);
 });
 
+test("pro layout: Escape sends the input away even with text in it, and / brings the text back", async ({ page }) => {
+  const dock = page.getByTestId("point-input-dock");
+  await leaveInput(page);
+  await page.keyboard.press("/");
+  await pointInput(page).fill("A=(1;1)");
+  await pointInput(page).press("Escape");
+  await expect(dock).toHaveAttribute("data-shown", "false");
+  await page.keyboard.press("/");
+  await expect(dock).toHaveAttribute("data-shown", "true");
+  await expect(pointInput(page)).toHaveValue("A=(1;1)");
+});
+
 test("dark theme: the preview paper turns gray, and exports stay white unless asked", async ({ page }) => {
   await pointInput(page).fill(TRIANGLE);
   await pointInput(page).press("Enter");

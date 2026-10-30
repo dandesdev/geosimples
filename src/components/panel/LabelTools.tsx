@@ -96,7 +96,7 @@ function FreeTextTool() {
     <Section title="Texto livre">
       <p className="mb-1 text-xs text-muted-foreground">
         Um texto solto, como "Figura 1" ou "não está em escala". Ele entra abaixo da figura; arraste no modo Mover
-        pontos. Na barra de pontos também dá: <code>"Figura 1"@(2;-1)</code>.
+        pontos. Na barra de entrada também dá: <code>"Figura 1"@(2;-1)</code>.
       </p>
       <form
         className="flex gap-2"

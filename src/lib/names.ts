@@ -8,6 +8,7 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   polygon: { one: "polígono", many: "polígonos", title: "Polígono" },
   text: { one: "texto", many: "textos", title: "Texto" },
   function: { one: "gráfico", many: "gráficos", title: "Gráfico" },
+  vline: { one: "reta vertical", many: "retas verticais", title: "Reta vertical" },
   axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
 };
 
@@ -51,5 +52,7 @@ export function describeConstruction(doc: FigureDoc, c: PointConstruction): stri
       return `Interseção de ${name(c.of[0])} e ${name(c.of[1])}`;
     case "arcEnd":
       return `${c.end === 0 ? "Início" : "Fim"} do arco de ${name(c.circle)}`;
+    case "onGraph":
+      return `No gráfico de ${name(c.graph)}`;
   }
 }
