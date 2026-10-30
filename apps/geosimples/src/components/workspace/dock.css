@@ -1,0 +1,105 @@
+/* The pro layout's dock, in the app's colors: light and dark follow the tokens in index.css. */
+.dockview-theme-geosimples {
+  color-scheme: light;
+  --dv-paneview-active-outline-color: var(--primary);
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tabs-and-actions-container-height: 30px;
+  /* The drop overlay fills exactly the space the panel would take: no inset, no rounding. */
+  --dv-drag-over-background-color: color-mix(in srgb, var(--primary) 18%, transparent);
+  --dv-drag-over-border-color: var(--primary);
+  --dv-drag-over-border: 2px solid var(--primary);
+  --dv-edge-dock-indicator-color: var(--primary);
+  --dv-tabs-container-scrollbar-color: var(--muted-foreground);
+  --dv-icon-hover-background-color: var(--muted);
+  --dv-floating-box-shadow: 0 10px 30px rgb(0 0 0 / 0.18), 0 2px 8px rgb(0 0 0 / 0.1);
+  --dv-floating-border: 1px solid var(--border);
+  --dv-floating-group-border: 1px solid var(--border);
+  --dv-floating-group-dragging-opacity: 0.6;
+  --dv-overlay-z-index: 999;
+  --dv-tab-font-size: inherit;
+  --dv-border-radius: 0px;
+  --dv-tab-margin: 0;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--primary);
+  --dv-active-sash-transition-duration: 0.1s;
+  --dv-active-sash-transition-delay: 0.3s;
+  --dv-spacing-padding: 0px;
+  --dv-tab-border-radius: 0px;
+  --dv-sash-border-radius: 0px;
+  --dv-dropdown-border-radius: 6px;
+  --dv-tab-close-icon-size: inherit;
+  --dv-group-view-background-color: var(--card);
+  --dv-tabs-and-actions-container-background-color: var(--background);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--card);
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-tab-divider-color: var(--border);
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
+  --dv-separator-border: color-mix(in srgb, var(--border) 60%, transparent);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-scrollbar-background-color: color-mix(in srgb, var(--foreground) 25%, transparent);
+  --dv-floating-titlebar-background-color: var(--background);
+  --dv-floating-titlebar-border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.dark .dockview-theme-geosimples {
+  color-scheme: dark;
+}
+
+/* A tab strip ends in a line, so the panel under it reads as one piece with its tab. */
+.dockview-theme-geosimples .dv-tabs-and-actions-container {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+/* Only the open tab, and the one under the pointer, show their close button: tabs stay narrow. */
+.dockview-theme-geosimples .dv-tab:not(.dv-active-tab):not(:hover) [data-close] {
+  visibility: hidden;
+}
+
+/* Toolbars have a thin grip instead of tabs. */
+.dockview-theme-geosimples .dv-groupview:has([data-grip]) {
+  --dv-tabs-and-actions-container-height: 12px;
+}
+.dockview-theme-geosimples .dv-groupview:has([data-grip]) .dv-tabs-and-actions-container {
+  border: none;
+}
+/* The grip fills the strip: the whole strip drags the toolbar. */
+.dockview-theme-geosimples .dv-groupview:has([data-grip]) :is(.dv-scrollable, .dv-tabs-container, .dv-tab) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+.dockview-theme-geosimples .dv-groupview:has([data-grip]) .dv-react-part {
+  width: 100%;
+  height: 100%;
+}
+.dockview-theme-geosimples .dv-groupview:has([data-grip]) :is(.dv-void-container, .dv-scrollbar) {
+  display: none;
+}
+
+/* Dropped on the preview, a panel floats: the overlay says so instead of looking like a dock. */
+.geo-float-here .dv-drop-target-anchor,
+.geo-float-here .dv-drop-target-selection {
+  border-style: dashed;
+  background-color: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.geo-float-here .dv-drop-target-anchor::after,
+.geo-float-here .dv-drop-target-selection::after {
+  content: "Solte para deixar flutuando";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}

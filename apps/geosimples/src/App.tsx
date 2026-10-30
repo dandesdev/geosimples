@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
@@ -5,13 +6,15 @@ import { PointInput } from "@/components/PointInput";
 import { EditSheet } from "@/components/panel/EditSheet";
 import { SidePanel } from "@/components/panel/SidePanel";
 import { AppDialogs } from "@/components/dialogs/AppDialogs";
-import { ProWorkspace } from "@/components/workspace/ProWorkspace";
 import { useApplyTheme, useDarkTheme } from "@/lib/theme";
 import { useSidePanelBeside } from "@/lib/useMediaQuery";
 import { useShortcuts } from "@/lib/useShortcuts";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { FileDrop } from "@/components/figures/FileDrop";
 import { SharedLinkImport } from "@/components/figures/SharedLinkImport";
+
+// The dock is only for the pro layout: the classic page doesn't download it.
+const ProWorkspace = lazy(() => import("@/components/workspace/ProWorkspace").then((m) => ({ default: m.ProWorkspace })));
 
 function ClassicLayout() {
   const beside = useSidePanelBeside();
@@ -37,7 +40,13 @@ function App() {
   const pro = beside && layout === "pro";
   return (
     <TooltipProvider delayDuration={300}>
-      {pro ? <ProWorkspace /> : <ClassicLayout />}
+      {pro ? (
+        <Suspense fallback={<div className="h-dvh bg-background" />}>
+          <ProWorkspace />
+        </Suspense>
+      ) : (
+        <ClassicLayout />
+      )}
       <AppDialogs />
       <FileDrop />
       <SharedLinkImport />

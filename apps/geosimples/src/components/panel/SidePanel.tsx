@@ -34,7 +34,7 @@ export function SidePanel() {
           {beside && (
             <IconButton
               label="Layout profissional"
-              hint="A tela inteira para a prévia, ferramentas numa coluna à esquerda e janelas que se encaixam nas bordas ou flutuam."
+              hint="A tela inteira para a prévia, com painéis e barras de ferramentas que você arrasta para onde quiser: lado a lado, em abas ou flutuando."
               onClick={() => ws().setLayout("pro")}
             >
               <LayoutDashboard />
