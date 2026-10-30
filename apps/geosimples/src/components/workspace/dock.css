@@ -56,6 +56,16 @@
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
+/* Drop overlays appear in place, at their final size: no sliding or growing. */
+.dockview-theme-geosimples,
+.dockview-theme-geosimples .dv-drop-target,
+.dockview-theme-geosimples .dv-drop-target-container {
+  --dv-transition-duration: 0ms;
+}
+.dockview-theme-geosimples :is(.dv-drop-target-anchor, .dv-drop-target-selection) {
+  transition: none !important;
+}
+
 /* Only the open tab, and the one under the pointer, show their close button: tabs stay narrow. */
 .dockview-theme-geosimples .dv-tab:not(.dv-active-tab):not(:hover) [data-close] {
   visibility: hidden;

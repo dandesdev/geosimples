@@ -17,14 +17,17 @@ import {
   fitFigure,
   fitToolbars,
   floatItem,
-  gridSizes,
   isPreviewGroup,
   isToolbarGroup,
   orientToolbars,
   restoreLayout,
   saveLayout,
   setDockApi,
-  sizeEdgeDrop,
+  keepWidths,
+  recordWidths,
+  settle,
+  settleSplitter,
+  splitsLine,
   syncDockState,
 } from "./dock";
 import { FigurePane, FormattingPane, LabelsPane, PreviewPane, PropertiesPane, ToolbarPane } from "./DockPanes";
@@ -78,10 +81,19 @@ export function ProWorkspace() {
     // Mounting again (as React's strict mode does) keeps the dock it already has.
     if (apiRef.current) setDockApi(apiRef.current);
     const clear = () => setFloatHere(false);
+    // A resized window changes the dock's size without a layout event: the preview takes the difference.
+    let frame = 0;
+    const resized = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => apiRef.current && keepWidths(apiRef.current));
+    });
+    if (rootRef.current) resized.observe(rootRef.current);
     window.addEventListener("dragend", clear);
     window.addEventListener("drop", clear);
     window.addEventListener("pointerup", clear);
     return () => {
+      cancelAnimationFrame(frame);
+      resized.disconnect();
       window.removeEventListener("dragend", clear);
       window.removeEventListener("drop", clear);
       window.removeEventListener("pointerup", clear);
@@ -93,10 +105,12 @@ export function ProWorkspace() {
     apiRef.current = api;
     setDockApi(api);
     restoreLayout(api);
+    recordWidths(api);
     syncDockState();
     api.onDidLayoutChange(() => {
       orientToolbars(api);
       fitFigure(api);
+      keepWidths(api);
       // Toolbars measure their buttons once they are drawn in their new place.
       requestAnimationFrame(() => fitToolbars(api));
       saveLayout();
@@ -110,6 +124,9 @@ export function ProWorkspace() {
       const toPreview = isPreviewGroup(e.group);
       const into = e.kind === "tab" || e.kind === "header_space" || (e.kind === "content" && e.position === "center");
       setFloatHere(toPreview && into);
+      // Never two panels side by side inside one column: no overlay, so no drop. Toolbars line up freely.
+      const panels = !draggingToolbar(api, e) && !isToolbarGroup(e.group);
+      if (e.kind === "content" && panels && splitsLine(e.group, e.position)) e.preventDefault();
       if (toPreview || !into) return;
       // Toolbars and panels don't share a group: a toolbar can't become a tab, nor take one.
       if (draggingToolbar(api, e) || isToolbarGroup(e.group)) e.preventDefault();
@@ -117,22 +134,18 @@ export function ProWorkspace() {
   };
 
   const onWillDrop = (e: DockviewWillDropEvent) => {
-    if (e.kind === "edge") {
-      // Dropped on an edge of the window: once placed, it takes the size the overlay showed.
-      const data = e.getData();
-      const id = data?.panelId;
-      const before = gridSizes(e.api);
-      setTimeout(() => {
-        const group = id ? e.api.getPanel(id)?.group : e.api.groups.find((g) => g.id === data?.groupId);
-        if (group) sizeEdgeDrop(e.api, group, e.position, before);
-      });
-      return;
-    }
+    const data = e.getData();
+    const dropped = () =>
+      data?.panelId ? e.api.getPanel(data.panelId)?.group : e.api.groups.find((g) => g.id === data?.groupId);
+    // Dropped on a window edge or beside a group, the dropped group (and the one it split) keep their new
+    // widths; every other drop, and every other panel column, keeps the widths there were.
+    // Dropped on an edge of the window, it takes the size the overlay showed.
+    const sets = e.kind === "edge" || (e.kind === "content" && (e.position === "left" || e.position === "right"));
+    settle(e.api, () => (sets ? [dropped(), e.group] : []), e.kind === "edge" ? e.position : undefined);
     if (!isPreviewGroup(e.group) || e.position !== "center") return;
     // Dropped on the preview, a panel or toolbar floats where it was let go.
     e.preventDefault();
     setFloatHere(false);
-    const data = e.getData();
     if (!data) return;
     const item = data.panelId ? e.api.getPanel(data.panelId) : e.api.groups.find((g) => g.id === data.groupId);
     if (!item) return;
@@ -144,6 +157,11 @@ export function ProWorkspace() {
     <div
       ref={rootRef}
       data-float-here={floatHere || undefined}
+      onPointerDownCapture={(e) => {
+        // Only a splitter between columns (taller than wide) sets widths.
+        const sash = (e.target as Element).closest(".dv-sash");
+        if (sash && sash.clientHeight > sash.clientWidth && apiRef.current) settleSplitter(apiRef.current);
+      }}
       className={cn("h-dvh overflow-hidden bg-background", floatHere && "geo-float-here")}
     >
       <DockviewReact
