@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -18,11 +19,26 @@ import {
   CloseLoopIcon,
   ConnectIcon,
   ConstructionsIcon,
+  ExtremumIcon,
+  GraphPointIcon,
+  GuidesIcon,
+  NumberLineIcon,
   PolygonIcon,
+  RootsIcon,
+  ToFunctionsIcon,
+  VerticalLineIcon,
+  YInterceptIcon,
 } from "@/components/icons";
 import { CIRCLE_OPTIONS, CONSTRUCTIONS } from "./tools";
 import { actions } from "@/lib/actions";
-import { CONSTRUCTION_KINDS, previewProps, useAvailability, type Availability } from "@/lib/availability";
+import {
+  CONSTRUCTION_KINDS,
+  NOTABLE_FEATURES,
+  previewProps,
+  useAvailability,
+  type Availability,
+  type CheckId,
+} from "@/lib/availability";
 import { useFigureStore } from "@/store/figureStore";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +125,12 @@ function ToolStrip({ children }: { children: React.ReactNode }) {
 
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
+/** The Gráficos menu's actions on the selection: the button looks ready when one can run. */
+const GRAPH_CHECKS: CheckId[] = ["graphPoint", "guides", "toFunctions", ...NOTABLE_FEATURES.map((f) => `notable-${f}` as const)];
+
+/** Menu items that need no selection, like the ones that start typing in the input bar. */
+const ALWAYS: Availability = { reason: null, preview: null };
+
 /** Runs an action after clearing its hover preview, which would be stale afterwards. */
 const act = (fn: () => void) => () => {
   clearPreview();
@@ -125,7 +147,14 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
   const anyCircle = CIRCLE_OPTIONS.some((o) => !av[`circle-${o.mode}`].reason);
   const anyConnect = !av.connect.reason || !av.closeContour.reason;
   const anyConstruction = CONSTRUCTION_KINDS.some((kind) => !av[`construct-${kind}`].reason);
+  const anyGraphTool = GRAPH_CHECKS.some((id) => !av[id].reason);
   const menu = { side: menuSide, align: "start" } as const;
+  /** Set by the items that go on in the input bar, so the closing menu leaves focus there. */
+  const toInput = useRef(false);
+  const startTyping = (start: () => void) => () => {
+    toInput.current = true;
+    start();
+  };
   return (
     <>
       <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
@@ -238,13 +267,94 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <IconButton
-        label="Gráfico de função"
-        hint="Escreve y = na barra de pontos: complete com a expressão, como x^2 - 1 ou 2sen(x), e tecle Enter. Os eixos vêm junto."
-        onClick={actions.startGraph}
-      >
-        <ChartSpline />
-      </IconButton>
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label="Gráficos"
+            hint="Funções, retas verticais, reta numérica, pontos notáveis e formas que viram funções."
+            ready={anyGraphTool}
+          >
+            <ChartSpline />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          {...menu}
+          className="w-80"
+          onCloseAutoFocus={(e) => {
+            if (!toInput.current) return;
+            toInput.current = false;
+            // The input bar has the focus now; the menu button would take it back.
+            e.preventDefault();
+          }}
+        >
+          <DropdownMenuLabel>Gráficos</DropdownMenuLabel>
+          <MenuItem
+            icon={<ChartSpline />}
+            title="Nova função…"
+            hint="y = na barra de entrada, como x^2 - 1. Os eixos vêm junto."
+            availability={ALWAYS}
+            onSelect={startTyping(actions.startGraph)}
+          />
+          <MenuItem
+            icon={<VerticalLineIcon />}
+            title="Reta vertical…"
+            hint="x = na barra, como x = 2. Tracejada, como uma assíntota."
+            availability={ALWAYS}
+            onSelect={startTyping(actions.startVerticalLine)}
+          />
+          <MenuItem
+            icon={<NumberLineIcon />}
+            title="Reta numérica"
+            hint="Intervalos na barra: [-2; 3[ ou ]-∞; 1]."
+            availability={ALWAYS}
+            onSelect={startTyping(actions.addNumberLine)}
+          />
+          <DropdownMenuSeparator />
+          <MenuItem
+            icon={<GraphPointIcon />}
+            title="Ponto sobre o gráfico"
+            hint="Também P=f(2) na barra, ou um clique na curva."
+            availability={av.graphPoint}
+            onSelect={actions.pointOnGraph}
+          />
+          <MenuItem
+            icon={<RootsIcon />}
+            title="Raízes"
+            hint="x₁, x₂… Seguem a função quando ela muda."
+            availability={av["notable-root"]}
+            onSelect={() => actions.markNotable("root")}
+          />
+          <MenuItem
+            icon={<ExtremumIcon />}
+            title="Máximos e mínimos"
+            hint="O vértice V, ou cada pico e vale."
+            availability={av["notable-extremum"]}
+            onSelect={() => actions.markNotable("extremum")}
+          />
+          <MenuItem
+            icon={<YInterceptIcon />}
+            title="Corte no eixo y"
+            hint="O ponto (0; f(0))."
+            availability={av["notable-yAxis"]}
+            onSelect={() => actions.markNotable("yAxis")}
+          />
+          <MenuItem
+            icon={<GuidesIcon />}
+            title="Linhas até os eixos"
+            hint="Tracejadas, do ponto aos eixos. Liga e desliga."
+            availability={av.guides}
+            onSelect={actions.toggleGuides}
+          />
+          <DropdownMenuSeparator />
+          <MenuItem
+            icon={<ToFunctionsIcon />}
+            title="Transformar em funções"
+            hint="Segmentos viram retas; circunferências, duas metades."
+            availability={av.toFunctions}
+            onSelect={actions.toFunctions}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
 }

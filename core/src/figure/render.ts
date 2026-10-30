@@ -18,8 +18,19 @@ import {
   measureRuns,
   type LabelRun,
 } from "./labels";
-import { axesOrigin, axisTicks, functionLines, gridValues } from "./plot";
+import {
+  axesOrigin,
+  axesStepX,
+  axisTicks,
+  endDotRadius,
+  functionEnds,
+  functionLines,
+  gridValues,
+  pointGuides,
+  xTickText,
+} from "./plot";
 import type {
+  Axes,
   Dash,
   Element,
   ElementType,
@@ -143,11 +154,12 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   const pts = pointMap(doc);
   const box = new BoxBuilder();
   const layers: Record<
-    "grid" | "axes" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    "grid" | "axes" | "guide" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
     Prim[]
   > = {
     grid: [],
     axes: [],
+    guide: [],
     polygon: [],
     circle: [],
     function: [],
@@ -158,7 +170,9 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   };
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
+    numberline: [],
     function: [],
+    vline: [],
     polygon: [],
     circle: [],
     angle: [],
@@ -203,6 +217,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       .join("");
 
   const solid = (s: PaintStroke): PaintStroke => ({ ...s, dash: "solid" });
+  const axes = doc.elements.find((e): e is Axes => e.type === "axes");
 
   for (const el of doc.elements) {
     switch (el.type) {
@@ -223,6 +238,17 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           box.add(c.x, c.y);
         }
         hits.point.push({ owner: el.id, type: "point", x: c.x, y: c.y, r: el.size });
+        if (el.guides && axes) {
+          const d = pointGuides(el, axes)
+            .map(([a, b]) => {
+              const pa = P(a);
+              const pb = P(b);
+              box.add(pb.x, pb.y);
+              return `M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`;
+            })
+            .join("");
+          if (d) layers.guide.push({ kind: "path", owner: el.id, d, stroke: paintStroke(el.guides), fill: null });
+        }
         break;
       }
       case "segment": {
@@ -364,16 +390,40 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           .join("");
         if (!d) break;
         layers.function.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        const r = endDotRadius(stroke.width);
+        for (const end of functionEnds(el)) {
+          const c = P(end.at);
+          layers.function.push({
+            kind: "path",
+            owner: el.id,
+            d: circlePath(c.x, c.y, r),
+            // An open dot is hollow: paper inside, so the curve doesn't show through.
+            fill: { color: end.open ? "#ffffff" : stroke.color, opacity: end.open ? 1 : stroke.opacity, pattern: "solid", angle: 0 },
+            stroke: end.open ? { ...solid(stroke), width: Math.max(0.6, stroke.width * 0.8) } : null,
+          });
+          box.add(c.x, c.y, r + 0.5);
+        }
         hits.function.push({ owner: el.id, type: "function", d, area: false });
+        break;
+      }
+      case "vline": {
+        const stroke = paintStroke(el.stroke);
+        const a = P({ x: el.x, y: el.range[0] });
+        const b = P({ x: el.x, y: el.range[1] });
+        const d = `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`;
+        layers.function.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        box.add(a.x, a.y, stroke.width / 2);
+        box.add(b.x, b.y, stroke.width / 2);
+        hits.vline.push({ owner: el.id, type: "vline", d, area: false });
         break;
       }
       case "axes": {
         const stroke = paintStroke(el.stroke);
         const o = axesOrigin(el);
-        const xs = axisTicks(el.x, el.step, o.x);
+        const xs = axisTicks(el.x, axesStepX(el), o.x);
         const ys = axisTicks(el.y, el.step, o.y);
         if (el.grid) {
-          const lines = gridValues(el.x, el.step)
+          const lines = gridValues(el.x, axesStepX(el))
             .map((x) => `M${f(x * k)} ${f(-el.y[0] * k)}L${f(x * k)} ${f(-el.y[1] * k)}`)
             .concat(gridValues(el.y, el.step).map((y) => `M${f(el.x[0] * k)} ${f(-y * k)}L${f(el.x[1] * k)} ${f(-y * k)}`))
             .join("");
@@ -409,7 +459,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           textRect(layers.label, el.id, at, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
         if (el.numbers) {
           const gap = el.size * 0.9;
-          for (const x of xs) text(formatNumber(x), { x: x * k, y: x0.y + tick + gap * 0.7 });
+          for (const x of xs) text(xTickText(el, x), { x: x * k, y: x0.y + tick + gap * 0.7 });
           for (const y of ys) {
             const s = formatNumber(y);
             text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * k });
@@ -419,6 +469,36 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         if (xName) text(xName, { x: x1.x + 2, y: x1.y + el.size });
         if (yName) text(yName, { x: y1.x + el.size * 0.9, y: y1.y });
         hits.axes.push({ owner: el.id, type: "axes", d, area: false });
+        break;
+      }
+      case "numberline": {
+        const stroke = paintStroke(el.stroke);
+        const a = P({ x: el.x[0], y: el.y });
+        const b = P({ x: el.x[1], y: el.y });
+        const d = `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`;
+        layers.axes.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        const len = 4 + stroke.width * 2;
+        const half = len * 0.4;
+        layers.axes.push({
+          kind: "path",
+          owner: el.id,
+          d: `M${f(b.x)} ${f(b.y)}L${f(b.x - len)} ${f(b.y - half)}L${f(b.x - len)} ${f(b.y + half)}Z`,
+          stroke: null,
+          fill: { color: stroke.color, opacity: stroke.opacity, pattern: "solid", angle: 0 },
+        });
+        const tick = 2.5;
+        const xs = axisTicks(el.x, el.step, NaN);
+        const tickD = xs.map((x) => `M${f(x * k)} ${f(a.y - tick)}L${f(x * k)} ${f(a.y + tick)}`).join("");
+        if (tickD) layers.axes.push({ kind: "path", owner: el.id, d: tickD, stroke: solid(stroke), fill: null });
+        box.add(a.x, a.y, tick);
+        box.add(b.x, b.y, half);
+        if (el.numbers) {
+          for (const x of xs) {
+            const s = formatNumber(x);
+            textRect(layers.label, el.id, { x: x * k, y: a.y + tick + el.size * 0.9 }, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
+          }
+        }
+        hits.numberline.push({ owner: el.id, type: "numberline", d, area: false });
         break;
       }
       case "text": {
@@ -440,6 +520,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     prims: [
       ...layers.grid,
       ...layers.axes,
+      ...layers.guide,
       ...layers.polygon,
       ...layers.circle,
       ...layers.function,
@@ -450,9 +531,11 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     ],
     hits: [
       ...hits.axes,
+      ...hits.numberline,
       ...hits.polygon,
       ...hits.circle,
       ...hits.function,
+      ...hits.vline,
       ...hits.angle,
       ...hits.segment,
       ...hits.text,
@@ -470,7 +553,7 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text" || el.type === "axes") return;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;

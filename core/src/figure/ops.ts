@@ -1,4 +1,4 @@
-import { DEFAULT_AXES_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
+import { DEFAULT_AXES_STROKE, DEFAULT_GUIDE_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
 import { parseExpr } from "../plot";
 import {
   angleArc,
@@ -10,7 +10,8 @@ import {
   resolveConstructions,
   signedArea2,
 } from "./geometry";
-import { labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
+import { formatNumber, labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
+import { functionValue } from "./plot";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Axes,
@@ -24,8 +25,10 @@ import type {
   FreeText,
   Id,
   Point,
+  NumberLine,
   Polygon,
   Segment,
+  VerticalLine,
 } from "./types";
 import { dist, heading, lerp, normDeg, sub, type Vec } from "./vec";
 
@@ -84,7 +87,9 @@ const PREFIX: Record<ElementType, string> = {
   polygon: "g",
   text: "t",
   function: "f",
+  vline: "r",
   axes: "e",
+  numberline: "n",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
@@ -101,11 +106,11 @@ export function idMaker(doc: FigureDoc) {
   };
 }
 
-function withElements(doc: FigureDoc, elements: Element[]): FigureDoc {
+export function withElements(doc: FigureDoc, elements: Element[]): FigureDoc {
   return { ...doc, elements };
 }
 
-function roomFor(doc: FigureDoc, count: number): boolean {
+export function roomFor(doc: FigureDoc, count: number): boolean {
   return doc.elements.length + count <= LIMITS.elements;
 }
 
@@ -139,6 +144,15 @@ export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions 
   if (parsed.functions.length > 0) {
     const [f] = parsed.functions;
     return addFunction(doc, f.expr, f.name, opts);
+  }
+  if (parsed.lines.length > 0) return addVerticalLine(doc, parsed.lines[0].x, opts);
+  if (parsed.intervals.length > 0) {
+    const [i] = parsed.intervals;
+    return addInterval(doc, i.from, i.to, i.closed, opts);
+  }
+  if (parsed.graphPoints.length > 0) {
+    const [p] = parsed.graphPoints;
+    return addPointOnGraph(doc, p.graph, p.x, p.label, opts);
   }
   if (parsed.nodes.length === 0 && parsed.texts.length === 0) return ok(doc);
   const fresh = parsed.nodes.filter((n) => n.kind === "new");
@@ -427,7 +441,9 @@ function referencedPoints(el: Element): Id[] {
     case "point":
     case "text":
     case "function":
+    case "vline":
     case "axes":
+    case "numberline":
       return [];
     case "segment":
       return [el.a, el.b];
@@ -509,12 +525,22 @@ function withOrphanHelpers(doc: FigureDoc, gone: Set<Id>): Set<Id> {
   return out;
 }
 
-/** Moves points and free texts. */
+/** Moves points and free texts. A point on a graph slides along it, following x. */
 export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number }[]): FigureDoc {
   const byId = new Map(moves.map((m) => [m.id, m]));
   const elements = doc.elements.map((el) => {
     const m = byId.get(el.id);
-    return m && (el.type === "point" || el.type === "text") ? { ...el, x: m.x, y: m.y } : el;
+    if (!m || (el.type !== "point" && el.type !== "text")) return el;
+    const c = el.type === "point" ? el.construction : undefined;
+    if (c?.kind === "onGraph") {
+      const graph = doc.elements.find((g) => g.id === c.graph);
+      // Past where f is defined, like √x left of 0, the point waits at its last x.
+      if (graph?.type !== "function") return el;
+      const x = Math.min(Math.max(m.x, graph.domain[0]), graph.domain[1]);
+      if (functionValue(graph.expr, x) === null) return el;
+      return { ...el, construction: { ...c, x } };
+    }
+    return { ...el, x: m.x, y: m.y };
   });
   return resolveConstructions(withElements(doc, elements));
 }
@@ -853,8 +879,136 @@ export function addFunction(doc: FigureDoc, expr: string, name = "", opts: OpOpt
   const existing = doc.elements.find((e): e is Axes => e.type === "axes");
   if (!roomFor(doc, existing ? 1 : 2)) return fail(doc, LIMIT_ERROR);
   const nextId = idMaker(doc);
-  const axes: Axes = existing ?? {
-    id: nextId("axes"),
+  const axes = existing ?? newAxes(nextId("axes"));
+  const graph: FunctionGraph = {
+    id: nextId("function"),
+    type: "function",
+    expr: expr.trim(),
+    domain: [...axes.x],
+    range: [...axes.y],
+    stroke: { ...stylesOf(opts).stroke },
+    label: withText(undefined, name || nextFunctionName(doc), stylesOf(opts).label),
+  };
+  return withAxes(doc, graph, axes, !existing);
+}
+
+/** The vertical line x = a, dashed like an asymptote, over the figure's axes (added when there are none). */
+export function addVerticalLine(doc: FigureDoc, x: number, opts: OpOptions = {}): OpResult {
+  if (!Number.isFinite(x) || Math.abs(x) > LIMITS.coordinate) return fail(doc, "Valor de x fora do limite.");
+  const existing = doc.elements.find((e): e is Axes => e.type === "axes");
+  if (!roomFor(doc, existing ? 1 : 2)) return fail(doc, LIMIT_ERROR);
+  const nextId = idMaker(doc);
+  const axes = existing ?? newAxes(nextId("axes"));
+  const line: VerticalLine = {
+    id: nextId("vline"),
+    type: "vline",
+    x,
+    range: [...axes.y],
+    stroke: { ...stylesOf(opts).stroke, dash: "dashed" },
+  };
+  return withAxes(doc, line, axes, !existing);
+}
+
+/** Lowest y the figure reaches, roughly: where a new number line goes under it. */
+function figureBottom(doc: FigureDoc): number | null {
+  const pts = pointMap(doc);
+  let low = Infinity;
+  for (const el of doc.elements) {
+    if (el.type === "point" || el.type === "text") low = Math.min(low, el.y);
+    else if (el.type === "axes") low = Math.min(low, el.y[0]);
+    else if (el.type === "function" || el.type === "vline") low = Math.min(low, el.range[0]);
+    else if (el.type === "numberline") low = Math.min(low, el.y);
+    else if (el.type === "circle") low = Math.min(low, (pts.get(el.center)?.y ?? Infinity) - el.radius);
+  }
+  return Number.isFinite(low) ? low : null;
+}
+
+/** A number line from -5 to 5, at y = 0 in an empty figure or under everything else. */
+export function addNumberLine(doc: FigureDoc): OpResult {
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const bottom = figureBottom(doc);
+  const line: NumberLine = {
+    id: idMaker(doc)("numberline"),
+    type: "numberline",
+    x: [-5, 5],
+    y: bottom === null ? 0 : Math.floor(bottom) - 2,
+    step: 1,
+    numbers: true,
+    stroke: { ...DEFAULT_AXES_STROKE },
+    size: 9,
+  };
+  return ok(withElements(doc, [...doc.elements, line]), [line.id]);
+}
+
+/** Moves a number line up or down, with the interval marks that sit on it. */
+export function moveNumberLine(doc: FigureDoc, id: Id, y: number): FigureDoc {
+  const line = doc.elements.find((e): e is NumberLine => e.id === id && e.type === "numberline");
+  if (!line || !Number.isFinite(y)) return doc;
+  const on = (p: Point) => !p.construction && Math.abs(p.y - line.y) < 1e-9 && p.x >= line.x[0] - 1e-9 && p.x <= line.x[1] + 1e-9;
+  const elements = doc.elements.map((el): Element => {
+    if (el.id === id) return { ...line, y };
+    return el.type === "point" && on(el) ? { ...el, y } : el;
+  });
+  return resolveConstructions(withElements(doc, elements));
+}
+
+/** Width in pt of the stroke that marks an interval over a number line. */
+const INTERVAL_WIDTH = 2.4;
+
+/**
+ * An interval on the figure's number line: a thick stroke from `from` to `to`
+ * (null for -∞ and +∞, which run to the line's ends), with a closed dot where
+ * an end belongs to it and an open one where it doesn't.
+ */
+export function addInterval(
+  doc: FigureDoc,
+  from: number | null,
+  to: number | null,
+  closed: [boolean, boolean],
+  opts: OpOptions = {},
+): OpResult {
+  const found = doc.elements.find((e): e is NumberLine => e.type === "numberline");
+  if (!found) return fail(doc, "Crie uma reta numérica antes: Gráficos › Reta numérica.");
+  // Ends past the line stretch it, a whole unit beyond, so they get ticks and the arrow stays ahead.
+  const finite = [from, to].filter((v): v is number => v !== null);
+  const line: NumberLine = {
+    ...found,
+    x: [Math.min(found.x[0], ...finite.map((v) => Math.floor(v) - 1)), Math.max(found.x[1], ...finite.map((v) => Math.ceil(v) + 1))],
+  };
+  if (Math.abs(line.x[0]) > LIMITS.coordinate || Math.abs(line.x[1]) > LIMITS.coordinate) return fail(doc, "Valor fora do limite da figura.");
+  const a = from ?? line.x[0];
+  const b = to ?? line.x[1];
+  if (!(a < b)) return fail(doc, "O início do intervalo precisa ser menor que o fim.");
+  if (!roomFor(doc, 3)) return fail(doc, LIMIT_ERROR);
+  const styles = stylesOf(opts);
+  const nextId = idMaker(doc);
+  const end = (x: number, infinite: boolean, isClosed: boolean): Point => ({
+    id: nextId("point"),
+    type: "point",
+    x,
+    y: line.y,
+    // An infinite end has no mark: the stroke just runs to the arrow.
+    shape: infinite ? "none" : isClosed ? "dot" : "ring",
+    size: Math.max(styles.point.size, 2.4),
+    color: styles.point.color,
+  });
+  const p = end(a, from === null, closed[0]);
+  const q = end(b, to === null, closed[1]);
+  const s = newSegment(nextId("segment"), p.id, q.id, opts);
+  const mark: Segment = { ...s, stroke: { ...s.stroke, width: INTERVAL_WIDTH, dash: "solid" } };
+  const stretched = doc.elements.map((e) => (e.id === line.id ? line : e));
+  return ok(withElements(doc, [...stretched, mark, p, q]), [mark.id, p.id, q.id]);
+}
+
+/** Adds `el` and, when `fresh`, the axes it was given, first so everything else draws over them. */
+function withAxes(doc: FigureDoc, el: Element, axes: Axes, fresh: boolean): OpResult {
+  const elements = fresh ? [axes, ...doc.elements, el] : [...doc.elements, el];
+  return ok(withElements(doc, elements), fresh ? [el.id, axes.id] : [el.id]);
+}
+
+export function newAxes(id: Id): Axes {
+  return {
+    id,
     type: "axes",
     x: [...DEFAULT_PLOT_WINDOW.x],
     y: [...DEFAULT_PLOT_WINDOW.y],
@@ -865,18 +1019,81 @@ export function addFunction(doc: FigureDoc, expr: string, name = "", opts: OpOpt
     stroke: { ...DEFAULT_AXES_STROKE },
     size: 8,
   };
-  const graph: FunctionGraph = {
-    id: nextId("function"),
-    type: "function",
-    expr: expr.trim(),
-    domain: [...axes.x],
-    range: [...axes.y],
-    stroke: { ...stylesOf(opts).stroke },
-    label: withText(undefined, name || nextFunctionName(doc), stylesOf(opts).label),
-  };
-  // Axes go first, so everything else draws over them.
-  const elements = existing ? [...doc.elements, graph] : [axes, ...doc.elements, graph];
-  return ok(withElements(doc, elements), existing ? [graph.id] : [graph.id, axes.id]);
+}
+
+/**
+ * Where to put a point on a graph when the teacher gave no x: a whole
+ * number just right of the middle of its domain, where the curve shows.
+ */
+function niceX(graph: FunctionGraph): number | null {
+  const [a, b] = graph.domain;
+  const start = Math.round((a + b) / 2) + 1;
+  for (let i = 0; i <= Math.ceil(b - a); i++) {
+    for (const x of i === 0 ? [start] : [start + i, start - i]) {
+      if (x <= a || x >= b) continue;
+      const y = functionValue(graph.expr, x);
+      if (y !== null && y >= graph.range[0] && y <= graph.range[1]) return x;
+    }
+  }
+  return null;
+}
+
+/**
+ * A point on the graph `graphId` at x (or a whole x near the middle when
+ * null), named `name` or the next free name. It follows the graph when the
+ * expression changes, and slides along it when dragged.
+ */
+export function addPointOnGraph(
+  doc: FigureDoc,
+  graphId: Id,
+  x: number | null,
+  name = "",
+  opts: OpOptions = {},
+): OpResult {
+  const graph = doc.elements.find((e): e is FunctionGraph => e.id === graphId && e.type === "function");
+  if (!graph) return fail(doc, "Selecione um gráfico.");
+  const at = x ?? niceX(graph);
+  const y = at === null ? null : functionValue(graph.expr, at);
+  if (at === null || y === null) {
+    const where = at === null ? " na janela" : ` em x = ${formatNumber(at)}`;
+    return fail(doc, `${graph.label?.text || "A função"} não está definida${where}.`);
+  }
+  if (Math.abs(at) > LIMITS.coordinate || Math.abs(y) > LIMITS.coordinate) {
+    return fail(doc, "O ponto fica fora do limite da figura.");
+  }
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const spec = name ? { x: at, y, label: name } : { x: at, y };
+  const [point] = buildPoints(doc, [spec], { ...opts, autoName: true }, idMaker(doc));
+  const placed: Point = { ...point, construction: { kind: "onGraph", graph: graph.id, x: at } };
+  return ok(withElements(doc, [...doc.elements, placed]), [placed.id]);
+}
+
+/** A point on the first selected graph, at a whole x where its curve shows. */
+export function pointOnSelectedGraph(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
+  const [graph] = selectedOfType(doc, selection, "function");
+  if (!graph) return fail(doc, "Selecione um gráfico.");
+  return addPointOnGraph(doc, graph.id, null, "", opts);
+}
+
+/** Turns the dashed lines to the axes on for the selected points, or off when they all have them. */
+export function toggleGuides(doc: FigureDoc, selection: Id[]): OpResult {
+  const points = selectedOfType(doc, selection, "point");
+  if (points.length === 0) return fail(doc, "Selecione pontos.");
+  if (!doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura não tem eixos. Crie um gráfico antes.");
+  const on = points.some((p) => !p.guides);
+  const next = updateElements(
+    doc,
+    points.map((p) => p.id),
+    (el) => {
+      if (el.type !== "point") return el;
+      // In the point's color, so a red point's lines are red too.
+      if (on) return el.guides ? el : { ...el, guides: { ...DEFAULT_GUIDE_STROKE, color: el.color } };
+      const rest = { ...el };
+      delete rest.guides;
+      return rest;
+    },
+  );
+  return ok(next);
 }
 
 const sameInterval = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
@@ -892,6 +1109,7 @@ export function setAxesWindow(doc: FigureDoc, id: Id, x: [number, number], y: [n
   if (!(x[0] < x[1]) || !(y[0] < y[1])) return fail(doc, "O início precisa ser menor que o fim.");
   const elements = doc.elements.map((el): Element => {
     if (el.id === id) return { ...axes, x, y };
+    if (el.type === "vline") return { ...el, range: sameInterval(el.range, axes.y) ? y : el.range };
     if (el.type !== "function") return el;
     return {
       ...el,
@@ -899,5 +1117,5 @@ export function setAxesWindow(doc: FigureDoc, id: Id, x: [number, number], y: [n
       range: sameInterval(el.range, axes.y) ? y : el.range,
     };
   });
-  return ok(withElements(doc, elements));
+  return ok(resolveConstructions(withElements(doc, elements)));
 }

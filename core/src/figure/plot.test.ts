@@ -1,19 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
   addFunction,
+  addPointOnGraph,
   addPoints,
+  addVerticalLine,
   applyInput,
   buildScene,
   deleteElements,
   emptyDoc,
+  functionEnds,
   labelText,
+  movePoints,
   normalizeDoc,
   parseInput,
+  piText,
+  piWindow,
   setAxesWindow,
+  toggleGuides,
   toSvg,
   toTikz,
+  updateElements,
   type Axes,
+  type EndMark,
+  type FigureDoc,
   type FunctionGraph,
+  type Point,
+  type VerticalLine,
 } from "./index";
 
 const graph = (expr: string) => {
@@ -140,5 +152,142 @@ describe("axes window", () => {
     expect(g.domain).toEqual([0, 2]);
     expect(g.range).toEqual([-2, 10]);
     expect(setAxesWindow(doc, "e1", [3, 1], [0, 1]).error).toMatch(/menor/);
+  });
+});
+
+describe("vertical lines", () => {
+  it("are typed as x = a, never taking a point like x=(1;2)", () => {
+    expect(parseInput("x = 2").lines).toEqual([{ x: 2 }]);
+    expect(parseInput("x=-1,5").lines).toEqual([{ x: -1.5 }]);
+    expect(parseInput("x = pi/2").lines[0].x).toBeCloseTo(Math.PI / 2);
+    expect(parseInput("x=(1;2)").nodes).toHaveLength(1);
+    expect(parseInput("x = x + 1").errors[0].message).toMatch(/número/);
+  });
+
+  it("come dashed over the axes, which they add when missing, and follow the axes window", () => {
+    const r = applyInput(emptyDoc(), parseInput("x = 2"));
+    expect(r.doc.elements.map((e) => e.type)).toEqual(["axes", "vline"]);
+    const line = r.doc.elements[1] as VerticalLine;
+    expect(line.stroke.dash).toBe("dashed");
+    expect(line.range).toEqual([-5, 5]);
+    const wider = setAxesWindow(r.doc, "e1", [-5, 5], [-8, 8]).doc;
+    expect((wider.elements[1] as VerticalLine).range).toEqual([-8, 8]);
+    expect(toTikz(r.doc)).toContain("\\draw[draw=black, line width=0.8pt, dashed] (2,-5) -- (2,5);");
+    expect(buildScene(r.doc).hits.some((h) => h.type === "vline")).toBe(true);
+  });
+});
+
+describe("points on graphs", () => {
+  const ctx = (doc: FigureDoc) => ({
+    points: [],
+    graphs: doc.elements.flatMap((e) => (e.type === "function" ? [{ id: e.id, name: e.label?.text ?? "" }] : [])),
+  });
+
+  it("are typed as P = f(2) for a graph named f", () => {
+    const doc = graph("x^2");
+    expect(parseInput("P = f(2)", ctx(doc)).graphPoints).toEqual([{ graph: "f1", x: 2, label: "P" }]);
+    expect(parseInput("f(-1,5)", ctx(doc)).graphPoints).toEqual([{ graph: "f1", x: -1.5, label: "" }]);
+    expect(parseInput("g(2)", ctx(doc)).graphPoints).toEqual([]);
+    expect(parseInput("f(x) = 2x", ctx(doc)).functions).toHaveLength(1);
+  });
+
+  it("sit at (x, f(x)), follow the expression, and stay put where it's undefined", () => {
+    const doc = graph("x^2");
+    const r = applyInput(doc, parseInput("P = f(2)", ctx(doc)));
+    const p = r.doc.elements.find((e) => e.id === r.created[0]) as Point;
+    expect([p.x, p.y, p.label?.text]).toEqual([2, 4, "P"]);
+    const changed = updateElements(r.doc, ["f1"], (e) => ({ ...e, expr: "x + 1" }) as FunctionGraph);
+    expect((changed.elements.find((e) => e.id === p.id) as Point).y).toBe(3);
+    const undefinedThere = updateElements(changed, ["f1"], (e) => ({ ...e, expr: "1/(x - 2)" }) as FunctionGraph);
+    expect((undefinedThere.elements.find((e) => e.id === p.id) as Point).y).toBe(3);
+  });
+
+  it("slide along the graph when dragged, and become free when it's deleted", () => {
+    const doc = graph("x^2");
+    const r = addPointOnGraph(doc, "f1", 1);
+    const id = r.created[0];
+    const moved = movePoints(r.doc, [{ id, x: -2, y: 0 }]);
+    expect(moved.elements.find((e) => e.id === id)).toMatchObject({ x: -2, y: 4 });
+    const freed = deleteElements(moved, ["f1"]).doc.elements.find((e) => e.id === id) as Point;
+    expect(freed.construction).toBeUndefined();
+    expect([freed.x, freed.y]).toEqual([-2, 4]);
+  });
+
+  it("get a whole x where the curve shows when none is given, or say where f is undefined", () => {
+    const r = addPointOnGraph(graph("x^2"), "f1", null);
+    expect(r.doc.elements.find((e) => e.id === r.created[0])).toMatchObject({ x: 1, y: 1 });
+    expect(addPointOnGraph(graph("raiz(x)"), "f1", -1).error).toMatch(/não está definida em x = -1/);
+    expect(addPointOnGraph(graph("x"), "e1", 1).error).toMatch(/Selecione um gráfico/);
+  });
+});
+
+describe("guides to the axes", () => {
+  it("turn on and off for selected points, and need axes", () => {
+    const doc = addPoints(graph("x"), [{ x: 2, y: 3 }]).doc;
+    const on = toggleGuides(doc, ["p1"]);
+    expect((on.doc.elements[2] as Point).guides?.dash).toBe("dashed");
+    expect(toTikz(on.doc)).toContain("\\draw[draw=black, line width=0.5pt, dashed] (p1) -- (2,0) (p1) -- (0,3);");
+    expect((toggleGuides(on.doc, ["p1"]).doc.elements[2] as Point).guides).toBeUndefined();
+    expect(toggleGuides(addPoints(emptyDoc(), [{ x: 1, y: 1 }]).doc, ["p1"]).error).toMatch(/eixos/);
+  });
+
+  it("skip the line along an axis the point sits on", () => {
+    const doc = toggleGuides(addPoints(graph("x"), [{ x: 2, y: 0 }]).doc, ["p1"]).doc;
+    expect(toTikz(doc)).toContain("(p1) -- (0,0);");
+    expect(toTikz(doc)).not.toContain("(p1) -- (2,0)");
+  });
+});
+
+describe("graph ends", () => {
+  it("draw closed and open dots where the curve reaches the domain's ends", () => {
+    const doc = graph("x");
+    const f = { ...(doc.elements[1] as FunctionGraph), domain: [-2, 3] as [number, number], ends: ["closed", "open"] as [EndMark, EndMark] };
+    expect(functionEnds(f)).toEqual([
+      { at: { x: -2, y: -2 }, open: false },
+      { at: { x: 3, y: 3 }, open: true },
+    ]);
+    const tikz = toTikz({ ...doc, elements: [doc.elements[0], f] });
+    expect(tikz).toMatch(/\\fill\[black\] \(-2,-2\) circle/);
+    expect(tikz).toMatch(/\\filldraw\[draw=black, fill=white, line width=0.64pt\] \(3,3\) circle/);
+    // Outside the y cut there's no curve to end, so no dot.
+    expect(functionEnds({ ...f, range: [-1, 5] })).toHaveLength(1);
+  });
+});
+
+describe("π ticks", () => {
+  it("write multiples of π the textbook way", () => {
+    expect([0.5, 1, 1.5, 2, -0.5, -1, 2 / 3, 1 / 6].map((r) => piText(r * Math.PI))).toEqual([
+      "π/2",
+      "π",
+      "3π/2",
+      "2π",
+      "-π/2",
+      "-π",
+      "2π/3",
+      "π/6",
+    ]);
+    expect(piText(1)).toBeNull();
+  });
+
+  it("put x ticks every xPi·π, keep y in units, and suit the window to them", () => {
+    const doc = graph("sen(x)");
+    const axes = { ...(doc.elements[0] as Axes), xPi: 0.5, x: piWindow([-5, 5], 0.5) };
+    expect(axes.x).toEqual([-5.212, 5.212]);
+    const tikz = toTikz({ ...doc, elements: [axes] });
+    expect(tikz).toContain("{$\\pi /2$}");
+    expect(tikz).toContain("{$-3\\pi /2$}");
+    expect(tikz).toContain("{$2$}");
+    expect(normalizeDoc({ ...doc, elements: [axes] }).elements[0]).toMatchObject({ xPi: 0.5 });
+  });
+});
+
+describe("saved graph tools", () => {
+  it("keep guides, ends, vertical lines and points on graphs through normalize", () => {
+    let doc = graph("x^2");
+    doc = addPointOnGraph(doc, "f1", 1).doc;
+    doc = toggleGuides(doc, ["p1"]).doc;
+    doc = addVerticalLine(doc, 2).doc;
+    doc = updateElements(doc, ["f1"], (e) => ({ ...e, ends: ["open", "closed"] }) as FunctionGraph);
+    expect(normalizeDoc(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
   });
 });

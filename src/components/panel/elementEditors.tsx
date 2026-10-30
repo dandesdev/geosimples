@@ -9,7 +9,9 @@ import {
   type Point,
   type Polygon,
   type Segment,
+  type NumberLine,
   type Ticks,
+  type VerticalLine,
 } from "@geosimples/core/figure";
 import { useActivePrefs } from "@/store/useActivePrefs";
 import { Choice, ColorPicker, Field, RangeField, Section, SwitchField } from "./controls";
@@ -156,6 +158,26 @@ export function FunctionEditor({ el, update, updateLabel, multi }: EditorProps<F
     <div className="space-y-2">
       <StrokeEditor title="Traço da curva" stroke={el.stroke} onChange={(stroke, key) => update((f) => ({ ...f, stroke }), key)} />
       <LabelEditor multi={multi} label={el.label} onChange={updateLabel} placeholder="Ex.: f, g, y = x²" />
+    </div>
+  );
+}
+
+export function VerticalLineEditor({ el, update, updateLabel, multi }: EditorProps<VerticalLine>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor title="Traço da reta" stroke={el.stroke} onChange={(stroke, key) => update((l) => ({ ...l, stroke }), key)} />
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} placeholder="Ex.: x = 2" />
+    </div>
+  );
+}
+
+export function NumberLineEditor({ el, update }: EditorProps<NumberLine>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor title="Traço da reta" stroke={el.stroke} onChange={(stroke, key) => update((l) => ({ ...l, stroke }), key)} />
+      <Section title="Números">
+        <RangeField label="Tamanho" value={el.size} min={5} max={16} step={0.5} format={pt} onChange={(size) => update((l) => ({ ...l, size }), "size")} />
+      </Section>
     </div>
   );
 }

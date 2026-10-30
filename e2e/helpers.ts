@@ -29,7 +29,7 @@ export async function counts(page: Page): Promise<Record<string, number>> {
 }
 
 export function pointInput(page: Page) {
-  return page.getByRole("textbox", { name: "Adicionar pontos" });
+  return page.getByRole("textbox", { name: "Pontos e funções" });
 }
 
 export function toolbarButton(page: Page, name: string) {
@@ -85,4 +85,15 @@ export async function clickEmptyCanvas(page: Page) {
 export async function clickCanvasAt(page: Page, fx: number, fy: number) {
   const b = await canvasBox(page);
   await page.mouse.click(b.x + b.width * fx, b.y + b.height * fy);
+}
+
+/** Clicks an element's curve at a fraction of its drawn length, read from its hit path, so the click lands on the line. */
+export async function clickAlong(page: Page, owner: string, fraction: number) {
+  const at = await page.locator(`[data-owner="${owner}"] path`).last().evaluate((el, f) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() * f);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  }, fraction);
+  await page.mouse.click(at.x, at.y);
 }

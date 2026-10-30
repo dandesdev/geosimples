@@ -1,5 +1,5 @@
 import { LIMITS } from "./defaults";
-import { parseExpr } from "../plot";
+import { parseExpr, type Expr } from "../plot";
 import type { Id } from "./types";
 import { add, dist, polar, type Vec } from "./vec";
 
@@ -30,6 +30,27 @@ export interface ParsedFunction {
   expr: string;
 }
 
+/** A vertical line to create, written x = 2. */
+export interface ParsedLine {
+  x: number;
+}
+
+/** An interval to mark on the number line, written [-2; 3[ or ]-∞; 1]. Null ends are infinite. */
+export interface ParsedInterval {
+  from: number | null;
+  to: number | null;
+  /** Whether each end belongs to the interval. */
+  closed: [boolean, boolean];
+}
+
+/** A point to create on a graph, written P = f(2) or f(2). */
+export interface ParsedGraphPoint {
+  graph: Id;
+  x: number;
+  /** Empty for the next free name. */
+  label: string;
+}
+
 export type InputTokenKind = "name" | "point" | "ref" | "connector" | "text" | "error";
 
 /** A span of the input text, used to color it as the teacher types. */
@@ -53,6 +74,12 @@ export interface ParsedInput {
   texts: ParsedText[];
   /** Graphs of functions, written f(x) = x^2 or y = 2x + 1. The whole input is then the function. */
   functions: ParsedFunction[];
+  /** Vertical lines, written x = 2. The whole input is then the line. */
+  lines: ParsedLine[];
+  /** Points on graphs, written P = f(2). The whole input is then the point. */
+  graphPoints: ParsedGraphPoint[];
+  /** Intervals on the number line, written [-2; 3[. The whole input is then the interval. */
+  intervals: ParsedInterval[];
   tokens: InputToken[];
   errors: InputError[];
 }
@@ -62,6 +89,8 @@ export interface InputContext {
   points: { id: Id; x: number; y: number; label?: string }[];
   /** Last selected point: where a +displacement starts when nothing comes before it. */
   selected?: Vec;
+  /** Graphs in the figure, by the name on their label, for P = f(2). */
+  graphs?: { id: Id; name: string }[];
 }
 
 const NAME = /[A-Za-zα-ωΑ-Ω][A-Za-z0-9′'₀-₉]*/uy;
@@ -83,8 +112,9 @@ const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
  * - `"texto"@(X;Y)` places a free text centered at a point; any point form works after `@`.
  */
 export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
-  const fn = parseFunctionInput(text);
-  if (fn) return fn;
+  const whole =
+    parseFunctionInput(text) ?? parseLineInput(text) ?? parseGraphPointInput(text, ctx) ?? parseIntervalInput(text);
+  if (whole) return whole;
   const nodes: InputNode[] = [];
   const segments: [number, number][] = [];
   const texts: ParsedText[] = [];
@@ -317,7 +347,17 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
 
   // Drop segments that would have no length.
   const kept = segments.filter(([p, q]) => dist(position(p), position(q)) > 0);
-  return { nodes, segments: kept, texts, functions: [], tokens: tokens.sort((x, y) => x.start - y.start), errors };
+  return {
+    nodes,
+    segments: kept,
+    texts,
+    functions: [],
+    lines: [],
+    graphPoints: [],
+    intervals: [],
+    tokens: tokens.sort((x, y) => x.start - y.start),
+    errors,
+  };
 }
 
 /** Removes floating point noise like 2.9999999999999996. */
@@ -338,7 +378,7 @@ function parseFunctionInput(text: string): ParsedInput | null {
   const head = m[0].length;
   const start = (m[1] ?? m[3]).length;
   const expr = text.slice(head);
-  const result: ParsedInput = { nodes: [], segments: [], texts: [], functions: [], tokens: [], errors: [] };
+  const result = emptyInput();
   result.tokens.push({ kind: "name", start, end: head });
   const parsed = parseExpr(expr);
   if (parsed.ok) {
@@ -349,5 +389,128 @@ function parseFunctionInput(text: string): ParsedInput | null {
     result.errors.push({ message: parsed.error, start: at, end: Math.max(at + 1, text.length) });
     result.tokens.push({ kind: "error", start: at, end: Math.max(at + 1, text.length) });
   }
+  return result;
+}
+
+const emptyInput = (): ParsedInput => ({
+  nodes: [],
+  segments: [],
+  texts: [],
+  functions: [],
+  lines: [],
+  graphPoints: [],
+  intervals: [],
+  tokens: [],
+  errors: [],
+});
+
+const hasX = (e: Expr): boolean =>
+  e.kind === "x" ||
+  (e.kind === "neg" && hasX(e.arg)) ||
+  (e.kind === "call" && hasX(e.arg)) ||
+  (e.kind === "bin" && (hasX(e.a) || hasX(e.b)));
+
+/** A number written as an expression, like 2, -1,5 or pi/2, starting at `offset` in the input. */
+function constant(text: string, offset: number): { value: number } | InputError {
+  const parsed = parseExpr(text);
+  if (!parsed.ok) {
+    const at = offset + Math.min(parsed.at, Math.max(text.length - 1, 0));
+    return { message: parsed.error, start: at, end: Math.max(at + 1, offset + text.length) };
+  }
+  const value = parsed.fn(0);
+  if (hasX(parsed.expr) || !Number.isFinite(value)) {
+    return { message: "Use um número aqui, como 2 ou pi/2.", start: offset, end: offset + text.length };
+  }
+  return { value: roundTiny(value) };
+}
+
+function withValue(result: ParsedInput, value: { value: number } | InputError, start: number, end: number) {
+  if ("value" in value) {
+    if (end > start) result.tokens.push({ kind: "text", start, end });
+    return value.value;
+  }
+  result.errors.push(value);
+  result.tokens.push({ kind: "error", start: value.start, end: value.end });
+  return null;
+}
+
+/** `x = …` with a number after, never a point like x=(1;2). */
+const LINE_INPUT = /^(\s*)x\s*=(?![^;:]*[;:])/;
+
+/** The vertical line x = 2, or x = pi/2. Returns null for anything else. */
+function parseLineInput(text: string): ParsedInput | null {
+  const m = LINE_INPUT.exec(text);
+  if (!m) return null;
+  const head = m[0].length;
+  const result = emptyInput();
+  result.tokens.push({ kind: "name", start: m[1].length, end: head });
+  const rest = text.slice(head);
+  if (rest.trim() === "") return result;
+  const x = withValue(result, constant(rest, head), head, text.length);
+  if (x !== null) result.lines.push({ x });
+  return result;
+}
+
+/** `P = f(2)` or `f(2)`: a name, then a graph's name and a number in parentheses. */
+const GRAPH_POINT_INPUT = /^(\s*)(?:([A-Za-zα-ωΑ-Ω][A-Za-z0-9′'₀-₉]*)\s*=\s*)?([A-Za-z][A-Za-z0-9₀-₉]*)\s*\(([^;:()]*(?:\([^;:()]*\)[^;:()]*)*)\)\s*$/u;
+
+/** A point on a graph of the figure, like P = f(2). Returns null for anything else. */
+function parseGraphPointInput(text: string, ctx: InputContext): ParsedInput | null {
+  const m = GRAPH_POINT_INPUT.exec(text);
+  if (!m) return null;
+  const [, lead, label = "", name, arg] = m;
+  const graph = ctx.graphs?.find((g) => g.name === name);
+  // f(x) = … is a function, and other names are left to the point reader to complain about.
+  if (!graph || arg.trim() === "x") return null;
+  const result = emptyInput();
+  const nameStart = text.indexOf(name, lead.length + (label ? label.length : 0));
+  if (label) result.tokens.push({ kind: "name", start: lead.length, end: lead.length + label.length });
+  result.tokens.push({ kind: "ref", start: nameStart, end: nameStart + name.length });
+  const argStart = text.indexOf("(", nameStart) + 1;
+  const x = withValue(result, constant(arg, argStart), argStart, argStart + arg.length);
+  if (x !== null) result.graphPoints.push({ graph: graph.id, x, label: label.slice(0, LIMITS.labelLength) });
+  return result;
+}
+
+/** `[a; b]` with either bracket turned: [ closes the start, ] opens it, and the other way at the end. */
+const INTERVAL_INPUT = /^(\s*)([[\]])([^;[\]]*);([^;[\]]*)([[\]])\s*$/;
+
+/** -∞, +∞, -inf, inf: an end that runs off the number line. */
+const INFINITY = /^\s*([+-]?)\s*(?:∞|inf)\s*$/i;
+
+/** An interval on the number line, like [-2; 3[ or ]-∞; 1/2]. Returns null for anything else. */
+function parseIntervalInput(text: string): ParsedInput | null {
+  const m = INTERVAL_INPUT.exec(text);
+  if (!m) return null;
+  const [, lead, open, first, second, close] = m;
+  const result = emptyInput();
+  const start = lead.length;
+  const firstAt = start + 1;
+  const secondAt = firstAt + first.length + 1;
+  const closeAt = text.trimEnd().length - 1;
+  result.tokens.push({ kind: "name", start, end: firstAt }, { kind: "name", start: closeAt, end: closeAt + 1 });
+  const end = (raw: string, at: number, side: "-" | "+"): number | null | undefined => {
+    const inf = INFINITY.exec(raw);
+    if (inf) {
+      if (inf[1] !== (side === "-" ? "-" : "+") && !(side === "+" && inf[1] === "")) {
+        result.errors.push({ message: side === "-" ? "O início só pode ser -∞." : "O fim só pode ser +∞.", start: at, end: at + raw.length });
+        result.tokens.push({ kind: "error", start: at, end: at + raw.length });
+        return undefined;
+      }
+      result.tokens.push({ kind: "text", start: at, end: at + raw.length });
+      return null;
+    }
+    const v = withValue(result, constant(raw, at), at, at + raw.length);
+    return v === null ? undefined : v;
+  };
+  const from = end(first, firstAt, "-");
+  const to = end(second, secondAt, "+");
+  if (from === undefined || to === undefined) return result;
+  if (from !== null && to !== null && !(from < to)) {
+    result.errors.push({ message: "O início do intervalo precisa ser menor que o fim.", start, end: text.length });
+    return result;
+  }
+  // An infinite end is never included, whatever the bracket says.
+  result.intervals.push({ from, to, closed: [open === "[" && from !== null, close === "]" && to !== null] });
   return result;
 }

@@ -64,8 +64,19 @@ test("pro layout: hidden point input and the right-click menu", async ({ page })
   await expect(page.getByText(/^Selecionados:/)).toHaveCount(0);
   await page.locator('[data-owner="p1"]').click({ button: "right" });
   await expect(page.getByText("Selecionados: 1 ponto", { exact: false })).toBeVisible();
+  // Only what applies to the point: no undo, export or theme in here.
+  await expect(page.getByRole("menuitem", { name: "Exportar…" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: /Desfazer/ })).toHaveCount(0);
   await page.getByRole("menuitem", { name: "Apagar selecionados" }).click();
   await expect.poll(async () => (await counts(page)).point).toBe(2);
+
+  // An empty spot offers a point there and the view.
+  await page.keyboard.press("Escape");
+  await page.getByRole("region", { name: "Prévia da figura" }).locator("svg.touch-none").click({ button: "right", position: { x: 30, y: 30 } });
+  await expect(page.getByRole("menuitem", { name: /Adicionar ponto aqui/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Vista" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Apagar selecionados" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 });
 
 test("pro layout: / brings the point input without moving the preview", async ({ page }) => {
@@ -84,6 +95,18 @@ test("pro layout: / brings the point input without moving the preview", async ({
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => (window as unknown as { scrolled: string[] }).scrolled)).toEqual([]);
   expect(await box(preview)).toEqual(before);
+});
+
+test("pro layout: Escape sends the input away even with text in it, and / brings the text back", async ({ page }) => {
+  const dock = page.getByTestId("point-input-dock");
+  await leaveInput(page);
+  await page.keyboard.press("/");
+  await pointInput(page).fill("A=(1;1)");
+  await pointInput(page).press("Escape");
+  await expect(dock).toHaveAttribute("data-shown", "false");
+  await page.keyboard.press("/");
+  await expect(dock).toHaveAttribute("data-shown", "true");
+  await expect(pointInput(page)).toHaveValue("A=(1;1)");
 });
 
 test("dark theme: the preview paper turns gray, and exports stay white unless asked", async ({ page }) => {

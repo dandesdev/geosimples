@@ -14,3 +14,4 @@ export * from "./normalize";
 export * from "./file";
 export * from "./library";
 export * from "./plot";
+export * from "./graphOps";

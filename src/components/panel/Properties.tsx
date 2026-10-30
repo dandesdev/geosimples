@@ -1,5 +1,19 @@
 import { useState, type ReactNode } from "react";
-import { setAxesWindow, type Axes, type FunctionGraph } from "@geosimples/core/figure";
+import {
+  DEFAULT_GUIDE_STROKE,
+  functionValue,
+  moveNumberLine,
+  piText,
+  piWindow,
+  setAxesWindow,
+  updateElements,
+  type Axes,
+  type EndMark,
+  type FunctionGraph,
+  type NumberLine,
+  type VerticalLine,
+} from "@geosimples/core/figure";
+import { toast } from "sonner";
 import { parseExpr } from "@geosimples/core/plot";
 import {
   angleArc,
@@ -49,6 +63,8 @@ export function Properties() {
       {el.type === "text" && <TextProperties el={el} {...props} />}
       {/* Keyed, so a half-typed expression stays with its graph when the selection changes. */}
       {el.type === "function" && <FunctionProperties key={el.id} el={el} {...props} />}
+      {el.type === "vline" && <VerticalLineProperties el={el} {...props} />}
+      {el.type === "numberline" && <NumberLineProperties el={el} {...props} />}
       {el.type === "axes" && <AxesProperties el={el} {...props} />}
     </div>
   );
@@ -71,13 +87,66 @@ const nameOf = (doc: FigureDoc, id: string) => {
   return el?.label?.text || id;
 };
 
-function PointProperties({ el, update, multi, doc }: EditorProps<Point>) {
+function PointProperties(props: EditorProps<Point>) {
+  const hasAxes = props.doc.elements.some((e) => e.type === "axes");
+  return (
+    <>
+      <PointPlace {...props} />
+      {hasAxes && (
+        <Section title="Eixos">
+          <SwitchField
+            label="Linhas até os eixos"
+            checked={!!props.el.guides}
+            onChange={(on) =>
+              props.update((p) => {
+                if (on) return p.guides ? p : { ...p, guides: { ...DEFAULT_GUIDE_STROKE, color: p.color } };
+                const rest = { ...p };
+                delete rest.guides;
+                return rest;
+              }, "guides")
+            }
+            help="Tracejadas, do ponto até cada eixo, como para marcar f(a) no gráfico."
+          />
+        </Section>
+      )}
+    </>
+  );
+}
+
+function PointPlace({ el, update, multi, doc }: EditorProps<Point>) {
   const decimals = useFigureStore((s) => s.settings.decimals);
   if (multi) return <Hint>Com vários pontos selecionados, a posição se ajusta um por vez.</Hint>;
-  if (el.construction) {
+  const c = el.construction;
+  if (c?.kind === "onGraph") {
+    return (
+      <Section title="Sobre o gráfico">
+        <Hint>{describeConstruction(doc, c)}. Acompanha a função quando ela muda, e desliza por ela no modo Mover pontos.</Hint>
+        <Field label="x">
+          <NumberInput
+            ariaLabel="x do ponto no gráfico"
+            value={c.x}
+            onChange={(x) => {
+              const graph = doc.elements.find((g) => g.id === c.graph);
+              // Where f is undefined the point would have nowhere to go.
+              if (graph?.type === "function" && functionValue(graph.expr, x) === null) {
+                toast.error(`${graph.label?.text || "A função"} não está definida em x = ${formatNumber(x)}.`);
+                return;
+              }
+              update((p) => (p.construction?.kind === "onGraph" ? { ...p, construction: { ...p.construction, x } } : p), "graph-x");
+            }}
+          />
+        </Field>
+        <Readout label="y = f(x)" value={formatNumber(el.y, decimals)} />
+        <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => actions.freePoints([el.id])}>
+          Soltar ponto
+        </Button>
+      </Section>
+    );
+  }
+  if (c) {
     return (
       <Section title="Construção">
-        <Hint>{describeConstruction(doc, el.construction)}. Acompanha esses objetos quando eles se movem.</Hint>
+        <Hint>{describeConstruction(doc, c)}. Acompanha esses objetos quando eles se movem.</Hint>
         <Readout label="Posição" value={`(${formatNumber(el.x, decimals)}; ${formatNumber(el.y, decimals)})`} />
         <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => actions.freePoints([el.id])}>
           Soltar ponto
@@ -378,15 +447,85 @@ function FunctionProperties({ el, update, multi, doc }: EditorProps<FunctionGrap
           </Button>
         )}
       </Section>
+      <Section title="Extremos">
+        <EndChoice label="No início" value={el.ends?.[0] ?? "none"} onChange={(m) => update((f) => ({ ...f, ends: [m, f.ends?.[1] ?? "none"] }), "end-0")} />
+        <EndChoice label="No fim" value={el.ends?.[1] ?? "none"} onChange={(m) => update((f) => ({ ...f, ends: [f.ends?.[0] ?? "none", m] }), "end-1")} />
+        <Hint>Bolinha fechada: o extremo pertence ao gráfico. Aberta: não pertence.</Hint>
+      </Section>
     </>
   );
 }
+
+function VerticalLineProperties({ el, update, multi }: EditorProps<VerticalLine>) {
+  if (multi) return <Hint>Com várias retas selecionadas, a posição se ajusta uma por vez.</Hint>;
+  return (
+    <Section title="Reta vertical">
+      <Field label="x =">
+        <NumberInput ariaLabel="Posição da reta vertical" value={el.x} onChange={(x) => update((l) => ({ ...l, x }), "x")} />
+      </Field>
+      <IntervalFields label="y de" value={el.range} onChange={(range) => update((l) => ({ ...l, range }), "range")} />
+      <Hint>Tracejada, marca uma assíntota. O traço muda em Formatação.</Hint>
+    </Section>
+  );
+}
+
+function NumberLineProperties({ el, update, multi }: EditorProps<NumberLine>) {
+  if (multi) return <Hint>Com várias retas numéricas selecionadas, a janela se ajusta uma por vez.</Hint>;
+  const moveTo = (y: number) => {
+    const store = useFigureStore.getState();
+    store.commit(moveNumberLine(store.doc, el.id, y), `${el.id}:y`);
+  };
+  return (
+    <Section title="Reta numérica">
+      <IntervalFields label="x de" value={el.x} onChange={(x) => update((l) => ({ ...l, x }), "x")} />
+      <Field label="Altura (y)">
+        <NumberInput ariaLabel="Altura da reta numérica" value={el.y} onChange={moveTo} />
+      </Field>
+      <Field label="De quanto em quanto">
+        <NumberInput ariaLabel="Distância entre marcas" value={el.step} min={0.01} onChange={(step) => update((l) => ({ ...l, step }), "step")} />
+      </Field>
+      <SwitchField label="Números" checked={el.numbers} onChange={(numbers) => update((l) => ({ ...l, numbers }), "numbers")} />
+      <Hint>Intervalos: digite [-2; 3[ ou ]-∞; 1] na barra de entrada. Mudar a altura leva os intervalos junto.</Hint>
+    </Section>
+  );
+}
+
+const END_OPTIONS: { value: EndMark; label: string; title: string }[] = [
+  { value: "none", label: "—", title: "Sem bolinha" },
+  { value: "closed", label: "●", title: "Bolinha fechada" },
+  { value: "open", label: "○", title: "Bolinha aberta" },
+];
+
+function EndChoice({ label, value, onChange }: { label: string; value: EndMark; onChange: (m: EndMark) => void }) {
+  return <Choice label={label} value={value} options={END_OPTIONS} onChange={onChange} />;
+}
+
+/** π steps a trigonometry figure uses, as fractions of π. */
+const PI_STEPS = [
+  { value: "0.25", label: "π/4" },
+  { value: "0.5", label: "π/2" },
+  { value: "1", label: "π" },
+];
 
 function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
   const setWindow = (x: [number, number], y: [number, number]) => {
     const store = useFigureStore.getState();
     const r = setAxesWindow(store.doc, el.id, x, y);
     if (!r.error) store.commit(r.doc, `${el.id}:window`);
+  };
+  /** Counts x in π (every xPi·π) or in plain numbers, and puts the window's ends on ticks. */
+  const setPi = (xPi: number | null) => {
+    const store = useFigureStore.getState();
+    const counted = updateElements(store.doc, [el.id], (a) => {
+      if (a.type !== "axes") return a;
+      if (xPi !== null) return { ...a, xPi };
+      const rest = { ...a };
+      delete rest.xPi;
+      return rest;
+    });
+    const x: [number, number] = xPi !== null ? piWindow(el.x, xPi) : [Math.floor(el.x[0]), Math.ceil(el.x[1])];
+    const r = setAxesWindow(counted, el.id, x, el.y);
+    if (!r.error) store.commit(r.doc, `${el.id}:pi`);
   };
   if (multi) return <Hint>Com vários eixos selecionados, a janela se ajusta um por vez.</Hint>;
   return (
@@ -397,7 +536,29 @@ function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
         <Hint>Os gráficos desenhados na janela dos eixos acompanham a mudança.</Hint>
       </Section>
       <Section title="Marcas">
-        <Field label="De quanto em quanto">
+        <Choice
+          label="Eixo x"
+          value={el.xPi ? "pi" : "number"}
+          options={[
+            { value: "number", label: "1, 2, 3", title: "Números" },
+            { value: "pi", label: "π/2, π", title: "Múltiplos de π" },
+          ]}
+          onChange={(v) => setPi(v === "pi" ? 0.5 : null)}
+          help="Em múltiplos de π, para gráficos de seno, cosseno e tangente. As pontas da janela vão para as marcas mais próximas."
+        />
+        {el.xPi && (
+          <Choice
+            label="Marcas em x a cada"
+            value={String(el.xPi)}
+            options={
+              PI_STEPS.some((s) => s.value === String(el.xPi))
+                ? PI_STEPS
+                : [...PI_STEPS, { value: String(el.xPi), label: piText(el.xPi * Math.PI) ?? `${el.xPi}π` }]
+            }
+            onChange={(v) => setPi(Number(v))}
+          />
+        )}
+        <Field label={el.xPi ? "De quanto em quanto em y" : "De quanto em quanto"}>
           <NumberInput ariaLabel="Distância entre marcas" value={el.step} min={0.01} onChange={(step) => update((a) => ({ ...a, step }), "step")} />
         </Field>
         <SwitchField label="Números" checked={el.numbers} onChange={(numbers) => update((a) => ({ ...a, numbers }), "numbers")} />

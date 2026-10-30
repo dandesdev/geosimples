@@ -31,7 +31,7 @@ export function EmptyState({ pro = false }: { pro?: boolean }) {
         <h2 className="mb-2 text-base font-semibold">Comece pelos pontos</h2>
         <p className="text-muted-foreground">
           {pro
-            ? "Leve o mouse à borda de baixo da prévia (ou tecle /) e digite na barra de pontos."
+            ? "Leve o mouse à borda de baixo da prévia (ou tecle /) e digite na barra de entrada."
             : "Digite na barra abaixo da prévia."}{" "}
           Um nome antes do = vira o rótulo, e -- liga os pontos. No fim, -- fecha o contorno:
         </p>
@@ -45,7 +45,7 @@ export function EmptyState({ pro = false }: { pro?: boolean }) {
           <Button size="sm" variant="outline" onClick={insertExample}>
             Inserir este exemplo
           </Button>
-          <Button size="sm" variant="ghost" onClick={insertGraph} title="Ou digite f(x)=x^2-1 na barra de pontos.">
+          <Button size="sm" variant="ghost" onClick={insertGraph} title="Ou digite f(x)=x^2-1 na barra de entrada.">
             Ou um gráfico: f(x) = x² − 1
           </Button>
         </div>

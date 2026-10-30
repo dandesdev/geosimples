@@ -104,7 +104,9 @@ export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   polygon: ["area", "perimeter"],
   text: [],
   function: [],
+  vline: [],
   axes: [],
+  numberline: [],
 };
 
 /** Value of a measure in world units (degrees for angles), or null when it can't be measured. */
@@ -203,7 +205,7 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
 }
 
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
-  if (el.type === "text" || el.type === "axes") return null;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return null;
   const label = el.label;
   if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);
@@ -268,6 +270,9 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       const end = last[last.length - 1];
       return { anchor: end, offset: scale(fixed ?? unit({ x: 1, y: 1 }), label.distance) };
     }
+    case "vline":
+      // Right of its top end, like "x = 2" written by an asymptote.
+      return { anchor: { x: el.x, y: el.range[1] }, offset: scale(fixed ?? unit({ x: 1, y: -0.4 }), label.distance + 4) };
   }
 }
 
@@ -294,7 +299,7 @@ const SYMBOLS = Object.keys(SYMBOL_TEX).join("");
 /** Signs math mode already puts space around. */
 const OPERATORS = "=+-≅≡∼≈≠≤≥×·±−→∈∩∪⊥∥";
 
-const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()+\\-=\\s${SYMBOLS}]*$`, "u");
+const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()/+\\-=\\s${SYMBOLS}]*$`, "u");
 
 /**
  * How a label is typeset. Names and numbers (A', A₁, x², 3,5, 60°) are math,

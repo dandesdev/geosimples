@@ -46,7 +46,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   angle: "Marcar ângulo",
   polygon: "Polígono / preencher",
   export: "Exportar",
-  focusInput: "Ir para a barra de pontos",
+  focusInput: "Ir para a barra de entrada",
   zoomIn: "Aproximar",
   zoomOut: "Afastar",
   toggleAutoFit: "Enquadrar automaticamente",

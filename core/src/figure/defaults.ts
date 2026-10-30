@@ -63,6 +63,9 @@ export const AXES_GRID: Stroke = { color: "#c8c8c8", width: 0.4, dash: "solid", 
 /** Axes stroke: a bit thinner than figure lines. */
 export const DEFAULT_AXES_STROKE: Stroke = { color: INK, width: 0.6, dash: "solid", opacity: 1 };
 
+/** Lines from a point to the axes: thin and dashed, as textbooks mark f(a). */
+export const DEFAULT_GUIDE_STROKE: Stroke = { color: INK, width: 0.5, dash: "dashed", opacity: 1 };
+
 /** Default view of a new graph: x and y from -5 to 5. */
 export const DEFAULT_PLOT_WINDOW = { x: [-5, 5] as [number, number], y: [-5, 5] as [number, number] };
 

@@ -9,7 +9,7 @@ import { useFigureStore } from "@/store/figureStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 
 /**
- * The point input of the pro layout, over the bottom of the preview. It slides
+ * The input bar of the pro layout, over the bottom of the preview. It slides
  * away to leave the figure clear, and comes back when the pointer nears the
  * bottom (`near`), when it gets focus (the / key) or while it has text.
  * The pin keeps it in view.
@@ -20,16 +20,31 @@ export function AutoHideInput({ near }: { near: boolean }) {
   const typing = useFigureStore((s) => s.inputDraft.trim() !== "");
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const shown = !autoHide || near || hovered || focused || typing;
+  // Escape sends it away even with text in it or the mouse at the bottom, until
+  // the next /, or the mouse coming back to it or to the bottom edge.
+  const [dismissed, setDismissed] = useState(false);
+  const [prevNear, setPrevNear] = useState(near);
+  if (near !== prevNear) {
+    setPrevNear(near);
+    if (near) setDismissed(false);
+  }
+  const shown = !autoHide || focused || (!dismissed && (near || hovered || typing));
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-16 pb-2">
       <div
         data-testid="point-input-dock"
         data-shown={shown}
-        onPointerEnter={() => setHovered(true)}
+        onPointerEnter={() => {
+          setHovered(true);
+          setDismissed(false);
+        }}
         onPointerLeave={() => setHovered(false)}
-        onFocus={() => setFocused(true)}
+        onKeyDown={(e) => e.key === "Escape" && setDismissed(true)}
+        onFocus={() => {
+          setFocused(true);
+          setDismissed(false);
+        }}
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
         }}
@@ -42,7 +57,7 @@ export function AutoHideInput({ near }: { near: boolean }) {
           floating
           extra={
             <IconButton
-              label={autoHide ? "Fixar a barra de pontos" : "Esconder a barra de pontos sozinha"}
+              label={autoHide ? "Fixar a barra de entrada" : "Esconder a barra de entrada sozinha"}
               hint={autoHide ? "Ela fica sempre à vista." : "Ela some até o mouse chegar à borda de baixo."}
               active={!autoHide}
               onClick={() => setAutoHide(!autoHide)}
@@ -60,7 +75,7 @@ export function AutoHideInput({ near }: { near: boolean }) {
           className="pointer-events-auto absolute bottom-0 flex items-center gap-1.5 rounded-t-md border border-b-0 bg-card/95 px-2.5 py-0.5 text-xs text-muted-foreground shadow-sm hover:text-primary"
         >
           <Keyboard className="h-3.5 w-3.5" />
-          Digitar pontos
+          Digitar pontos ou funções
           <ShortcutKeys action="focusInput" />
         </button>
       )}

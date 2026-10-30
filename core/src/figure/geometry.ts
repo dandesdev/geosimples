@@ -1,4 +1,17 @@
-import type { Angle, Circle, Element, FigureDoc, Id, Point, PointConstruction, Segment } from "./types";
+import { findRoots } from "../plot";
+import { functionValue, graphFn, notablePoints } from "./plot";
+import type {
+  Angle,
+  Circle,
+  Element,
+  FigureDoc,
+  FunctionGraph,
+  Id,
+  Point,
+  PointConstruction,
+  Segment,
+  VerticalLine,
+} from "./types";
 import {
   add,
   cross,
@@ -252,9 +265,11 @@ export function resolveConstructions(doc: FigureDoc): FigureDoc {
   const pts = pointMap(doc);
   const circles = new Map<Id, Circle>();
   const segments = new Map<Id, Segment>();
+  const graphs = new Map<Id, FunctionGraph | VerticalLine>();
   for (const el of doc.elements) {
     if (el.type === "circle") circles.set(el.id, el);
     else if (el.type === "segment") segments.set(el.id, el);
+    else if (el.type === "function" || el.type === "vline") graphs.set(el.id, el);
   }
   const replacePoint = (p: Point) => {
     const i = elements.findIndex((e) => e.id === p.id);
@@ -279,7 +294,7 @@ export function resolveConstructions(doc: FigureDoc): FigureDoc {
           moved = true;
         }
       } else if (el.type === "point" && el.construction) {
-        const at = constructedPosition(el.construction, pts, segments, circles);
+        const at = constructedPosition(el.construction, pts, segments, circles, graphs);
         if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
         if (Math.abs(at.x - el.x) < 1e-12 && Math.abs(at.y - el.y) < 1e-12) continue;
         const next = { ...el, x: at.x, y: at.y };
@@ -383,8 +398,123 @@ export function bisectorDirection(a: Vec, vertex: Vec, b: Vec, reflex: boolean):
 /** A crossing of two segments or circles. `inside` is false when it falls on an extension or off an arc. */
 export interface Crossing {
   point: Vec;
-  index: 0 | 1;
+  index: number;
   inside: boolean;
+}
+
+/** What intersections are taken between. */
+export type Curve = Segment | Circle | FunctionGraph | VerticalLine;
+
+const CURVE_TYPES: Element["type"][] = ["segment", "circle", "function", "vline"];
+
+export const isCurve = (el: Element | undefined): el is Curve => !!el && CURVE_TYPES.includes(el.type);
+
+const isPlain = (c: Curve): c is Segment | Circle => c.type === "segment" || c.type === "circle";
+
+const within = (v: number, [a, b]: [number, number]) => v >= a - 1e-9 && v <= b + 1e-9;
+
+/** Whether p, already on the curve's line or circle, is on the part that's drawn. */
+function onDrawn(c: Curve, p: Vec, pts: Map<Id, Point>): boolean {
+  switch (c.type) {
+    case "segment": {
+      const a = pts.get(c.a);
+      const b = pts.get(c.b);
+      if (!a || !b) return false;
+      const ab = sub(b, a);
+      const t = dot(sub(p, a), ab) / dot(ab, ab);
+      return t >= -1e-9 && t <= 1 + 1e-9;
+    }
+    case "circle": {
+      const center = pts.get(c.center);
+      return !!center && onCircleArc(c, center, p);
+    }
+    case "function":
+      return within(p.x, c.domain) && within(p.y, c.range);
+    case "vline":
+      return within(p.y, c.range);
+  }
+}
+
+/** Points where graph f meets the other curve, found along f's domain. */
+function graphMeets(f: FunctionGraph, other: Curve, pts: Map<Id, Point>): Vec[] {
+  const fn = graphFn(f.expr);
+  if (!fn) return [];
+  const on = (x: number): Vec[] => {
+    const y = fn(x);
+    return Number.isFinite(y) ? [{ x, y }] : [];
+  };
+  switch (other.type) {
+    case "vline":
+      return within(other.x, f.domain) ? on(other.x) : [];
+    case "function": {
+      const g = graphFn(other.expr);
+      const from = Math.max(f.domain[0], other.domain[0]);
+      const to = Math.min(f.domain[1], other.domain[1]);
+      return g ? findRoots((x) => fn(x) - g(x), [from, to]).flatMap(on) : [];
+    }
+    case "segment": {
+      const a = pts.get(other.a);
+      const b = pts.get(other.b);
+      if (!a || !b) return [];
+      if (Math.abs(b.x - a.x) < 1e-12) return within(a.x, f.domain) ? on(a.x) : [];
+      const m = (b.y - a.y) / (b.x - a.x);
+      return findRoots((x) => fn(x) - (a.y + m * (x - a.x)), f.domain).flatMap(on);
+    }
+    case "circle": {
+      const c = pts.get(other.center);
+      if (!c) return [];
+      const r = other.radius;
+      const from = Math.max(f.domain[0], c.x - r);
+      const to = Math.min(f.domain[1], c.x + r);
+      return findRoots((x) => (x - c.x) ** 2 + (fn(x) - c.y) ** 2 - r * r, [from, to]).flatMap(on);
+    }
+  }
+}
+
+/** Points where the vertical line x = v.x meets a segment or circle. */
+function verticalMeets(v: VerticalLine, other: Segment | Circle, pts: Map<Id, Point>): Vec[] {
+  if (other.type === "segment") {
+    const a = pts.get(other.a);
+    const b = pts.get(other.b);
+    if (!a || !b || Math.abs(b.x - a.x) < 1e-12) return [];
+    return [lerp(a, b, (v.x - a.x) / (b.x - a.x))];
+  }
+  const c = pts.get(other.center);
+  if (!c) return [];
+  const dx = v.x - c.x;
+  const h2 = other.radius * other.radius - dx * dx;
+  if (h2 < -1e-12) return [];
+  const h = Math.sqrt(Math.max(0, h2));
+  return h < 1e-9 ? [{ x: v.x, y: c.y }] : [{ x: v.x, y: c.y - h }, { x: v.x, y: c.y + h }];
+}
+
+/**
+ * Crossings of two curves when a graph or vertical line is one of them, left
+ * to right (bottom to top at the same x). A segment counts as its whole line,
+ * like in `crossings`; `inside` says the crossing is on both drawn curves.
+ */
+export function graphCrossings(first: Curve, second: Curve, pts: Map<Id, Point>): Crossing[] {
+  let found: Vec[];
+  if (first.type === "function") found = graphMeets(first, second, pts);
+  else if (second.type === "function") found = graphMeets(second, first, pts);
+  else if (first.type === "vline" && second.type === "vline") found = [];
+  else if (first.type === "vline") found = verticalMeets(first, second as Segment | Circle, pts);
+  else if (second.type === "vline") found = verticalMeets(second, first, pts);
+  else return crossings(first, second, pts);
+  const sorted = found
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+    .sort((p, q) => p.x - q.x || p.y - q.y)
+    .filter((p, i, all) => i === 0 || dist(p, all[i - 1]) > 1e-7);
+  return sorted.map((point, index) => ({
+    point,
+    index,
+    inside: onDrawn(first, point, pts) && onDrawn(second, point, pts),
+  }));
+}
+
+/** Crossings of any two curves, numbered as PointConstruction "intersection" numbers them. */
+export function curveCrossings(first: Curve, second: Curve, pts: Map<Id, Point>): Crossing[] {
+  return isPlain(first) && isPlain(second) ? crossings(first, second, pts) : graphCrossings(first, second, pts);
 }
 
 /** Crossings of two segments or circles, numbered as PointConstruction "intersection" numbers them. */
@@ -428,6 +558,7 @@ export function constructedPosition(
   pts: Map<Id, Point>,
   segments: Map<Id, Segment>,
   circles: Map<Id, Circle>,
+  graphs: Map<Id, FunctionGraph | VerticalLine> = new Map(),
 ): Vec | null {
   switch (c.kind) {
     case "midpoint": {
@@ -456,16 +587,29 @@ export function constructedPosition(
       return add(lerp(p, q, c.along), scale(c.fixed ? unit(normal) : normal, c.across));
     }
     case "intersection": {
-      const [first, second] = c.of.map((id) => segments.get(id) ?? circles.get(id));
+      const [first, second] = c.of.map((id) => segments.get(id) ?? circles.get(id) ?? graphs.get(id));
       if (!first || !second) return null;
-      const all = crossings(first, second, pts);
-      return (all.find((x) => x.index === c.index) ?? all[0])?.point ?? null;
+      if (isPlain(first) && isPlain(second)) {
+        const all = crossings(first, second, pts);
+        return (all.find((x) => x.index === c.index) ?? all[0])?.point ?? null;
+      }
+      // Graph crossings come and go with the formula: each keeps its own place in the count.
+      return graphCrossings(first, second, pts)[c.index]?.point ?? null;
     }
     case "arcEnd": {
       const circle = circles.get(c.circle);
       const center = circle && pts.get(circle.center);
       if (!circle?.arc || !center) return null;
       return add(center, polar(circle.radius, c.end === 0 ? circle.arc.start : circle.arc.end));
+    }
+    case "onGraph": {
+      const graph = graphs.get(c.graph);
+      const y = graph?.type === "function" ? functionValue(graph.expr, c.x) : null;
+      return y === null ? null : { x: c.x, y };
+    }
+    case "notable": {
+      const graph = graphs.get(c.graph);
+      return graph?.type === "function" ? (notablePoints(graph, c.feature)[c.index] ?? null) : null;
     }
   }
 }
@@ -484,5 +628,34 @@ export function constructionParents(c: PointConstruction): Id[] {
       return c.of;
     case "arcEnd":
       return [c.circle];
+    case "onGraph":
+    case "notable":
+      return [c.graph];
   }
+}
+
+/** Constructions whose point goes away when what it marks is gone, instead of staying where it was. */
+const VANISHING = new Set<PointConstruction["kind"]>(["intersection", "onGraph", "notable"]);
+
+/**
+ * Constructed points whose crossing, root or turning point no longer exists,
+ * like the roots of x² - 1 after it becomes x² + 1. Points that lost a parent
+ * aren't listed: deleting a parent frees them instead.
+ */
+export function vanishedPoints(doc: FigureDoc): Point[] {
+  const byId = elementMap(doc);
+  const pts = pointMap(doc);
+  const segments = new Map<Id, Segment>();
+  const circles = new Map<Id, Circle>();
+  const graphs = new Map<Id, FunctionGraph | VerticalLine>();
+  for (const el of doc.elements) {
+    if (el.type === "segment") segments.set(el.id, el);
+    else if (el.type === "circle") circles.set(el.id, el);
+    else if (el.type === "function" || el.type === "vline") graphs.set(el.id, el);
+  }
+  return doc.elements.filter((el): el is Point => {
+    if (el.type !== "point" || !el.construction || !VANISHING.has(el.construction.kind)) return false;
+    if (!constructionParents(el.construction).every((id) => byId.has(id))) return false;
+    return constructedPosition(el.construction, pts, segments, circles, graphs) === null;
+  });
 }
