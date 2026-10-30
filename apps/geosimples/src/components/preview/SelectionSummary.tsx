@@ -58,7 +58,8 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "overla
           : "pointer-events-none absolute left-2 right-14 truncate rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground",
         // The pro layout's point input slides up from the bottom, so the hint goes on top.
         placement === "overlay" && "bottom-2",
-        placement === "overlay-top" && "top-2",
+        // On top, it stops short of the pro layout's buttons at the top right.
+        placement === "overlay-top" && "right-44 top-2",
       )}
     >
       {text}

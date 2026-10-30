@@ -1,6 +1,6 @@
 import { CircleHelp, LayoutDashboard, Moon, PanelTop, Settings, Sun } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
-import { DeleteButton, Divider, ExportIconButton, History, Tools, type MenuSide } from "@/components/preview/ActionBar";
+import { DeleteButton, ExportIconButton, History, Tools, type MenuSide } from "@/components/preview/ActionBar";
 import { ModeSwitch } from "@/components/preview/ModeSwitch";
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { emitCommand } from "@/lib/commands";
 import { nextTheme, useDarkTheme } from "@/lib/theme";
+import { TooltipSide } from "@/components/tooltipSide";
 import { cn } from "@/lib/utils";
 import { activeProfileName, usePrefsStore } from "@/store/prefsStore";
 import {
@@ -64,32 +65,42 @@ function WindowsMenu({ side }: { side: MenuSide }) {
   );
 }
 
-function AppTools({ side }: { side: MenuSide }) {
+/**
+ * Janelas, the theme, Configurações and help, floating at the preview's top
+ * right in the pro layout: always in view, wherever the toolbars are.
+ */
+export function AppButtons() {
   const dark = useDarkTheme();
   const profileName = usePrefsStore((s) => activeProfileName(s));
   const ws = useWorkspaceStore.getState;
   return (
-    <>
-      <WindowsMenu side={side} />
-      <IconButton
-        label={dark ? "Tema claro" : "Tema escuro"}
-        hint="A prévia continua branca, como no papel."
-        onClick={() => ws().setTheme(nextTheme(dark))}
+    <TooltipSide.Provider value="bottom">
+      <div
+        role="toolbar"
+        aria-label="Janelas e ajuda"
+        className="absolute right-2 top-2 z-10 flex gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
       >
-        {dark ? <Sun /> : <Moon />}
-      </IconButton>
-      <IconButton
-        label="Configurações"
-        hint={`Em uso: ${profileName}. Padrões, comportamento, atalhos e aparência.`}
-        shortcut="settings"
-        onClick={() => emitCommand("settings")}
-      >
-        <Settings />
-      </IconButton>
-      <IconButton label="Como usar" shortcut="help" onClick={() => emitCommand("help")}>
-        <CircleHelp />
-      </IconButton>
-    </>
+        <WindowsMenu side="bottom" />
+        <IconButton
+          label={dark ? "Tema claro" : "Tema escuro"}
+          hint="A prévia continua branca, como no papel."
+          onClick={() => ws().setTheme(nextTheme(dark))}
+        >
+          {dark ? <Sun /> : <Moon />}
+        </IconButton>
+        <IconButton
+          label="Configurações"
+          hint={`Em uso: ${profileName}. Padrões, comportamento, atalhos e aparência.`}
+          shortcut="settings"
+          onClick={() => emitCommand("settings")}
+        >
+          <Settings />
+        </IconButton>
+        <IconButton label="Como usar" shortcut="help" onClick={() => emitCommand("help")}>
+          <CircleHelp />
+        </IconButton>
+      </div>
+    </TooltipSide.Provider>
   );
 }
 
@@ -104,26 +115,18 @@ export function Toolbar({ id, row, side }: { id: ToolbarId; row: boolean; side: 
       aria-label={TOOLBAR_TITLES[id]}
       aria-orientation={row ? "horizontal" : "vertical"}
       data-toolbar={id}
-      className={cn("flex items-center gap-0.5 p-1", row ? "flex-row" : "flex-col")}
+      // As long as its buttons, not its place, so they can be measured.
+      className={cn("flex items-center gap-0.5 p-1", row ? "w-max flex-row" : "flex-col")}
     >
       {id === "tools-file" && (
         <>
           <ExportIconButton />
-          <Divider vertical={!row} />
           <History />
           <DeleteButton />
         </>
       )}
-      {id === "tools-build" && (
-        <>
-          <Tools menuSide={side} />
-          <Divider vertical={!row} />
-          <ModeSwitch vertical={!row} />
-        </>
-      )}
-      {id === "tools-app" && (
-        <AppTools side={side} />
-      )}
+      {id === "tools-build" && <Tools menuSide={side} />}
+      {id === "tools-mode" && <ModeSwitch vertical={!row} />}
     </div>
   );
 }

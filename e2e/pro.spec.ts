@@ -196,7 +196,7 @@ test("pro layout: toolbars sharing a column fit their buttons when one leaves or
   await expect(page.locator(".dv-resize-container").getByRole("toolbar", { name: "Arquivo e histórico" })).toBeVisible();
   await expect.poll(() => slack("Ferramentas")).toBeLessThanOrEqual(2);
 
-  // Back under Ferramentas: Ferramentas and Arquivo fit, Janelas e ajuda takes the rest.
+  // Back under Ferramentas: Ferramentas and Arquivo fit, Modo takes the rest.
   const tools = await box(page.getByRole("toolbar", { name: "Ferramentas", exact: true }).locator("xpath=ancestor::*[contains(@class,'dv-groupview')][1]"));
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(tools, 0.5, 0.95));
   await expect(page.locator(".dv-resize-container")).toHaveCount(0);
@@ -205,6 +205,77 @@ test("pro layout: toolbars sharing a column fit their buttons when one leaves or
   const file = await box(page.getByRole("toolbar", { name: "Arquivo e histórico" }));
   expect(file.x).toBeLessThan(10);
   expect(file.y).toBeGreaterThan(tools.y);
+});
+
+/** Toolbar buttons outside their toolbar's window, or outside the page. */
+const hiddenButtons = (page: Page) =>
+  page.locator("[data-toolbar] button").evaluateAll((buttons) =>
+    buttons
+      .filter((b) => {
+        const r = b.getBoundingClientRect();
+        const g = b.closest(".dv-groupview")!.getBoundingClientRect();
+        const inside = (o: DOMRect) => r.left >= o.left - 1 && r.right <= o.right + 1 && r.top >= o.top - 1 && r.bottom <= o.bottom + 1;
+        return !inside(g) || r.right > window.innerWidth || r.bottom > window.innerHeight;
+      })
+      .map((b) => b.getAttribute("aria-label")),
+  );
+
+/** Drags the splitter that ends at `edge` of `bar`'s window (its bottom, or its right when across) by `by` px. */
+async function dragSplitter(page: Page, bar: Locator, edge: "bottom" | "right", by: number) {
+  const g = await box(bar.locator("xpath=ancestor::*[contains(@class,'dv-groupview')][1]"));
+  const x = edge === "right" ? g.x + g.width : g.x + g.width / 2;
+  const y = edge === "right" ? g.y + g.height / 2 : g.y + g.height;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(edge === "right" ? x + by : x, edge === "right" ? y : y + by, { steps: 8 });
+  await page.mouse.up();
+}
+
+test("pro layout: toolbars keep every button in view, and the app buttons float over the preview", async ({ page }) => {
+  // Three toolbars, each one kind of button: no dividers inside.
+  await expect(page.locator("[data-toolbar]")).toHaveCount(3);
+  await expect(page.locator("[data-toolbar] .bg-border")).toHaveCount(0);
+  // Janelas, theme, settings and help sit at the preview's top right.
+  const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
+  const app = await box(page.getByRole("toolbar", { name: "Janelas e ajuda" }));
+  expect(app.x + app.width).toBeGreaterThan(preview.x + preview.width - 20);
+  expect(app.y).toBeLessThan(preview.y + 20);
+
+  // Splitters between toolbars in a column move nothing: no toolbar shrinks below its buttons or grows over the others.
+  const file = page.getByRole("toolbar", { name: "Arquivo e histórico" });
+  const tools = page.getByRole("toolbar", { name: "Ferramentas" });
+  const before = await box(tools);
+  for (const [bar, by] of [[file, -80], [file, 120], [tools, -100], [tools, 200]] as const) {
+    await dragSplitter(page, bar, "bottom", by);
+    expect(await hiddenButtons(page)).toEqual([]);
+  }
+  expect((await box(tools)).y).toBeCloseTo(before.y, 0);
+
+  // Across the top, side by side: the splitter between them can't hide buttons either.
+  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(preview, 0.5, 0.01));
+  await expect(tools).toHaveAttribute("aria-orientation", "horizontal");
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(await box(tools), 0.97, 0.5));
+  await expect(file).toHaveAttribute("aria-orientation", "horizontal");
+  for (const by of [-200, 600]) {
+    await dragSplitter(page, tools, "right", by);
+    expect(await hiddenButtons(page)).toEqual([]);
+  }
+
+  // Floating, a toolbar has no handles to shrink it, and grows when a button comes (Figura rápida).
+  await drag(page, page.getByLabel("Arrastar Modo"), at(await box(page.getByRole("region", { name: "Prévia da figura" })), 0.4, 0.4));
+  const floating = page.locator(".dv-resize-container").filter({ has: page.getByRole("toolbar", { name: "Modo" }) });
+  await expect(floating).toBeVisible();
+  await expect(floating.locator("[class^='dv-resize-handle-']").first()).toBeHidden();
+  const short = (await box(floating)).height;
+  // Holding Adicionar pontos switches to Figura rápida, which shows its button.
+  const add = await box(page.getByRole("button", { name: "Adicionar pontos" }));
+  await page.mouse.move(add.x + add.width / 2, add.y + add.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Figura rápida" })).toBeVisible();
+  await expect.poll(async () => (await box(floating)).height).toBeGreaterThan(short + 30);
+  expect(await hiddenButtons(page)).toEqual([]);
 });
 
 test("pro layout: the right panels keep their width when toolbars move, and only their splitter changes it", async ({ page }) => {
@@ -239,7 +310,7 @@ test("pro layout: the right panels keep their width when toolbars move, and only
   await page.mouse.up();
   await expect.poll(width).toBeGreaterThan(start + 90);
   const wider = await width();
-  await drag(page, page.getByLabel("Arrastar Janelas e ajuda"), { x: 3, y: 300 });
+  await drag(page, page.getByLabel("Arrastar Modo"), { x: 3, y: 300 });
   await expect.poll(width).toBe(wider);
 
   // A narrower window takes the room from the preview, not from the panels.
