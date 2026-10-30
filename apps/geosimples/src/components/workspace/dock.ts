@@ -210,7 +210,7 @@ export function buildDefaultLayout(target: DockviewApi) {
   target.addPanel({ id: PREVIEW_ID, component: PREVIEW_ID, title: "Prévia" });
   target.addPanel({ ...panelOptions("tools-file"), position: { referencePanel: PREVIEW_ID, direction: "left" }, initialWidth: TOOLBAR_SIZE });
   target.addPanel({ ...panelOptions("tools-build"), position: { referencePanel: "tools-file", direction: "below" } });
-  target.addPanel({ ...panelOptions("tools-app"), position: { referencePanel: "tools-build", direction: "below" } });
+  target.addPanel({ ...panelOptions("tools-mode"), position: { referencePanel: "tools-build", direction: "below" } });
   target.addPanel({ ...panelOptions("figure"), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: RIGHT_COLUMN });
   target.addPanel({ ...panelOptions("properties"), position: { referencePanel: "figure", direction: "below" } });
   target.addPanel({ ...panelOptions("formatting"), position: { referencePanel: "properties", direction: "below" } });
@@ -229,7 +229,8 @@ export function restoreLayout(target: DockviewApi) {
   if (saved) {
     try {
       target.fromJSON(saved as Parameters<DockviewApi["fromJSON"]>[0]);
-      if (target.getPanel(PREVIEW_ID)) {
+      const known = target.panels.every((p) => p.id === PREVIEW_ID || (DOCK_ITEM_IDS as string[]).includes(p.id));
+      if (target.getPanel(PREVIEW_ID) && known) {
         prepareGroups(target);
         return;
       }
@@ -253,9 +254,13 @@ export const isPreviewGroup = (group: DockviewGroupPanel | undefined) =>
 export const isToolbarGroup = (group: DockviewGroupPanel | undefined) =>
   !!group && group.panels.length > 0 && group.panels.every((p) => isToolbar(p.id));
 
-/** A toolbar lies across when it is wider than tall: then its grip goes on the left, not on top. */
+/**
+ * A toolbar lies across when it is wider than tall: then its grip goes on the
+ * left, not on top. Floating, it always lies down (and the dock doesn't keep a
+ * floating group's size up to date anyway).
+ */
 export function toolbarIsRow(group: DockviewGroupPanel) {
-  return group.api.width > group.api.height;
+  return group.api.location.type !== "floating" && group.api.width > group.api.height;
 }
 
 /** How each toolbar group was last shaped, so a layout change that doesn't move it leaves it alone. */
@@ -268,6 +273,8 @@ export function orientToolbar(group: DockviewGroupPanel) {
   const key = `${row ? "row" : "column"} ${where}`;
   if (shaped.get(group.id) === key) return false;
   shaped.set(group.id, key);
+  // Its length limits were for the other way: they are measured again.
+  limited.delete(group.id);
   if (group.api.getHeaderPosition() !== (row ? "left" : "top")) group.api.setHeaderPosition(row ? "left" : "top");
   if (where !== "grid") return true;
   group.api.setConstraints(
@@ -277,6 +284,22 @@ export function orientToolbar(group: DockviewGroupPanel) {
       : { minimumWidth: TOOLBAR_SIZE, maximumWidth: TOOLBAR_SIZE, minimumHeight: GRIP_SIZE + TOOLBAR_SIZE, maximumHeight: Number.MAX_SAFE_INTEGER },
   );
   return true;
+}
+
+/**
+ * A toolbar being dropped lets go of the limits its old place gave it, so its
+ * new place decides its shape: kept 48 px wide and as tall as its buttons, a
+ * toolbar dropped into a row would never turn to lie across.
+ */
+export function releaseToolbar(group: DockviewGroupPanel) {
+  shaped.delete(group.id);
+  limited.delete(group.id);
+  group.api.setConstraints({
+    minimumWidth: TOOLBAR_SIZE,
+    maximumWidth: Number.MAX_SAFE_INTEGER,
+    minimumHeight: TOOLBAR_SIZE,
+    maximumHeight: Number.MAX_SAFE_INTEGER,
+  });
 }
 
 export function orientToolbars(target: DockviewApi) {
@@ -293,35 +316,53 @@ function toolbarLength(group: DockviewGroupPanel, row: boolean) {
   return (row ? body.scrollWidth : body.scrollHeight) + GRIP_SIZE;
 }
 
-/** The last size each toolbar was fitted from, so a line that can't take the fit isn't tried again and again. */
-const fitted = new Map<string, string>();
+/** The length limits each toolbar was last given, so a change that keeps them doesn't set them again. */
+const limited = new Map<string, string>();
 
 /**
- * Toolbars that share a column (or a row) with only other toolbars take the
- * length of their buttons; the last one takes what is left. Run after every
- * change, so a column refits when one of its toolbars leaves or arrives.
+ * Every button of a toolbar is always in view: a toolbar is never shorter than
+ * its buttons. Toolbars that share a column (or a row) with only other
+ * toolbars are exactly that long, and the last one takes what is left, so
+ * dragging between them can't push one out of the window. Run after every
+ * change, so a line refits when a toolbar leaves, arrives or turns.
  */
 export function fitToolbars(target: DockviewApi) {
   for (const group of target.groups) {
-    if (!isToolbarGroup(group) || group.api.location.type !== "grid") continue;
-    const row = toolbarIsRow(group);
-    const line = [group, ...inLineWith(group, row)];
-    if (line.length < 2 || !line.every(isToolbarGroup)) continue;
-    const start = (g: DockviewGroupPanel) => g.element.getBoundingClientRect()[row ? "left" : "top"];
-    line.sort((a, b) => start(a) - start(b));
-    if (line.at(-1) === group) continue;
-    const want = toolbarLength(group, row);
-    const now = Math.round(row ? group.api.width : group.api.height);
-    if (want === null) continue;
-    if (Math.abs(now - want) <= 1) {
-      fitted.delete(group.id);
+    if (!isToolbarGroup(group)) continue;
+    if (group.api.location.type === "floating") {
+      fitFloatingToolbar(group);
       continue;
     }
-    const key = `${now}>${want}`;
-    if (fitted.get(group.id) === key) continue;
-    fitted.set(group.id, key);
-    group.api.setSize(row ? { width: want } : { height: want });
+    if (group.api.location.type !== "grid") continue;
+    const row = toolbarIsRow(group);
+    const want = toolbarLength(group, row);
+    if (want === null) continue;
+    const line = [group, ...inLineWith(group, row)];
+    const start = (g: DockviewGroupPanel) => g.element.getBoundingClientRect()[row ? "left" : "top"];
+    line.sort((a, b) => start(a) - start(b));
+    const exact = line.length > 1 && line.every(isToolbarGroup) && line.at(-1) !== group;
+    const max = exact ? want : Number.MAX_SAFE_INTEGER;
+    const key = `${want} ${max}`;
+    if (limited.get(group.id) === key) continue;
+    limited.set(group.id, key);
+    group.api.setConstraints(row ? { minimumWidth: want, maximumWidth: max } : { minimumHeight: want, maximumHeight: max });
+    const now = Math.round(row ? group.api.width : group.api.height);
+    if (now < want || now > max) group.api.setSize(row ? { width: want } : { height: want });
   }
+}
+
+/** A floating toolbar is as long as its buttons, and not resized by hand (dock.css hides its handles). */
+function fitFloatingToolbar(group: DockviewGroupPanel) {
+  const overlay = group.element.closest<HTMLElement>(".dv-resize-container");
+  const height = floatingToolbarHeight(group);
+  if (!api || !overlay || height === null || Math.abs(overlay.offsetHeight - height) <= 1) return;
+  api.addFloatingGroup(group, { x: overlay.offsetLeft, y: overlay.offsetTop, width: TOOLBAR_SIZE + 2, height });
+}
+
+/** A floating toolbar lies down, as long as its buttons and grip, plus its window's border. */
+function floatingToolbarHeight(group: DockviewGroupPanel) {
+  const body = document.querySelector<HTMLElement>(`[data-toolbar="${group.activePanel?.id}"]`);
+  return body ? Math.min(body.scrollHeight + GRIP_SIZE + 2, (api?.height ?? Infinity) - 40) : null;
 }
 
 /** Opens a closed panel or toolbar where it starts out, or brings an open one to the front. */
@@ -381,12 +422,9 @@ export function floatItem(item: IDockviewPanel | DockviewGroupPanel, at?: { x: n
   if (!api) return;
   const group = "group" in item ? item.group : item;
   const toolbar = isToolbarGroup(group);
-  const body = toolbar ? document.querySelector<HTMLElement>(`[data-toolbar="${group.activePanel?.id}"]`) : null;
   // A toolbar floats down, as long as its buttons; a panel keeps a readable size.
   const width = toolbar ? TOOLBAR_SIZE + 2 : Math.min(Math.max(group.api.width, 260), 340);
-  const height = toolbar
-    ? Math.min((body?.scrollHeight ?? 300) + GRIP_SIZE + 2, api.height - 40)
-    : Math.min(Math.max(group.api.height, 220), 460);
+  const height = toolbar ? (floatingToolbarHeight(group) ?? 300) : Math.min(Math.max(group.api.height, 220), 460);
   const x = at ? at.x - 40 : api.width - RIGHT_COLUMN - width - 24;
   const y = at ? at.y - 12 : 24;
   // The whole window stays inside the dock.

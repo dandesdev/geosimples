@@ -16,14 +16,17 @@ export const PANEL_TITLES: Record<PanelId, string> = {
   labels: "Rótulos e textos",
 };
 
-/** The pro layout's toolbars: the tool column, in pieces that dock and float on their own. */
-export const TOOLBAR_IDS = ["tools-file", "tools-build", "tools-app"] as const;
+/**
+ * The pro layout's toolbars: the tool column, in pieces that dock and float on
+ * their own. Each is one kind of button, so none needs a divider inside.
+ */
+export const TOOLBAR_IDS = ["tools-file", "tools-build", "tools-mode"] as const;
 export type ToolbarId = (typeof TOOLBAR_IDS)[number];
 
 export const TOOLBAR_TITLES: Record<ToolbarId, string> = {
   "tools-file": "Arquivo e histórico",
   "tools-build": "Ferramentas",
-  "tools-app": "Janelas e ajuda",
+  "tools-mode": "Modo",
 };
 
 /** Everything the Janelas menu opens and closes. */
@@ -68,9 +71,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     {
       name: "geosimples-workspace",
       storage: createJSONStorage(() => localStorage),
-      version: 2,
+      version: 3,
       partialize: ({ layout, theme, inputAutoHide, dock }) => ({ layout, theme, inputAutoHide, dock }),
-      // Version 1 kept its own window positions; the dock starts from its default arrangement instead.
+      // Version 1 kept its own window positions, and version 2 had other toolbars: the dock starts from its default arrangement.
       migrate: (saved) => {
         const { layout, theme, inputAutoHide } = (saved ?? {}) as Partial<WorkspaceState>;
         const kept = Object.entries({ layout, theme, inputAutoHide }).filter(([, v]) => v !== undefined);

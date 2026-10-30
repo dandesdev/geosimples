@@ -11,7 +11,7 @@ import { TooltipSide } from "@/components/tooltipSide";
 import { PANEL_TITLES, useWorkspaceStore, type PanelId, type ToolbarId } from "@/store/workspaceStore";
 import { AutoHideInput } from "./AutoHideInput";
 import { dockApi, fitToolbars } from "./dock";
-import { Toolbar } from "./Toolbars";
+import { AppButtons, Toolbar } from "./Toolbars";
 
 /** The preview, edge to edge, with the point input waiting at its bottom. */
 export function PreviewPane() {
@@ -26,6 +26,7 @@ export function PreviewPane() {
       onPointerLeave={() => setNearBottom(false)}
     >
       <PreviewPanel pro />
+      <AppButtons />
       <AutoHideInput near={nearBottom} />
     </div>
   );
@@ -40,11 +41,11 @@ export function ToolbarPane(props: IDockviewPanelProps<{ toolbar: ToolbarId }>) 
   const [shape, setShape] = useState<{ row: boolean; side: MenuSide }>({ row: false, side: "right" });
   useEffect(() => {
     const measure = () => {
-      const el = ref.current;
+      const el = ref.current?.closest(".dv-groupview");
       if (!el) return;
       const r = el.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) return;
-      const row = r.width > r.height;
+      const row = props.api.location.type !== "floating" && r.width > r.height;
       const side: MenuSide = row
         ? r.top + r.height / 2 > window.innerHeight / 2 ? "top" : "bottom"
         : r.left + r.width / 2 > window.innerWidth / 2 ? "left" : "right";
@@ -54,9 +55,21 @@ export function ToolbarPane(props: IDockviewPanelProps<{ toolbar: ToolbarId }>) 
     const subs = [props.api.onDidDimensionsChange(measure), props.api.onDidLocationChange(measure)];
     const ro = new ResizeObserver(measure);
     if (ref.current) ro.observe(ref.current);
+    // A button that comes or goes (Figura rápida) changes the toolbar's length: its line refits.
+    let frame = 0;
+    const buttons = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const dock = dockApi();
+        if (dock) fitToolbars(dock);
+      });
+    });
+    if (ref.current?.firstElementChild) buttons.observe(ref.current.firstElementChild);
     return () => {
       subs.forEach((s) => s.dispose());
       ro.disconnect();
+      cancelAnimationFrame(frame);
+      buttons.disconnect();
     };
   }, [props.api]);
   useEffect(() => {

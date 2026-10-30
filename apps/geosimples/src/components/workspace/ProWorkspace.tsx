@@ -20,6 +20,7 @@ import {
   isPreviewGroup,
   isToolbarGroup,
   orientToolbars,
+  releaseToolbar,
   restoreLayout,
   saveLayout,
   setDockApi,
@@ -141,6 +142,8 @@ export function ProWorkspace() {
     // widths; every other drop, and every other panel column, keeps the widths there were.
     // Dropped on an edge of the window, it takes the size the overlay showed.
     const sets = e.kind === "edge" || (e.kind === "content" && (e.position === "left" || e.position === "right"));
+    const source = dropped();
+    if (isToolbarGroup(source)) releaseToolbar(source!);
     settle(e.api, () => (sets ? [dropped(), e.group] : []), e.kind === "edge" ? e.position : undefined);
     if (!isPreviewGroup(e.group) || e.position !== "center") return;
     // Dropped on the preview, a panel or toolbar floats where it was let go.

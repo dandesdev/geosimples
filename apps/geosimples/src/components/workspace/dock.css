@@ -113,3 +113,8 @@
   font-size: 12px;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
 }
+
+/* A floating toolbar is as long as its buttons: it has no handles to make it shorter. */
+.dockview-theme-geosimples .dv-resize-container:has([data-toolbar]) > [class^="dv-resize-handle-"] {
+  display: none;
+}

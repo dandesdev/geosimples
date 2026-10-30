@@ -80,8 +80,8 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               prévia ocupa a tela e cada painel vai para onde você quiser: arraste pela aba até a parte de cima ou
               de baixo de outro painel para empilhar, até as abas dele para juntar, até uma borda da janela, ou solte
               sobre a prévia para flutuar. As barras de ferramentas também: arraste pelos pontinhos. Em cima ou
-              embaixo, elas ficam deitadas. O botão direito do mouse na prévia mostra todas as ações; Janelas põe
-              tudo de volta no lugar. Há também o tema escuro.
+              embaixo, elas ficam deitadas. O botão direito do mouse na prévia mostra todas as ações; Janelas, no canto
+              de cima da prévia, põe tudo de volta no lugar. Ali também ficam o tema escuro, as configurações e esta ajuda.
             </li>
           )}
           <li>
