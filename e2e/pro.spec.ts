@@ -322,6 +322,9 @@ test("pro layout: two full-height panel columns on both sides of the preview sti
   await page.getByRole("button", { name: "Janelas" }).click();
   await page.getByRole("menuitemcheckbox", { name: "Rótulos e textos" }).click();
   await page.keyboard.press("Escape");
+  // The closing menu blocks the pointer until it is gone.
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
   await drag(page, tab(page, "Rótulos e textos"), at(props, 0.5, 0.92));
   const after = await box(group(page, "Propriedades"));
   const labels = await box(panel(page, "labels"));
