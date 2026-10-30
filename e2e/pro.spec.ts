@@ -68,6 +68,50 @@ test("pro layout: hidden point input and the right-click menu", async ({ page })
   await expect.poll(async () => (await counts(page)).point).toBe(2);
 });
 
+test("pro layout: / brings the point input without moving the preview", async ({ page }) => {
+  await leaveInput(page);
+  const preview = page.getByRole("region", { name: "Prévia da figura" });
+  const before = await box(preview);
+  // Every scroll on the page, of any element, while the input slides in.
+  await page.evaluate(() => {
+    const w = window as unknown as { scrolled: string[] };
+    w.scrolled = [];
+    document.addEventListener("scroll", (e) => w.scrolled.push(String((e.target as Element).className)), true);
+  });
+  await page.keyboard.press("/");
+  await expect(pointInput(page)).toBeFocused();
+  await expect(page.getByTestId("point-input-dock")).toHaveAttribute("data-shown", "true");
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as unknown as { scrolled: string[] }).scrolled)).toEqual([]);
+  expect(await box(preview)).toEqual(before);
+});
+
+test("dark theme: the preview paper turns gray, and exports stay white unless asked", async ({ page }) => {
+  await pointInput(page).fill(TRIANGLE);
+  await pointInput(page).press("Enter");
+  const paper = () => page.locator('section[aria-label="Prévia da figura"] svg').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await paper()).toBe("rgb(255, 255, 255)");
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("geosimples-workspace")!);
+    saved.state.theme = "dark";
+    localStorage.setItem("geosimples-workspace", JSON.stringify(saved));
+  });
+  await page.reload();
+  expect(await paper()).toBe("rgb(48, 48, 48)");
+  // Black ink shows light on the gray paper.
+  await expect(page.locator('section[aria-label="Prévia da figura"] path[stroke="#000000"]')).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Exportar", exact: true }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Exportar figura" });
+  await dialog.getByRole("tab", { name: /SVG/ }).click();
+  const exported = () => dialog.getByRole("img", { name: "Prévia da exportação" }).getAttribute("src").then((src) => decodeURIComponent(src!));
+  expect(await exported()).toContain('fill="#ffffff"');
+  expect(await exported()).toContain('stroke="#000000"');
+  await dialog.getByRole("radio", { name: "Como no tema" }).click();
+  expect(await exported()).toContain('fill="#303030"');
+  expect(await exported()).not.toContain('stroke="#000000"');
+});
+
 test("pro layout: a panel docks above or below another, and the overlay shows exactly where", async ({ page }) => {
   const target = await box(group(page, "Formatação"));
   // Over the lower part of Formatação, the overlay is its lower half: no inset, no margin.
@@ -162,15 +206,15 @@ test("pro layout: panels close, come back from Janelas, and the layout resets", 
   await page.getByRole("menuitem", { name: "Restaurar janelas" }).click();
   expect((await box(panel(page, "properties"))).x).toBeGreaterThan(page.viewportSize()!.width / 2);
 
-  // Dark theme; the preview stays white.
+  // Dark theme; the preview's paper turns gray with it.
   await page.getByRole("button", { name: "Tema escuro" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   const paper = await page
     .getByRole("region", { name: "Prévia da figura" })
-    .locator("svg.bg-white")
+    .locator("svg.touch-none")
     .first()
     .evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(paper).toBe("rgb(255, 255, 255)");
+  expect(paper).toBe("rgb(48, 48, 48)");
 
   // Back to the classic page, which keeps the browser's own right-click menu.
   await page.getByRole("button", { name: "Janelas" }).click();

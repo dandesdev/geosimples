@@ -74,7 +74,9 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
   useCommand("focusInput", () => {
     const input = inputRef.current;
     if (!input) return;
-    input.focus();
+    // The pro layout keeps the input slid out of view until it has focus: scrolling
+    // to it would move the preview up, and back when it slides in.
+    input.focus({ preventScroll: true });
     // After a prefill like "f(x) = ", typing goes on at the end.
     input.setSelectionRange(input.value.length, input.value.length);
   });

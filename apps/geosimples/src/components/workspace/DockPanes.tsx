@@ -24,6 +24,10 @@ export function PreviewPane() {
       className="relative h-full overflow-hidden"
       onPointerMove={(e) => setNearBottom(e.clientY > ref.current!.getBoundingClientRect().bottom - 56)}
       onPointerLeave={() => setNearBottom(false)}
+      // Focus reaching the slid-away input (Tab) would scroll the preview up to it.
+      onScroll={(e) => {
+        e.currentTarget.scrollTop = 0;
+      }}
     >
       <PreviewPanel pro />
       <AppButtons />

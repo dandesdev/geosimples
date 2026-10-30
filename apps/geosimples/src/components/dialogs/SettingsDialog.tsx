@@ -49,8 +49,8 @@ import {
   type Prefs,
 } from "@/store/prefsStore";
 import { useActivePrefs } from "@/store/useActivePrefs";
-import { useWorkspaceStore, type Layout, type Theme } from "@/store/workspaceStore";
-import { THEME_NAMES } from "@/lib/theme";
+import { useWorkspaceStore, type ExportColors, type Layout, type Theme } from "@/store/workspaceStore";
+import { EXPORT_COLORS, EXPORT_COLORS_HELP, THEME_NAMES } from "@/lib/theme";
 import { useSidePanelBeside } from "@/lib/useMediaQuery";
 import { resetLayout } from "@/components/workspace/dock";
 
@@ -58,6 +58,7 @@ import { resetLayout } from "@/components/workspace/dock";
 function AppearanceSettings() {
   const layout = useWorkspaceStore((s) => s.layout);
   const theme = useWorkspaceStore((s) => s.theme);
+  const exportColors = useWorkspaceStore((s) => s.exportColors);
   const inputAutoHide = useWorkspaceStore((s) => s.inputAutoHide);
   const ws = useWorkspaceStore.getState;
   const desktop = useSidePanelBeside();
@@ -82,6 +83,13 @@ function AppearanceSettings() {
         value={theme}
         options={(Object.keys(THEME_NAMES) as Theme[]).map((t) => ({ value: t, label: THEME_NAMES[t] }))}
         onChange={(next: Theme) => ws().setTheme(next)}
+      />
+      <Choice
+        label="Cores ao exportar"
+        value={exportColors}
+        options={EXPORT_COLORS}
+        onChange={(next: ExportColors) => ws().setExportColors(next)}
+        help={EXPORT_COLORS_HELP}
       />
       <SwitchField
         label="Esconder a barra de pontos"

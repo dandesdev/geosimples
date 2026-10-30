@@ -105,7 +105,7 @@
   --radius: 0.625rem;
 }
 
-/* Dark UI around the figure. The preview stays white paper, as printed. */
+/* Dark UI around the figure. The preview's gray paper comes from core (paper.ts). */
 .dark {
   color-scheme: dark;
   --background: rgb(27 27 28);

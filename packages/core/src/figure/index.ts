@@ -8,6 +8,7 @@ export * from "./ops";
 export * from "./constructions";
 export * from "./render";
 export * from "./svg";
+export * from "./paper";
 export * from "./tikz";
 export * from "./normalize";
 export * from "./file";

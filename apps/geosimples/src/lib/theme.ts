@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { useWorkspaceStore, type Theme } from "@/store/workspaceStore";
+import type { Paper } from "@geosimples/core/figure";
+import { useWorkspaceStore, type ExportColors, type Theme } from "@/store/workspaceStore";
 import { useMediaQuery } from "./useMediaQuery";
 
 /** Whether the interface is dark now, following the system when the theme says so. */
@@ -16,6 +17,25 @@ export function useApplyTheme() {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 }
+
+/** The paper the preview draws on: gray in the dark theme. */
+export function usePreviewPaper(): Paper {
+  return useDarkTheme() ? "dark" : "print";
+}
+
+/** The paper PNG and SVG exports use: white, unless the settings ask for the theme's colors. */
+export function useExportPaper(): Paper {
+  const themed = useWorkspaceStore((s) => s.exportColors === "theme");
+  return usePreviewPaper() === "dark" && themed ? "dark" : "print";
+}
+
+export const EXPORT_COLORS: { value: ExportColors; label: string }[] = [
+  { value: "print", label: "Padrão" },
+  { value: "theme", label: "Como no tema" },
+];
+
+export const EXPORT_COLORS_HELP =
+  "Padrão: preto sobre papel branco, como na impressão. Como no tema: as cores que a prévia mostra no tema escuro, com o papel cinza. Vale para PNG e SVG; o TikZ sai sempre nas cores de impressão.";
 
 export const THEME_NAMES: Record<Theme, string> = { light: "Claro", dark: "Escuro", system: "Do sistema" };
 

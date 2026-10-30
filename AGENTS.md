@@ -65,7 +65,7 @@ You are an expert frontend developer and UX specialist with deep knowledge of pr
    - Keep Canvas only for static paper texture
 
 6. **Print first**
-   - The preview is white paper in every theme. Figure colors are stored as hex or `"ink"` (black in print).
+   - Figure colors are stored as hex or `"ink"` (black in print). The dark theme draws the preview on gray paper with `paintScene` (core `paper.ts`), which flips lightness and keeps hue; the stored colors never change. PNG and SVG exports stay white unless Configurações › Aparência › Cores ao exportar says "Como no tema"; TikZ always uses print colors.
    - Sizes that should keep their printed size (strokes, marks, labels) are pt, never world units.
 
 ## Color System

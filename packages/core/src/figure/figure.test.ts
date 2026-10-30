@@ -37,6 +37,8 @@ import {
   clearLabels,
   toSvg,
   toTikz,
+  darkColor,
+  DARK_PAPER,
   type Circle,
   type FigureDoc,
   type FreeText,
@@ -843,5 +845,25 @@ describe("free text", () => {
       ],
     });
     expect(fixed.elements).toEqual([{ id: "t1", type: "text", x: 0, y: 0, text: "ok", size: 72, color: "ink", font: "serif" }]);
+  });
+});
+
+describe("dark paper", () => {
+  it("flips lightness and keeps hue", () => {
+    expect(darkColor("#ffffff")).toBe(DARK_PAPER);
+    const ink = darkColor("#000000");
+    expect(parseInt(ink.slice(1, 3), 16)).toBeGreaterThan(200);
+    // A red stays red: its red channel leads the others.
+    const red = darkColor("#d62828");
+    expect(parseInt(red.slice(1, 3), 16)).toBeGreaterThan(parseInt(red.slice(3, 5), 16) + 100);
+  });
+
+  it("recolors the SVG only when asked, leaving the figure as printed", () => {
+    const doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
+    expect(toSvg(doc)).toContain('stroke="#000000"');
+    const dark = toSvg(doc, { paper: "dark", background: DARK_PAPER });
+    expect(dark).not.toContain('stroke="#000000"');
+    expect(dark).toContain(`stroke="${darkColor("#000000")}"`);
+    expect(dark).toContain(`fill="${DARK_PAPER}"`);
   });
 });
