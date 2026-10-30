@@ -33,29 +33,98 @@ export const edgeOverlay = (toolbar: boolean) => ({
   size: { type: "pixels" as const, value: toolbar ? TOOLBAR_SIZE : EDGE_PANEL },
 });
 
-type Sizes = Map<string, { width: number; height: number }>;
+/**
+ * Panel widths are the user's: a panel column keeps the width it was given
+ * (by its splitter, or by the drop that made it) whatever else moves, and the
+ * preview takes the difference. Left alone, the dock hands any freed or
+ * clamped width to the last column, so the right panels grew when a toolbar moved.
+ */
+const widths = new Map<string, number>();
+/** While a drop or a splitter drag is settling, widths are recorded, not restored. */
+let settling = false;
+const widthTried = new Map<string, string>();
 
-/** How big each group in the grid is, to put them back after a drop moves them. */
-export function gridSizes(target: DockviewApi): Sizes {
-  return new Map(
-    target.groups
-      .filter((g) => g.api.location.type === "grid")
-      .map((g) => [g.id, { width: g.api.width, height: g.api.height }]),
+/** A panel group whose width is kept: in the grid, not the preview nor a toolbar, and not spanning the window. */
+function keepsWidth(target: DockviewApi, group: DockviewGroupPanel) {
+  return (
+    group.api.location.type === "grid" &&
+    !isPreviewGroup(group) &&
+    !isToolbarGroup(group) &&
+    group.api.width < target.width * 0.9
   );
 }
 
-/**
- * Gives a group dropped on an edge of the window the size its overlay showed,
- * and puts the others back as they were (`before`): the preview gives up the room.
- */
-export function sizeEdgeDrop(target: DockviewApi, group: DockviewGroupPanel, edge: string, before: Sizes) {
-  const across = edge === "left" || edge === "right" ? "width" : "height";
-  if (!isToolbarGroup(group)) group.api.setSize({ [across]: EDGE_PANEL });
+/** Takes the current widths as the ones to keep, for `groups` or for every panel. */
+export function recordWidths(target: DockviewApi, groups: DockviewGroupPanel[] = target.groups) {
+  for (const g of groups) if (keepsWidth(target, g)) widths.set(g.id, g.api.width);
+}
+
+/** Puts panel columns back to the widths they were given. Runs after every layout change. */
+export function keepWidths(target: DockviewApi) {
+  if (settling || target.hasMaximizedGroup()) return;
   for (const g of target.groups) {
-    const was = before.get(g.id);
-    if (!was || g === group || isPreviewGroup(g) || g.api.location.type !== "grid") continue;
-    if (Math.abs(g.api[across] - was[across]) > 1) g.api.setSize({ [across]: was[across] });
+    if (!keepsWidth(target, g)) continue;
+    const was = widths.get(g.id);
+    const now = Math.round(g.api.width);
+    if (was === undefined) {
+      widths.set(g.id, now);
+      continue;
+    }
+    if (Math.abs(now - was) <= 1) continue;
+    // One try per width: a window too narrow to give it back must not loop.
+    const key = `${now}>${Math.round(was)}`;
+    if (widthTried.get(g.id) === key) continue;
+    widthTried.set(g.id, key);
+    g.api.setSize({ width: was });
   }
+}
+
+/**
+ * Lets a drop (or a splitter drag) settle, then keeps what it changed on
+ * purpose (`changed`: the group dropped and the one it split) and puts every
+ * other panel column back. `edge` is the window edge a group was dropped on:
+ * it then takes the size its overlay showed.
+ */
+export function settle(target: DockviewApi, changed: () => (DockviewGroupPanel | undefined)[], edge?: string) {
+  settling = true;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const groups = changed().filter((g): g is DockviewGroupPanel => !!g);
+      if (edge) {
+        const across = edge === "left" || edge === "right" ? "width" : "height";
+        for (const g of groups) if (!isToolbarGroup(g)) g.api.setSize({ [across]: EDGE_PANEL });
+      }
+      recordWidths(target, groups);
+      settling = false;
+      keepWidths(target);
+    }),
+  );
+}
+
+/** Splitters change widths on purpose: while one is dragged, widths are taken, not restored. */
+export function settleSplitter(target: DockviewApi) {
+  settling = true;
+  const done = () => {
+    window.removeEventListener("pointerup", done);
+    window.removeEventListener("pointercancel", done);
+    recordWidths(target);
+    settling = false;
+  };
+  window.addEventListener("pointerup", done);
+  window.addEventListener("pointercancel", done);
+}
+
+/**
+ * Whether dropping on `position` of `group` would put two panels side by side
+ * inside one column (or one over the other inside one row). Panels dock on any
+ * edge of the window, as tabs, or above and below each other, but a column
+ * never splits into narrower columns.
+ */
+export function splitsLine(group: DockviewGroupPanel | undefined, position: string) {
+  if (!group || group.api.location.type !== "grid" || isPreviewGroup(group)) return false;
+  if (position === "left" || position === "right") return inLineWith(group).length > 0;
+  if (position === "top" || position === "bottom") return inLineWith(group, true).length > 0;
+  return false;
 }
 
 /** Figura is one row of buttons: stacked with other panels, it keeps just that height. */
@@ -121,6 +190,8 @@ export function buildDefaultLayout(target: DockviewApi) {
   prepareGroups(target);
   // Figura is one row of buttons. The toolbars fit their buttons once they are drawn; the last takes the rest.
   fitFigure(target);
+  widths.clear();
+  recordWidths(target);
   requestAnimationFrame(() => requestAnimationFrame(() => fitToolbars(target)));
 }
 
