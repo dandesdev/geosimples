@@ -535,8 +535,10 @@ export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number
     if (c?.kind === "onGraph") {
       const graph = doc.elements.find((g) => g.id === c.graph);
       // Past where f is defined, like √x left of 0, the point waits at its last x.
-      if (graph?.type === "function" && functionValue(graph.expr, m.x) === null) return el;
-      return { ...el, construction: { ...c, x: m.x } };
+      if (graph?.type !== "function") return el;
+      const x = Math.min(Math.max(m.x, graph.domain[0]), graph.domain[1]);
+      if (functionValue(graph.expr, x) === null) return el;
+      return { ...el, construction: { ...c, x } };
     }
     return { ...el, x: m.x, y: m.y };
   });
@@ -965,8 +967,15 @@ export function addInterval(
   closed: [boolean, boolean],
   opts: OpOptions = {},
 ): OpResult {
-  const line = doc.elements.find((e): e is NumberLine => e.type === "numberline");
-  if (!line) return fail(doc, "Crie uma reta numérica antes: Gráficos › Reta numérica.");
+  const found = doc.elements.find((e): e is NumberLine => e.type === "numberline");
+  if (!found) return fail(doc, "Crie uma reta numérica antes: Gráficos › Reta numérica.");
+  // Ends past the line stretch it, a whole unit beyond, so they get ticks and the arrow stays ahead.
+  const finite = [from, to].filter((v): v is number => v !== null);
+  const line: NumberLine = {
+    ...found,
+    x: [Math.min(found.x[0], ...finite.map((v) => Math.floor(v) - 1)), Math.max(found.x[1], ...finite.map((v) => Math.ceil(v) + 1))],
+  };
+  if (Math.abs(line.x[0]) > LIMITS.coordinate || Math.abs(line.x[1]) > LIMITS.coordinate) return fail(doc, "Valor fora do limite da figura.");
   const a = from ?? line.x[0];
   const b = to ?? line.x[1];
   if (!(a < b)) return fail(doc, "O início do intervalo precisa ser menor que o fim.");
@@ -987,8 +996,8 @@ export function addInterval(
   const q = end(b, to === null, closed[1]);
   const s = newSegment(nextId("segment"), p.id, q.id, opts);
   const mark: Segment = { ...s, stroke: { ...s.stroke, width: INTERVAL_WIDTH, dash: "solid" } };
-  // The stroke goes under its end dots, so an open one shows hollow.
-  return ok(withElements(doc, [...doc.elements, mark, p, q]), [mark.id, p.id, q.id]);
+  const stretched = doc.elements.map((e) => (e.id === line.id ? line : e));
+  return ok(withElements(doc, [...stretched, mark, p, q]), [mark.id, p.id, q.id]);
 }
 
 /** Adds `el` and, when `fresh`, the axes it was given, first so everything else draws over them. */
@@ -1108,5 +1117,5 @@ export function setAxesWindow(doc: FigureDoc, id: Id, x: [number, number], y: [n
       range: sameInterval(el.range, axes.y) ? y : el.range,
     };
   });
-  return ok(withElements(doc, elements));
+  return ok(resolveConstructions(withElements(doc, elements)));
 }

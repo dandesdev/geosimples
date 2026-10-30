@@ -18,6 +18,7 @@ import {
   movePoints,
   normalizeDoc,
   parseInput,
+  setAxesWindow,
   settleDoc,
   toFunctions,
   toTikz,
@@ -231,5 +232,34 @@ describe("turning shapes into functions", () => {
     const r = toFunctions(doc, ["s1"]);
     expect(byId(r.doc, r.created[0])).toMatchObject({ expr: "3x/4 + 1", domain: [0, 4] });
     expect(toFunctions(doc, ["p1"]).error).toMatch(/Selecione segmentos/);
+  });
+});
+
+describe("review fixes", () => {
+  it("move notable points right away when the axes window changes the graph's domain", () => {
+    const doc = markNotable(graph("sen(x)"), ["f1"], "root").doc;
+    const wider = setAxesWindow(doc, "e1", [-7, 7], [-5, 5]).doc;
+    expect(points(wider).map((p) => Math.round(p.x * 1e4) / 1e4)).toEqual([-6.2832, -3.1416, 0]);
+  });
+
+  it("keep a vertex as its own point where a root also is", () => {
+    const roots = markNotable(graph("x^2"), ["f1"], "root").doc;
+    const both = markNotable(roots, ["f1"], "extremum");
+    expect(both.created).toHaveLength(1);
+    expect(points(both.doc).map((p) => p.label?.text)).toEqual(["x₁", "V"]);
+  });
+
+  it("keep a dragged point on a graph over the part that's drawn", () => {
+    let doc = graph("x");
+    doc = updateElements(doc, ["f1"], (e) => ({ ...e, domain: [0, 2] }) as FunctionGraph);
+    doc = applyInput(doc, parseInput("P = f(1)", { points: [], graphs: [{ id: "f1", name: "f" }] })).doc;
+    expect(points(movePoints(doc, [{ id: "p1", x: 9, y: 9 }]))[0]).toMatchObject({ x: 2, y: 2 });
+  });
+
+  it("stretch the number line to fit an interval's ends", () => {
+    const r = applyInput(addNumberLine(emptyDoc()).doc, parseInput("[6; +∞["));
+    expect(r.error).toBeUndefined();
+    expect(r.doc.elements[0]).toMatchObject({ x: [-5, 7] });
+    expect(points(r.doc).map((p) => [p.x, p.shape])).toEqual([[6, "dot"], [7, "none"]]);
   });
 });

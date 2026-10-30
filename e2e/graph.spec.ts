@@ -276,3 +276,97 @@ test("a square turns into four functions", async ({ page }) => {
     .map((e) => e.expr ?? `x = ${e.x}`);
   expect(exprs).toEqual(["0", "x = 1", "1", "x = 0"]);
 });
+
+test("typing a domain end keystroke by keystroke keeps the roots the half-typed value would lose", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2-9");
+  await input.press("Enter");
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Raízes/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await clickAlong(page, "f1", 0.85);
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  // "1" on the way to "10" would cut the domain to [-5; 1], past the root at 3.
+  const to = page.getByRole("textbox", { name: "x de: até" });
+  await to.click();
+  await to.press("ControlOrMeta+a");
+  await page.keyboard.type("10", { delay: 120 });
+  await to.press("Enter");
+  await page.waitForTimeout(1500);
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await expect(page.getByText(/foram apagados|foi apagado/)).toHaveCount(0);
+});
+
+test("undo and redo right after typing keep only settled figures in the history", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2-9");
+  await input.press("Enter");
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Raízes/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await clickAlong(page, "f1", 0.85);
+  const to = page.getByRole("textbox", { name: "x de: até" });
+  await to.click();
+  await to.press("ControlOrMeta+a");
+  // [-5; 1] loses the root at 3, and Desfazer comes before the typing's settle would.
+  await page.keyboard.type("1");
+  await toolbarButton(page, "Desfazer").click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await toolbarButton(page, "Refazer").click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+  await page.waitForTimeout(1500);
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+});
+
+test("the same mark deleted again after an undo is reported again", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2-9");
+  await input.press("Enter");
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Raízes/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await clickAlong(page, "f1", 0.85);
+  const to = page.getByRole("textbox", { name: "x de: até" });
+  const cut = async () => {
+    await to.click();
+    await to.press("ControlOrMeta+a");
+    await page.keyboard.type("1");
+    await expect(page.getByText("x₂ foi apagado: o que marcava deixou de existir.")).toBeVisible();
+    await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+  };
+  await cut();
+  await toolbarButton(page, "Desfazer").click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await expect(page.getByText("x₂ foi apagado: o que marcava deixou de existir.")).toHaveCount(0, { timeout: 10_000 });
+  await cut();
+});
+
+test("slow typing in a field and a quick switch to another keep each mark's single report", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2-9");
+  await input.press("Enter");
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Raízes/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+  await clickAlong(page, "f1", 0.85);
+  const to = page.getByRole("textbox", { name: "x de: até" });
+  // A pause between keys longer than the 300 ms autosave: "1" on the way to "10" still keeps x₂.
+  await to.click();
+  await to.press("ControlOrMeta+a");
+  await page.keyboard.type("10", { delay: 450 });
+  await page.waitForTimeout(1500);
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2 });
+
+  // "2" cuts the root at 3; going straight to another field settles it once, without bringing x₂ back.
+  await to.press("ControlOrMeta+a");
+  await page.keyboard.type("2");
+  // The y cut is another field (another undo key): typing there settles the domain edit first.
+  const top = page.getByRole("textbox", { name: "Cortar y de: até" });
+  await top.click();
+  await top.press("ControlOrMeta+a");
+  await page.keyboard.type("6");
+  await page.waitForTimeout(1500);
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+  // Counted once, not waited on: the first toast fading would hide a second one.
+  expect(await page.getByText("x₂ foi apagado: o que marcava deixou de existir.").count()).toBe(1);
+});

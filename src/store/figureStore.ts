@@ -6,6 +6,7 @@ import {
   emptyDoc,
   latestFigure,
   LIBRARY_KEY,
+  deleteElements,
   settleDoc,
   uniqueName,
   untitledName,
@@ -126,15 +127,50 @@ function listNames(names: string[]): string {
   return named.length > 1 ? `${named.slice(0, -1).join(", ")} e ${named[named.length - 1]}` : named[0];
 }
 
-/** Says which marks went away with what they marked, with a way back, and what's left to mark. */
-function announce(settled: Settled, undo: () => void) {
-  const n = settled.dropped.length;
+/**
+ * Says which marks went away with what they marked, with a way back, and
+ * what's left to mark. The way back only undoes while nothing else changed.
+ */
+function announce(settled: Settled, store: () => Pick<FigureState, "doc" | "undo">, reported: Id[] = []) {
+  const names = settled.dropped.filter((_, i) => !reported.includes(settled.droppedIds[i]));
+  const n = names.length;
   if (n > 0) {
-    toast(`${listNames(settled.dropped)} ${n === 1 ? "foi apagado" : "foram apagados"}: o que ${n === 1 ? "marcava" : "marcavam"} deixou de existir.`, {
+    const undo = () => {
+      if (store().doc === settled.doc) store().undo();
+      else toast("A figura mudou depois disso. Use Desfazer na barra para voltar passo a passo.");
+    };
+    toast(`${listNames(names)} ${n === 1 ? "foi apagado" : "foram apagados"}: o que ${n === 1 ? "marcava" : "marcavam"} deixou de existir.`, {
       action: { label: "Desfazer", onClick: undo },
     });
   }
   for (const note of settled.notes) toast(note);
+}
+
+/** A typed edit waiting to be settled once the typing stops, and the figure it left. */
+let pendingSettle: { timer: ReturnType<typeof setTimeout>; doc: FigureDoc } | null = null;
+
+/**
+ * Settles a typed edit now instead of when its timer fires: before any other
+ * step, so past and future only ever hold settled figures. The deletion
+ * joins the typed edit's undo step, which already holds the figure before it.
+ */
+function flushSettle(get: () => FigureState, set: (partial: Partial<FigureState>) => void): Id[] {
+  const pending = pendingSettle;
+  if (!pending) return [];
+  clearTimeout(pending.timer);
+  pendingSettle = null;
+  const { doc, past, selection } = get();
+  if (doc !== pending.doc) return [];
+  const settled = settleDoc(past[past.length - 1] ?? doc, doc);
+  if (settled.doc !== doc) set({ doc: settled.doc, selection: pruneSelection(settled.doc, selection) });
+  announce(settled, get);
+  return settled.droppedIds;
+}
+
+/** Forgets a pending settle without running it, for a figure that is going away. */
+function dropPendingSettle() {
+  if (pendingSettle) clearTimeout(pendingSettle.timer);
+  pendingSettle = null;
 }
 let transientBase: FigureDoc | null = null;
 
@@ -202,7 +238,14 @@ let saveTimer: number | undefined;
 /** Saves wait for a pause, so a drag doesn't write on every frame. */
 const SAVE_DELAY_MS = 300;
 
+/** Settles a pending typed edit, then saves: before switching figures or leaving the page. */
 function flushSave() {
+  flushSettle(useFigureStore.getState, useFigureStore.setState);
+  saveNow();
+}
+
+/** Writes the open figure as it is. The autosave uses this: settling waits for the typing to stop. */
+function saveNow() {
   window.clearTimeout(saveTimer);
   saveTimer = undefined;
   const { doc, figureId } = useFigureStore.getState();
@@ -228,6 +271,7 @@ function withLibrary(
   return (set, get, api) => {
     /** Shows another figure. Its undo history starts from it. */
     const show = (figureId: string, doc: FigureDoc, figures: FigureMeta[]) => {
+      // Callers settled the old figure through flushSave, or dropped it when deleting it.
       lastCommit = null;
       transientBase = null;
       savedDoc = doc;
@@ -294,7 +338,8 @@ function withLibrary(
           set({ figures: index.figures });
           return;
         }
-        // The open figure is gone, so its pending save must not bring it back.
+        // The open figure is gone, so its pending save (or settle, with its toast) must not bring it back.
+        dropPendingSettle();
         window.clearTimeout(saveTimer);
         savedDoc = get().doc;
         const next = latestFigure(index.figures);
@@ -329,25 +374,36 @@ export const useFigureStore = create<FigureState>()(
       quickFigure: NO_QUICK_FIGURE,
 
       commit: (next, coalesceKey) => {
-        const state = get();
-        if (next === state.doc) return;
-        // Roots, crossings and points on graphs that no longer exist go in the same undo step.
-        const settled = settleDoc(state.doc, next);
-        const doc = settled.doc;
+        if (next === get().doc) return;
         const now = Date.now();
         const merge =
           coalesceKey !== undefined &&
           lastCommit?.key === coalesceKey &&
           now - lastCommit.at < COALESCE_MS &&
-          state.past.length > 0;
+          get().past.length > 0;
+        // Still typing in the same field: its settle waits for the end. Anything else settles it first.
+        let reported: Id[] = [];
+        if (merge) dropPendingSettle();
+        else reported = flushSettle(get, set);
+        const state = get();
         lastCommit = coalesceKey === undefined ? null : { key: coalesceKey, at: now };
-        set({
-          doc,
-          past: merge ? state.past : [...state.past, state.doc].slice(-HISTORY_LIMIT),
-          future: [],
-          selection: pruneSelection(doc, state.selection),
-        });
-        announce(settled, () => get().undo());
+        const past = merge ? state.past : [...state.past, state.doc].slice(-HISTORY_LIMIT);
+        if (coalesceKey !== undefined) {
+          // Fields commit on every keystroke: the "1" on the way to "10" mustn't delete marks for
+          // good. Settle once the typing stops, in the same undo step (past already holds the start).
+          // `next` may come from the figure before the settle just run, still holding what it deleted.
+          const kept = new Set(next.elements.map((e) => e.id));
+          const doc = reported.some((id) => kept.has(id)) ? deleteElements(next, reported.filter((id) => kept.has(id))).doc : next;
+          set({ doc, past, future: [], selection: pruneSelection(doc, state.selection) });
+          pendingSettle = { timer: setTimeout(() => flushSettle(get, set), COALESCE_MS), doc };
+          return;
+        }
+        // Roots, crossings and points on graphs that no longer exist go in the same undo step.
+        const settled = settleDoc(state.doc, next);
+        const doc = settled.doc;
+        set({ doc, past, future: [], selection: pruneSelection(doc, state.selection) });
+        // `next` may come from the figure before that settle, holding the points it just reported.
+        announce(settled, get, reported);
       },
 
       run: (op, select = "created") => {
@@ -362,6 +418,7 @@ export const useFigureStore = create<FigureState>()(
       },
 
       beginTransient: () => {
+        flushSettle(get, set);
         transientBase = get().doc;
       },
       setTransient: (doc) => set({ doc }),
@@ -375,7 +432,7 @@ export const useFigureStore = create<FigureState>()(
         const settled = settleDoc(base, dragged);
         const doc = settled.doc;
         set({ doc, past: [...past, base].slice(-HISTORY_LIMIT), future: [], selection: pruneSelection(doc, selection) });
-        announce(settled, () => get().undo());
+        announce(settled, get);
       },
 
       toggleSelect: (id) =>
@@ -391,6 +448,7 @@ export const useFigureStore = create<FigureState>()(
       selectAll: () => set((s) => ({ selection: s.doc.elements.map((e) => e.id) })),
 
       undo: () => {
+        flushSettle(get, set);
         const { past, future, doc, selection } = get();
         if (past.length === 0) return;
         const prev = past[past.length - 1];
@@ -405,6 +463,7 @@ export const useFigureStore = create<FigureState>()(
         });
       },
       redo: () => {
+        flushSettle(get, set);
         const { past, future, doc, selection } = get();
         if (future.length === 0) return;
         const next = future[0];
@@ -434,7 +493,7 @@ export const useFigureStore = create<FigureState>()(
 useFigureStore.subscribe((state, prev) => {
   if (state.doc === prev.doc || state.doc === savedDoc) return;
   window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(flushSave, SAVE_DELAY_MS);
+  saveTimer = window.setTimeout(saveNow, SAVE_DELAY_MS);
 });
 
 // Closing or hiding the tab must not lose the last edit.

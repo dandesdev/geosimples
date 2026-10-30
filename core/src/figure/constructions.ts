@@ -121,6 +121,8 @@ function draft(doc: FigureDoc, opts: OpOptions) {
 
 function sameParents(a: PointConstruction, b: PointConstruction): boolean {
   if (a.kind !== b.kind) return false;
+  // A vertex where a root also is (x² at 0) goes on living when the root goes.
+  if (a.kind === "notable" && b.kind === "notable" && a.feature !== b.feature) return false;
   const key = (c: PointConstruction) => [...constructionParents(c)].sort().join(",");
   return key(a) === key(b);
 }

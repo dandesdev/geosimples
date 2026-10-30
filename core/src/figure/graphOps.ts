@@ -208,6 +208,8 @@ export interface Settled {
   doc: FigureDoc;
   /** Names (or "" for unnamed) of the points deleted because what they marked is gone. */
   dropped: string[];
+  /** Their ids, in the same order. */
+  droppedIds: Id[];
   /** Graphs that now have more roots or turning points than are marked. */
   notes: string[];
 }
@@ -223,6 +225,7 @@ export function settleDoc(before: FigureDoc, after: FigureDoc): Settled {
   const gone = vanishedPoints(after);
   const doc = gone.length > 0 ? deleteElements(after, gone.map((p) => p.id)).doc : after;
   const dropped = gone.map((p) => p.label?.text ?? "");
+  const droppedIds = gone.map((p) => p.id);
   const notes: string[] = [];
   const old = new Map(before.elements.map((e) => [e.id, e]));
   for (const el of doc.elements) {
@@ -239,5 +242,5 @@ export function settleDoc(before: FigureDoc, after: FigureDoc): Settled {
       }
     }
   }
-  return { doc, dropped, notes };
+  return { doc, dropped, droppedIds, notes };
 }
