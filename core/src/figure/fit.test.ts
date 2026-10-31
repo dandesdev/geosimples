@@ -3,6 +3,8 @@ import {
   addAxes,
   addFunction,
   addGrid,
+  addVerticalLine,
+  construct,
   addPoints,
   connectPoints,
   dragHandle,
@@ -103,6 +105,11 @@ describe("axes that fit the figure", () => {
     // A new expression still carries the marks by place.
     const changed = updateElements(sine, ["f1"], (e) => (e.type === "function" ? { ...e, expr: "sen(x - 1)" } : e));
     expect(marks(changed).map(([, x]) => x)).toEqual([-2.142, 1, 4.142]);
+    // A vertical line typed to a new x takes its crossing with it.
+    const crossed = construct(addVerticalLine(withGraph("x^2"), 2).doc, ["f1", "r1"], "intersection").doc;
+    const moved = updateElements(crossed, ["r1"], (e) => (e.type === "vline" ? { ...e, x: 3 } : e));
+    expect(settleDoc(crossed, moved).dropped).toEqual([]);
+    expect(moved.elements.find((e) => e.type === "point")).toMatchObject({ x: 3, y: 9 });
   });
 
   it("show the fitted window in the exports", () => {
