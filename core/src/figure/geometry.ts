@@ -681,7 +681,8 @@ export function vanishedPoints(doc: FigureDoc): Point[] {
 
 /**
  * Marks on graphs whose domain or y cut changed, as when the axes' window
- * does, stay where they are: each root, turning point and graph crossing
+ * does, stay where they are (a new expression still carries them by place):
+ * each root, turning point and graph crossing
  * takes the entry of the new list at its spot, instead of the same place in
  * a list that now starts elsewhere. One whose spot left the window gets an
  * index past the list, so it goes like any mark whose feature is gone.
@@ -689,7 +690,13 @@ export function vanishedPoints(doc: FigureDoc): Point[] {
 export function keepGraphMarks(before: FigureDoc, after: FigureDoc): FigureDoc {
   const old = new Map(before.elements.map((e) => [e.id, e]));
   const changed = new Set(
-    after.elements.filter((e) => (e.type === "function" || e.type === "vline") && old.get(e.id) !== e).map((e) => e.id),
+    after.elements
+      .filter((e) => {
+        const prev = old.get(e.id);
+        if (!prev || prev === e) return false;
+        return e.type === "vline" || (e.type === "function" && prev.type === "function" && prev.expr === e.expr);
+      })
+      .map((e) => e.id),
   );
   if (changed.size === 0) return after;
   const pts = pointMap(after);

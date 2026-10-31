@@ -1,4 +1,4 @@
-import { pointMap, resolveConstructions } from "./geometry";
+import { keepGraphMarks, pointMap, resolveConstructions } from "./geometry";
 import { moveNumberLine, movePoints, setAxesWindow, withElements } from "./ops";
 import { axesOrigin, axesStepX, axesStepY, functionValue } from "./plot";
 import type { Axes, Element, FigureDoc, Id } from "./types";
@@ -69,7 +69,8 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
   if (!el) return doc;
   const along = handle.end[0] === "x" ? to.x : to.y;
   const end = handle.end[1] === "0" ? 0 : 1;
-  const replace = (next: Element) => resolveConstructions(withElements(doc, doc.elements.map((e) => (e.id === el.id ? next : e))));
+  const replace = (next: Element) =>
+    resolveConstructions(keepGraphMarks(doc, withElements(doc, doc.elements.map((e) => (e.id === el.id ? next : e)))));
   // An end that snaps back where it was changes nothing, so a tap doesn't stop the axes or grid fitting.
   const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
   const axes = firstAxes(doc);

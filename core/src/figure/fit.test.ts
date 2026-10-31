@@ -15,6 +15,7 @@ import {
   markNotable,
   setAxesWindow,
   settleDoc,
+  updateElements,
   addNumberLine,
   buildScene,
   moveElements,
@@ -88,6 +89,20 @@ describe("axes that fit the figure", () => {
     const narrow = settleDoc(sine, setAxesWindow(sine, "e1", [-1, 5], axesOf(sine).y).doc);
     expect(narrow.dropped).toEqual(["x₁"]);
     expect(roots(narrow.doc)).toEqual([0, 3.142]);
+  });
+
+  it("keep marked roots where they are when a graph's domain is dragged or typed", () => {
+    const sine = fitFigure(markNotable(withGraph("sen(x)", addAxes(emptyDoc()).doc), ["f1"], "root").doc);
+    const marks = (d: FigureDoc) =>
+      d.elements.flatMap((e) => (e.type === "point" && e.construction ? [[e.label?.text, Math.round(e.x * 1000) / 1000]] : []));
+    const dragged = settleDoc(sine, fitFigure(dragHandle(sine, { owner: "f1", end: "x0" }, { x: -2, y: 0 })));
+    expect(dragged.dropped).toEqual(["x₁"]);
+    expect(marks(dragged.doc)).toEqual([["x₂", 0], ["x₃", 3.142]]);
+    const typed = updateElements(sine, ["f1"], (e) => (e.type === "function" ? { ...e, domain: [-2, 5] } : e));
+    expect(settleDoc(sine, typed).dropped).toEqual(["x₁"]);
+    // A new expression still carries the marks by place.
+    const changed = updateElements(sine, ["f1"], (e) => (e.type === "function" ? { ...e, expr: "sen(x - 1)" } : e));
+    expect(marks(changed).map(([, x]) => x)).toEqual([-2.142, 1, 4.142]);
   });
 
   it("show the fitted window in the exports", () => {

@@ -569,7 +569,7 @@ export function updateElements(
     if (next !== el) changed = true;
     return next;
   });
-  return changed ? resolveConstructions(withElements(doc, elements)) : doc;
+  return changed ? resolveConstructions(keepGraphMarks(doc, withElements(doc, elements))) : doc;
 }
 
 /** Inserts a point on a segment, at a fraction of its length or a distance from its first end. */
