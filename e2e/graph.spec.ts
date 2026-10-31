@@ -145,6 +145,20 @@ test("the Gráficos menu puts a point on the selected graph, with lines to the a
   await expect(page.getByRole("switch", { name: "Linhas até os eixos" })).toBeChecked();
 });
 
+test("a point put on a curve doesn't stretch the curve", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2");
+  await input.press("Enter");
+  await leaveInput(page);
+  await expect.poll(async () => ((await saved(page, "f1")) as { domain: number[] } | null)?.domain).toEqual([-3, 3]);
+  await toolbarButton(page, "Adicionar pontos").click();
+  // Far out on the right arm, near x = 2.5: room around the point would have pushed the axes to 4.
+  await clickAlong(page, "f1", 0.9);
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
+  expect(((await saved(page, "p1")) as { x: number }).x).toBeGreaterThan(2);
+  expect(((await saved(page, "f1")) as { domain: number[] }).domain).toEqual([-3, 3]);
+});
+
 test("in Adicionar pontos, a click on a curve puts the point on the graph", async ({ page }) => {
   const input = pointInput(page);
   await input.fill("y=x");
@@ -558,7 +572,8 @@ test("graph ends follow the pointer in Mover, and land on a tick near one with E
     const b = (await handle(end).boundingBox())!;
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
-    await page.mouse.move(b.x + b.width / 2 + by * unit, b.y + b.height / 2, { steps: 8 });
+    // Along y = x, as a hand follows the curve.
+    await page.mouse.move(b.x + b.width / 2 + by * unit, b.y + b.height / 2 - by * unit, { steps: 8 });
     await page.mouse.up();
   };
 

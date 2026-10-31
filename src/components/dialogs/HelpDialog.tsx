@@ -70,7 +70,7 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             Gráfico de função. Os eixos entram junto e se ajustam à figura. Vale x², raiz(x), |x|, 1/x, sen, cos, tg, ln, log
             e decimais com vírgula. Em Propriedades mude a expressão, onde a curva aparece e a janela, as marcas e a malha
             dos eixos. Eixos e malha quadriculada também entram sozinhos, pelo menu Gráficos. No modo Mover, os
-            quadradinhos nas pontas dos eixos, da malha e das retas mudam o tamanho deles. Com o ímã ao lado da prévia
+            quadradinhos nas pontas dos eixos, da malha e das retas mudam o tamanho deles; a ponta de um gráfico desliza pela curva. Com o ímã ao lado da prévia
             (Encaixar na grade) ligado, a ponta perto de uma marca vai para a marca; desligado, fica onde você soltar.
             Clique com o botão direito numa curva para pôr um ponto sobre ela ali.
           </li>
