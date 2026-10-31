@@ -4,6 +4,7 @@ import type {
   Angle,
   Circle,
   Element,
+  Extension,
   FigureDoc,
   FunctionGraph,
   Id,
@@ -165,6 +166,24 @@ export function distanceToLine(p: Vec, a: Vec, b: Vec): number {
   const l = len(ab);
   if (l === 0) return dist(p, a);
   return Math.abs(cross(ab, sub(p, a))) / l;
+}
+
+/**
+ * Where an extension is drawn now: from the nearer end of its segment to its
+ * point, or null while the point is on the segment (or no longer on its line).
+ */
+export function extensionEnds(ext: Extension, pts: Map<Id, Point>): [Point, Point] | null {
+  const a = pts.get(ext.line[0]);
+  const b = pts.get(ext.line[1]);
+  const p = pts.get(ext.point);
+  if (!a || !b || !p) return null;
+  const ab = sub(b, a);
+  const l2 = dot(ab, ab);
+  if (l2 < 1e-18 || distanceToLine(p, a, b) > 1e-6 * Math.max(1, Math.sqrt(l2))) return null;
+  const t = dot(sub(p, a), ab) / l2;
+  if (t < -1e-6) return [a, p];
+  if (t > 1 + 1e-6) return [b, p];
+  return null;
 }
 
 /** Foot of the perpendicular from p to the line through a and b. */

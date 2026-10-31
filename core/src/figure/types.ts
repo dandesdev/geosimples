@@ -142,6 +142,21 @@ export interface Segment {
   label?: Label;
 }
 
+/**
+ * The continuation of the line through `line` out to `point`, a point on that
+ * line: a side extended to the foot of a height, or a segment to where it
+ * crosses something. Drawn only while the point is beyond the segment
+ * between them, from its nearer end.
+ */
+export interface Extension {
+  id: Id;
+  type: "extension";
+  line: [Id, Id];
+  point: Id;
+  stroke: Stroke;
+  label?: never;
+}
+
 export interface Angle {
   id: Id;
   type: "angle";
@@ -296,6 +311,7 @@ export interface NumberLine {
 export type Element =
   | Point
   | Segment
+  | Extension
   | Angle
   | Circle
   | Polygon

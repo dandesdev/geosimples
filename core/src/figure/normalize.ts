@@ -166,6 +166,13 @@ export function normalizeDoc(input: unknown): FigureDoc {
         out.push(withLabel(s, r));
         break;
       }
+      case "extension": {
+        const line = Array.isArray(r.line) && r.line.length === 2 && r.line.every((p) => points.has(p as string)) ? r.line : null;
+        if (ids.has(id) || !line || line[0] === line[1] || !points.has(r.point as string)) break;
+        ids.add(id);
+        out.push({ id, type: "extension", line: [line[0], line[1]], point: r.point as string, stroke: stroke(r.stroke) });
+        break;
+      }
       case "angle": {
         if (ids.has(id) || ![r.a, r.vertex, r.b].every((p) => points.has(p as string))) break;
         ids.add(id);

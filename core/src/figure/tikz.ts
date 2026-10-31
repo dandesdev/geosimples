@@ -3,6 +3,7 @@ import {
   angleArc,
   angleArcRadii,
   angleTicks,
+  extensionEnds,
   pointMap,
   rightAngleSquare,
   segmentTicks,
@@ -135,6 +136,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
           const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
           sections.segment.push(offsetLines(at(m), segmentTicks(a, b, el.ticks), el.stroke));
         }
+        break;
+      }
+      case "extension": {
+        const ends = extensionEnds(el, pts);
+        if (ends) sections.segment.push(`\\draw${opts(strokeOpts(el.stroke))} (${ends[0].id}) -- (${ends[1].id});`);
         break;
       }
       case "angle": {
@@ -334,7 +340,7 @@ function textOptions(c: string, size: number, font: LabelFont, color: (c: string
 }
 
 function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return null;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline" || el.type === "extension") return null;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return null;
   const { size, measure } = el.label;

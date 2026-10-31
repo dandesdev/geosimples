@@ -384,7 +384,7 @@ test("a crossing dragged away hides while the drag lasts, and is deleted only if
   await page.keyboard.up("Shift");
   await toolbarButton(page, "Construções").click();
   await page.getByRole("menuitem", { name: /Interseção/ }).click();
-  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 4, segment: 1 });
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 4, segment: 1, extension: 2 });
   const crossings = page.locator('[data-owner="p3"], [data-owner="p4"]');
   await expect(crossings).not.toHaveCount(0);
 
@@ -410,4 +410,44 @@ test("a crossing dragged away hides while the drag lasts, and is deleted only if
   await page.mouse.up();
   await expect(page.getByText(/foram apagados: o que marcavam deixou de existir/)).toBeVisible();
   await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2, segment: 1 });
+});
+
+test("a segment slid past a crossing reaches it with a dashed extension that can be styled", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x^2", "A=(-2;1)--B=(2;1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await clickAlong(page, "f1", 0.9);
+  await page.keyboard.down("Shift");
+  await clickAlong(page, "s1", 0.1);
+  await page.keyboard.up("Shift");
+  await toolbarButton(page, "Construções").click();
+  await page.getByRole("menuitem", { name: /Interseção/ }).click();
+  // Over the segment, the crossings need no extension.
+  await expect(page.locator('[data-owner^="x"]')).toHaveCount(0);
+
+  await page.locator('[data-owner="p1"]').first().click();
+  await page.keyboard.down("Shift");
+  await page.locator('[data-owner="p2"]').first().click();
+  await page.keyboard.up("Shift");
+  await page.keyboard.press("M");
+  const a = (await page.locator('[data-owner="p1"]').first().boundingBox())!;
+  const b = (await page.locator('[data-owner="p2"]').first().boundingBox())!;
+  const unit = (b.x - a.x) / 4;
+  const from = { x: a.x + a.width / 2, y: a.y + a.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 2 * unit, from.y, { steps: 8 });
+  await page.mouse.up();
+  // A is now at x = 0, right of the crossing at x = -1: the line reaches it, dashed.
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 4, segment: 1, extension: 2 });
+  const extension = page.locator('[data-owner="x1"]');
+  await expect(extension).not.toHaveCount(0);
+
+  await page.keyboard.press("V");
+  await clickAlong(page, "x1", 0.5);
+  await expect(page.getByText(/^Prolongamento de AB até /).first()).toBeVisible();
+  await expect(page.getByText("Traço do prolongamento")).toBeVisible();
 });

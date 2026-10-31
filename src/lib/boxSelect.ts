@@ -1,5 +1,6 @@
 import {
   estimateTextWidth,
+  extensionEnds,
   functionLines,
   pointMap,
   type Box,
@@ -28,6 +29,11 @@ export function elementsInBox(doc: FigureDoc, k: number, box: Box): Id[] {
         return pointInside(el.id);
       case "segment":
         return pointInside(el.a) && pointInside(el.b);
+      case "extension": {
+        // Only while it shows: the dashed part between its ends.
+        const ends = extensionEnds(el, pts);
+        return !!ends && ends.every((p) => pointInside(p.id));
+      }
       case "angle":
         return pointInside(el.a) && pointInside(el.vertex) && pointInside(el.b);
       case "polygon":

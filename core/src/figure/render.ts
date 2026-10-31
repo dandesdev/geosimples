@@ -3,6 +3,7 @@ import {
   angleArc,
   angleArcRadii,
   angleTicks,
+  extensionEnds,
   pointMap,
   rightAngleSquare,
   segmentTicks,
@@ -177,6 +178,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     circle: [],
     angle: [],
     segment: [],
+    extension: [],
     point: [],
     text: [],
   };
@@ -273,6 +275,17 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         box.add(pa.x, pa.y, stroke.width / 2);
         box.add(pb.x, pb.y, stroke.width / 2);
         hits.segment.push({ owner: el.id, type: "segment", d, area: false });
+        break;
+      }
+      case "extension": {
+        const ends = extensionEnds(el, pts);
+        if (!ends) break;
+        const [pa, pb] = ends.map(P);
+        const d = `M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`;
+        const stroke = paintStroke(el.stroke);
+        layers.segment.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        box.add(pb.x, pb.y, stroke.width / 2);
+        hits.extension.push({ owner: el.id, type: "extension", d, area: false });
         break;
       }
       case "angle": {
@@ -537,6 +550,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...hits.function,
       ...hits.vline,
       ...hits.angle,
+      ...hits.extension,
       ...hits.segment,
       ...hits.text,
       ...hits.point,
@@ -553,7 +567,7 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline" || el.type === "extension") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;

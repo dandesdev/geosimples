@@ -99,6 +99,7 @@ export function withText(label: Label | undefined, text: string, base: Omit<Labe
 export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   point: [],
   segment: ["length"],
+  extension: [],
   angle: ["angle"],
   circle: ["radius"],
   polygon: ["area", "perimeter"],
@@ -205,7 +206,7 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
 }
 
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return null;
+  if (el.type === "text" || el.type === "axes" || el.type === "numberline" || el.type === "extension") return null;
   const label = el.label;
   if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);

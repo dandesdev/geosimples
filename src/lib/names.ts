@@ -3,6 +3,7 @@ import { formatNumber, type Element, type ElementType, type FigureDoc, type Id, 
 export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title: string }> = {
   point: { one: "ponto", many: "pontos", title: "Ponto" },
   segment: { one: "segmento", many: "segmentos", title: "Segmento" },
+  extension: { one: "prolongamento", many: "prolongamentos", title: "Prolongamento" },
   angle: { one: "ângulo", many: "ângulos", title: "Ângulo" },
   circle: { one: "circunferência", many: "circunferências", title: "Circunferência" },
   polygon: { one: "polígono", many: "polígonos", title: "Polígono" },

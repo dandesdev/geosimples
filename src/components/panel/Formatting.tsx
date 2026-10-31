@@ -2,6 +2,7 @@ import {
   AngleEditor,
   AxesEditor,
   CircleEditor,
+  ExtensionEditor,
   FunctionEditor,
   PointEditor,
   PolygonEditor,
@@ -27,6 +28,7 @@ export function Formatting() {
     <>
       {el.type === "point" && <PointEditor el={el} {...props} />}
       {el.type === "segment" && <SegmentEditor el={el} {...props} />}
+      {el.type === "extension" && <ExtensionEditor el={el} {...props} />}
       {el.type === "angle" && <AngleEditor el={el} {...props} />}
       {el.type === "circle" && <CircleEditor el={el} {...props} />}
       {el.type === "polygon" && <PolygonEditor el={el} {...props} />}

@@ -82,6 +82,7 @@ function buildPoints(doc: FigureDoc, specs: ParsedPoint[], opts: OpOptions, next
 const PREFIX: Record<ElementType, string> = {
   point: "p",
   segment: "s",
+  extension: "x",
   angle: "a",
   circle: "c",
   polygon: "g",
@@ -429,9 +430,12 @@ export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode, op
 /** Ids that also go away when `ids` are deleted. */
 export function cascadeIds(doc: FigureDoc, ids: Id[]): Set<Id> {
   const gone = new Set(ids);
-  for (const el of doc.elements) {
-    const refs = referencedPoints(el);
-    if (refs.some((r) => gone.has(r))) gone.add(el.id);
+  // Until nothing more goes: an extension can come before the segment it continues.
+  for (let size = -1; size !== gone.size; ) {
+    size = gone.size;
+    for (const el of doc.elements) {
+      if (!gone.has(el.id) && referencedPoints(el).some((r) => gone.has(r))) gone.add(el.id);
+    }
   }
   return gone;
 }
@@ -447,6 +451,8 @@ function referencedPoints(el: Element): Id[] {
       return [];
     case "segment":
       return [el.a, el.b];
+    case "extension":
+      return [...el.line, el.point];
     case "angle":
       return [el.a, el.vertex, el.b];
     case "circle":
