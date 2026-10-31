@@ -494,7 +494,7 @@ test("Mover drags the ends of the axes and whole segments", async ({ page }) => 
   // A tap on a handle selects the axes and leaves them fitting.
   await page.locator('[data-handle="e1:x1"]').click();
   await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
-  expect((await saved()).find((e) => e.id === "e1")?.fit).toBe(true);
+  await expect.poll(async () => (await saved())?.find((e) => e.id === "e1")?.fit).toBe(true);
   const x0 = (await page.locator('[data-handle="e1:x0"]').boundingBox())!;
   const x1 = (await page.locator('[data-handle="e1:x1"]').boundingBox())!;
   const unit = (x1.x - x0.x) / 10;
