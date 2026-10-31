@@ -278,6 +278,12 @@ export interface Axes {
   /** Units between ticks on the y axis, when it counts differently from x. */
   yStep?: number;
   /**
+   * cm per unit along x and y, for a graph that needs a different scale on
+   * each axis. It stretches the whole figure, so circles become ellipses.
+   * 1 and 1 when absent.
+   */
+  unit?: [number, number];
+  /**
    * The window follows the rest of the figure: everything fits with a tick of
    * room, and the steps keep the numbers apart. Setting the window or the
    * steps by hand turns it off.

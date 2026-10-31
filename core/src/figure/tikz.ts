@@ -16,6 +16,7 @@ import {
   axesStepX,
   axesStepY,
   axisTicks,
+  figureUnits,
   endDotRadius,
   functionEnds,
   functionLines,
@@ -45,6 +46,8 @@ const shifted = (base: string, o: Vec) => `([shift={(${n(o.x)}pt,${n(o.y)}pt)}]$
 export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   const scale = options.scale ?? 1;
   const pts = pointMap(doc);
+  const u = figureUnits(doc);
+  const S = (w: Vec): Vec => ({ x: w.x * u.x, y: w.y * u.y });
   const colors = new Map<string, string>();
   let usesPatterns = false;
 
@@ -137,7 +140,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         sections.segment.push(`\\draw${opts(strokeOpts(el.stroke))} (${el.a}) -- (${el.b});`);
         if (el.ticks > 0) {
           const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          sections.segment.push(offsetLines(at(m), segmentTicks(a, b, el.ticks), el.stroke));
+          sections.segment.push(offsetLines(at(m), segmentTicks(S(a), S(b), el.ticks), el.stroke));
         }
         break;
       }
@@ -150,7 +153,8 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         const a = pts.get(el.a);
         const v = pts.get(el.vertex);
         const b = pts.get(el.b);
-        const geo = a && v && b ? angleArc(a, v, b, el.reflex) : null;
+        // Marks go by the angle as drawn, which axes at different scales bend.
+        const geo = a && v && b ? angleArc(S(a), S(v), S(b), el.reflex) : null;
         if (!geo) break;
         const vtx = el.vertex;
         const end = geo.start + geo.sweep;
@@ -327,7 +331,8 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       : "% Preâmbulo: \\usepackage{tikz}",
   );
   // SVG's default miter limit: sharp corners get beveled instead of drawing long spikes.
-  lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm, miter limit=4]`);
+  // Axes at different scales stretch x and y; TikZ then draws circles as ellipses, as the SVG does.
+  lines.push(`\\begin{tikzpicture}[x=${n(scale * u.x)}cm, y=${n(scale * u.y)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
   const order = ["coords", "grid", "axes", "guide", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);

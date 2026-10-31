@@ -15,13 +15,15 @@ import {
  * A shape counts when all the points it uses are inside, and a circle when
  * its whole outline is. Ids come in figure order.
  */
-export function elementsInBox(doc: FigureDoc, k: number, box: Box): Id[] {
+export function elementsInBox(doc: FigureDoc, ppu: { x: number; y: number }, box: Box): Id[] {
+  const kx = ppu.x;
+  const ky = ppu.y;
   const pts = pointMap(doc);
   const inside = (x: number, y: number) =>
     x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY;
   const pointInside = (id: Id) => {
     const p = pts.get(id);
-    return !!p && inside(p.x * k, -p.y * k);
+    return !!p && inside(p.x * kx, -p.y * ky);
   };
 
   const contained = (el: Element): boolean => {
@@ -42,27 +44,28 @@ export function elementsInBox(doc: FigureDoc, k: number, box: Box): Id[] {
       case "circle": {
         const c = pts.get(el.center);
         if (!c) return false;
-        const r = el.radius * k;
-        return inside(c.x * k - r, -c.y * k - r) && inside(c.x * k + r, -c.y * k + r);
+        const r = el.radius * kx;
+        const ry = el.radius * ky;
+        return inside(c.x * kx - r, -c.y * ky - ry) && inside(c.x * kx + r, -c.y * ky + ry);
       }
       case "function": {
         const lines = functionLines(el);
-        return lines.length > 0 && lines.every((l) => l.every((p) => inside(p.x * k, -p.y * k)));
+        return lines.length > 0 && lines.every((l) => l.every((p) => inside(p.x * kx, -p.y * ky)));
       }
       case "numberline":
-        return inside(el.x[0] * k, -el.y * k) && inside(el.x[1] * k, -el.y * k);
+        return inside(el.x[0] * kx, -el.y * ky) && inside(el.x[1] * kx, -el.y * ky);
       case "vline":
-        return inside(el.x * k, -el.range[1] * k) && inside(el.x * k, -el.range[0] * k);
+        return inside(el.x * kx, -el.range[1] * ky) && inside(el.x * kx, -el.range[0] * ky);
       case "axes":
-        return inside(el.x[0] * k, -el.y[1] * k) && inside(el.x[1] * k, -el.y[0] * k);
+        return inside(el.x[0] * kx, -el.y[1] * ky) && inside(el.x[1] * kx, -el.y[0] * ky);
       case "grid": {
         const w = gridWindow(doc, el);
-        return inside(w.x[0] * k, -w.y[1] * k) && inside(w.x[1] * k, -w.y[0] * k);
+        return inside(w.x[0] * kx, -w.y[1] * ky) && inside(w.x[1] * kx, -w.y[0] * ky);
       }
       case "text": {
         const w = estimateTextWidth(el.text, el.size) / 2;
         const h = el.size * 0.6;
-        return inside(el.x * k - w, -el.y * k - h) && inside(el.x * k + w, -el.y * k + h);
+        return inside(el.x * kx - w, -el.y * ky - h) && inside(el.x * kx + w, -el.y * ky + h);
       }
     }
   };

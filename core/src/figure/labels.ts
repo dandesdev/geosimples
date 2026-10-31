@@ -1,5 +1,5 @@
 import { DEFAULT_LABEL } from "./defaults";
-import { functionLines } from "./plot";
+import { figureUnits, functionLines } from "./plot";
 import { angleArc, centroid, pointMap, signedArea2 } from "./geometry";
 import type {
   Element,
@@ -212,6 +212,9 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
   if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);
   const fixed = label.angle === null ? null : polar(1, label.angle);
+  // Offsets are in pt on paper, so they go by directions as drawn, which axes at different scales bend.
+  const u = figureUnits(doc);
+  const S = (w: Vec): Vec => ({ x: w.x * u.x, y: w.y * u.y });
 
   switch (el.type) {
     case "point": {
@@ -219,7 +222,7 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       if (!dir) {
         // Point away from the shapes that use this point, so A, B, C sit outside a triangle.
         const pull = neighborsOf(doc, el.id, pts).reduce(
-          (acc, n) => add(acc, unit(sub(n, el))),
+          (acc, n) => add(acc, unit(sub(S(n), S(el)))),
           { x: 0, y: 0 },
         );
         dir = len(pull) > 1e-6 ? unit(scale(pull, -1)) : { x: 0, y: 1 };
@@ -233,9 +236,9 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       const m = mid(a, b);
       let dir = fixed;
       if (!dir) {
-        const normal = unit(perp(sub(b, a)));
+        const normal = unit(perp(sub(S(b), S(a))));
         const c = centroid(Array.from(pts.values()));
-        const away = sub(m, c);
+        const away = sub(S(m), S(c));
         dir = len(away) > 1e-6 && away.x * normal.x + away.y * normal.y < 0 ? scale(normal, -1) : normal;
       }
       return { anchor: m, offset: scale(dir, label.distance) };
@@ -244,7 +247,7 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       const a = pts.get(el.a);
       const v = pts.get(el.vertex);
       const b = pts.get(el.b);
-      const arc = a && v && b ? angleArc(a, v, b, el.reflex) : null;
+      const arc = a && v && b ? angleArc(S(a), S(v), S(b), el.reflex) : null;
       if (!v || !arc) return null;
       const dir = fixed ?? polar(1, arc.start + arc.sweep / 2);
       const outer = el.radius + (el.arcs - 1) * 2.5;

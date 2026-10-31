@@ -518,3 +518,18 @@ test("Mover drags the ends of the axes and whole segments", async ({ page }) => 
     [3, 2],
   ]);
 });
+
+test("a smaller scale in y fits a steep graph whole", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2");
+  await input.press("Enter");
+  await leaveInput(page);
+  await clickAlong(page, "e1", 0.05);
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  const yUnit = page.getByRole("textbox", { name: "Centímetros por unidade em y" });
+  await yUnit.fill("0,2");
+  await yUnit.press("Enter");
+  const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { y: number[]; unit?: number[]; yStep?: number };
+  await expect.poll(async () => (await axes())?.unit).toEqual([1, 0.2]);
+  expect(await axes()).toMatchObject({ y: [-5, 30], yStep: 5 });
+});

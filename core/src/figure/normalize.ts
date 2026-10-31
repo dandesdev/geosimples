@@ -301,6 +301,9 @@ export function normalizeDoc(input: unknown): FigureDoc {
           size: num(r.size, 4, 72, 8),
           ...(typeof r.xPi === "number" && r.xPi > 0 ? { xPi: num(r.xPi, 1 / 12, 4, 0.5) } : {}),
           ...(r.fit === true ? { fit: true } : {}),
+          ...(Array.isArray(r.unit) && r.unit.length === 2
+            ? { unit: [num(r.unit[0], 0.05, 20, 1), num(r.unit[1], 0.05, 20, 1)] as [number, number] }
+            : {}),
         };
         if (r.grid === true) axesGrid = true;
         out.push(a);

@@ -14,8 +14,11 @@ type Interval = [number, number];
 /** Most ticks along one axis before the step grows: past it the numbers crowd. */
 const MAX_TICKS = 12;
 
-/** A graph's curve may make the axes at most this many times taller than wide; past it the curve is cut. */
+/** A graph's curve may make the axes at most this many times taller than wide on paper; past it the curve is cut. */
 const MAX_TALL = 2;
+
+/** Closest ticks may come on paper, in cm, before the numbers run together. */
+const MIN_TICK_CM = 0.5;
 
 const sameInterval = (a: Interval, b: Interval) => a[0] === b[0] && a[1] === b[1];
 const tidy = (v: number) => Math.round(v * 1e6) / 1e6 || 0;
@@ -35,11 +38,13 @@ class Span {
 
 /**
  * The round step (0.5, 1, 2, 5, 10, 20…) that puts at most MAX_TICKS ticks
- * over `span`: whole numbers from a span of 3 up, so a small figure counts 1, 2, 3.
+ * over `span`: whole numbers from a span of 3 up, so a small figure counts 1,
+ * 2, 3, and ticks at least MIN_TICK_CM apart on an axis of `cm` per unit.
  */
-export function niceStep(span: number): number {
-  if (!(span > 0)) return 1;
-  const least = span >= 3 ? 1 : 0.5;
+export function niceStep(span: number, cm = 1): number {
+  if (!(cm > 0)) cm = 1;
+  if (!(span > 0)) return Math.max(1, MIN_TICK_CM / cm);
+  const least = Math.max(span >= 3 ? 1 : 0.5, MIN_TICK_CM / cm);
   let power = Math.pow(10, Math.floor(Math.log10(span / MAX_TICKS)));
   for (let guard = 0; guard < 30; guard++, power *= 10) {
     for (const m of [1, 2, 5]) {
@@ -142,15 +147,17 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
 
   // x: the figure with a tick of room, at least a tick past the origin, and the usual window for graphs.
   const pi = axes.xPi;
+  const cm = { x: axes.unit?.[0] ?? 1, y: axes.unit?.[1] ?? 1 };
   const geoX: Interval = xs.empty ? [0, 0] : [Math.min(xs.lo, 0), Math.max(xs.hi, 0)];
-  const step = pi ? axes.step : niceStep(Math.max(geoX[1] - geoX[0], following.length > 0 ? 10 : 0));
+  const step = pi ? axes.step : niceStep(Math.max(geoX[1] - geoX[0], following.length > 0 ? 10 : 0), cm.x);
   const stepX = pi ? pi * Math.PI : step;
   let x: Interval = xs.empty && following.length === 0 ? [...DEFAULT_PLOT_WINDOW.x] : withRoom(geoX, stepX);
   if (following.length > 0) x = [Math.min(x[0], DEFAULT_PLOT_WINDOW.x[0]), Math.max(x[1], DEFAULT_PLOT_WINDOW.x[1])];
   if (pi) x = piWindow(x, pi);
 
   for (const g of following) addCurve(curves, g, x, axes);
-  const cut = capped(curves, MAX_TALL * (x[1] - x[0]));
+  // Tall on paper: a y axis at a smaller scale lets a steep curve show more.
+  const cut = capped(curves, (MAX_TALL * (x[1] - x[0]) * cm.x) / cm.y);
   if (cut) {
     ys.add(cut[0]);
     ys.add(cut[1]);
@@ -159,7 +166,7 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
     return { x, y: [...DEFAULT_PLOT_WINDOW.y], step, yStep: undefined };
   }
   const geoY: Interval = ys.empty ? [0, 0] : [Math.min(ys.lo, 0), Math.max(ys.hi, 0)];
-  const yStep = niceStep(geoY[1] - geoY[0]);
+  const yStep = niceStep(geoY[1] - geoY[0], cm.y);
   const y = withRoom(geoY, yStep);
   return { x, y, step, yStep: yStep === step ? undefined : yStep };
 }

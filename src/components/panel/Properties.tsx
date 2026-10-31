@@ -555,6 +555,16 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
     if (grids.length > 0) store.commit(updateElements(store.doc, [grids[0].id], (g) => (g.type === "grid" ? { ...g, follow: "axes" } : g)));
     else actions.addGrid();
   };
+  const unit = el.unit ?? [1, 1];
+  /** cm per unit on each axis; 1 and 1 is the plain figure. */
+  const setUnit = (next: [number, number]) =>
+    update((a) => {
+      if (next[0] !== 1 || next[1] !== 1) return { ...a, unit: next };
+      const rest = { ...a };
+      delete rest.unit;
+      return rest;
+    }, "unit");
+  const distorted = doc.elements.some((e) => e.type === "circle" || e.type === "angle" || e.type === "polygon");
   if (multi) return <Hint>Com vários eixos selecionados, a janela se ajusta um por vez.</Hint>;
   const stepY = axesStepY(el);
   return (
@@ -614,6 +624,19 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
           onChange={setGrid}
           help="Impressa, atrás da figura, nas marcas dos eixos. A grade do editor fica em Vista."
         />
+      </Section>
+      <Section title="Escala">
+        <Field label="1 em x mede">
+          <NumberInput ariaLabel="Centímetros por unidade em x" value={unit[0]} min={0.05} max={20} suffix="cm" onChange={(x) => setUnit([x, unit[1]])} />
+        </Field>
+        <Field label="1 em y mede">
+          <NumberInput ariaLabel="Centímetros por unidade em y" value={unit[1]} min={0.05} max={20} suffix="cm" onChange={(y) => setUnit([unit[0], y])} />
+        </Field>
+        {unit[0] !== unit[1] && distorted ? (
+          <Hint>Com escalas diferentes, circunferências viram elipses e ângulos ficam deformados na figura.</Hint>
+        ) : (
+          <Hint>Escalas diferentes em x e y destacam uma parte do gráfico, como uma curva que sobe rápido.</Hint>
+        )}
       </Section>
       <Section title="Nomes">
         <div className="grid grid-cols-2 gap-2">

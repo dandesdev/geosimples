@@ -13,6 +13,7 @@ import {
   gridWindow,
   makeCircle,
   addNumberLine,
+  buildScene,
   moveElements,
   niceStep,
   toTikz,
@@ -33,7 +34,9 @@ const triangle = () =>
 
 describe("axes that fit the figure", () => {
   it("count in round steps that keep the numbers apart", () => {
-    expect([2, 4, 10, 20, 30, 100].map(niceStep)).toEqual([0.5, 1, 1, 2, 5, 10]);
+    expect([2, 4, 10, 20, 30, 100].map((span) => niceStep(span))).toEqual([0.5, 1, 1, 2, 5, 10]);
+    // On an axis at 0.2 cm per unit, ticks every 1 would sit 2 mm apart.
+    expect(niceStep(20, 0.2)).toBe(5);
   });
 
   it("come in on their own, fitting, and start at the usual window in an empty figure", () => {
@@ -133,5 +136,28 @@ describe("Mover", () => {
       [4, 0],
       [-1, 3],
     ]);
+  });
+});
+
+describe("axes at different scales", () => {
+  const scaled = (doc: FigureDoc, unit: [number, number]) => ({
+    ...doc,
+    elements: doc.elements.map((e) => (e.type === "axes" ? { ...e, unit } : e)),
+  });
+
+  it("stretch the whole figure: points, curves and circles, which become ellipses", () => {
+    const doc = scaled(makeCircle(addAxes(addPoints(emptyDoc(), [{ x: 2, y: 2 }]).doc).doc, ["p1"], "radius").doc, [1, 0.5]);
+    const scene = buildScene(doc);
+    expect(scene.ky).toBeCloseTo(scene.kx / 2);
+    const point = scene.hits.find((h) => h.type === "point")!;
+    expect(point).toMatchObject({ x: 2 * scene.kx, y: -2 * scene.ky });
+    const outline = scene.hits.find((h) => h.type === "circle")!;
+    expect(outline.type === "circle" && outline.d).toMatch(/A28\.346 14\.173 /);
+    expect(toTikz(doc)).toContain("[x=1cm, y=0.5cm, miter limit=4]");
+  });
+
+  it("let a fitting y axis take a steep curve without the cut, with ticks far enough apart", () => {
+    // x² up to 25: at a fifth of the scale in y it fits whole, counted every 5.
+    expect(fitted(scaled(withGraph("x^2"), [1, 0.2]))).toMatchObject({ y: [-5, 30], yStep: 5 });
   });
 });
