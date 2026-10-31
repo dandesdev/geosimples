@@ -481,3 +481,40 @@ test("axes come in without a graph, fit the figure as it grows, and stop when th
   expect((await axes()).x).toEqual([-1, 14]);
   await expect(page.getByRole("switch", { name: "Ajustar à figura" })).not.toBeChecked();
 });
+
+test("Mover drags the ends of the axes and whole segments", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x", "A=(1;1)--B=(3;1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await page.keyboard.press("M");
+  const x0 = (await page.locator('[data-handle="e1:x0"]').boundingBox())!;
+  const x1 = (await page.locator('[data-handle="e1:x1"]').boundingBox())!;
+  const unit = (x1.x - x0.x) / 10;
+  await page.mouse.move(x1.x + x1.width / 2, x1.y + x1.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x1.x + x1.width / 2 + 2.2 * unit, x1.y + x1.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const saved = async () => (await savedFigure(page))?.elements as unknown as { id: string; x: number | number[]; y: number | number[]; fit?: boolean; domain?: number[] }[];
+  await expect.poll(async () => (await saved()).find((e) => e.id === "e1")?.x).toEqual([-5, 7]);
+  expect((await saved()).find((e) => e.id === "e1")?.fit).toBe(false);
+  expect((await saved()).find((e) => e.id === "f1")?.domain).toEqual([-5, 7]);
+
+  // A press on the segment drags both its ends.
+  const at = await page.locator('[data-owner="s1"] path').last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() / 2);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x, at.y - unit, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await saved()).filter((e) => e.id === "p1" || e.id === "p2").map((p) => [p.x, p.y])).toEqual([
+    [1, 2],
+    [3, 2],
+  ]);
+});

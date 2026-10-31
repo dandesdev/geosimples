@@ -37,7 +37,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   clearSelection: "Limpar seleção",
   modeSelect: "Modo selecionar",
   modePan: "Modo mover a vista",
-  modeMove: "Modo mover pontos",
+  modeMove: "Modo mover",
   modeAdd: "Modo adicionar pontos",
   modeFigure: "Modo figura rápida",
   toggleMultiSelect: "Seleção múltipla",

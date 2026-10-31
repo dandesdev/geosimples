@@ -126,7 +126,7 @@ function PointPlace({ el, update, multi, doc }: EditorProps<Point>) {
   if (c?.kind === "onGraph") {
     return (
       <Section title="Sobre o gráfico">
-        <Hint>{describeConstruction(doc, c)}. Acompanha a função quando ela muda, e desliza por ela no modo Mover pontos.</Hint>
+        <Hint>{describeConstruction(doc, c)}. Acompanha a função quando ela muda, e desliza por ela no modo Mover.</Hint>
         <Field label="x">
           <NumberInput
             ariaLabel="x do ponto no gráfico"
@@ -380,7 +380,7 @@ function TextProperties({ el, update, multi }: EditorProps<FreeText>) {
         <NumberInput ariaLabel="Coordenada X" value={el.x} suffix="x" onChange={(x) => update((t) => ({ ...t, x }), "x")} />
         <NumberInput ariaLabel="Coordenada Y" value={el.y} suffix="y" onChange={(y) => update((t) => ({ ...t, y }), "y")} />
       </div>
-      <Hint>Para arrastar o texto, use o modo Mover pontos.</Hint>
+      <Hint>Para arrastar o texto, use o modo Mover.</Hint>
     </Section>
   );
 }

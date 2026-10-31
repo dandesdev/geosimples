@@ -5,11 +5,15 @@ import {
   addGrid,
   addPoints,
   connectPoints,
+  dragHandle,
+  elementHandles,
   emptyDoc,
   fitAxesWindow,
   fitFigure,
   gridWindow,
   makeCircle,
+  addNumberLine,
+  moveElements,
   niceStep,
   toTikz,
   type Axes,
@@ -83,5 +87,51 @@ describe("printed grids", () => {
     // A fixed grid stays where it was set.
     const fixed = { ...alone, elements: alone.elements.map((e) => (e.type === "grid" ? { ...e, follow: "none" as const } : e)) };
     expect(fitFigure(fixed)).toBe(fixed);
+  });
+});
+
+describe("Mover", () => {
+  it("drags the ends of axes to the ticks, and the axes stop fitting", () => {
+    const doc = fitFigure(withGraph("x"));
+    expect(elementHandles(doc, axesOf(doc)).map((h) => [h.end, h.at.x, h.at.y])).toEqual([
+      ["x0", -5, 0],
+      ["x1", 5, 0],
+      ["y0", 0, -6],
+      ["y1", 0, 6],
+    ]);
+    const wider = dragHandle(doc, { owner: "e1", end: "x1" }, { x: 7.3, y: 2 });
+    expect(axesOf(wider)).toMatchObject({ x: [-5, 7], fit: false });
+    // The graph drawn over the window follows it.
+    expect(wider.elements.find((e) => e.type === "function")).toMatchObject({ domain: [-5, 7] });
+    // An end can't pass the other one.
+    expect(axesOf(dragHandle(doc, { owner: "e1", end: "x0" }, { x: 9, y: 0 })).x).toEqual([4, 5]);
+  });
+
+  it("drags the ends of grids, number lines and graphs", () => {
+    const grid = addGrid(addPoints(emptyDoc(), [{ x: 0, y: 0 }]).doc).doc;
+    expect(dragHandle(grid, { owner: "m1", end: "y1" }, { x: 0, y: 7.8 }).elements[0]).toMatchObject({ y: [-5, 8], follow: "none" });
+    const line = addNumberLine(emptyDoc()).doc;
+    expect(dragHandle(line, { owner: "n1", end: "x0" }, { x: -8.2, y: 0 }).elements[0]).toMatchObject({ x: [-8, 5] });
+    const graph = fitFigure(withGraph("x^2"));
+    expect(dragHandle(graph, { owner: "f1", end: "x0" }, { x: 0.2, y: 0 }).elements.find((e) => e.id === "f1")).toMatchObject({ domain: [0, 5] });
+    // Over the axes, a grid has no ends of its own.
+    const over = addGrid(graph).doc;
+    expect(elementHandles(over, over.elements[0])).toEqual([]);
+  });
+
+  it("moves shapes by their points, so what is built on them follows", () => {
+    const doc = makeCircle(triangle(), ["p1", "p3"], "through").doc;
+    const moved = moveElements(doc, ["s1"], { x: 1, y: 2 });
+    expect(moved.elements.filter((e) => e.type === "point").map((p) => p.type === "point" && [p.x, p.y])).toEqual([
+      [1, 2],
+      [5, 2],
+      [0, 3],
+    ]);
+    const circle = moveElements(doc, ["c1"], { x: -1, y: 0 });
+    expect(circle.elements.filter((e) => e.type === "point").map((p) => p.type === "point" && [p.x, p.y])).toEqual([
+      [-1, 0],
+      [4, 0],
+      [-1, 3],
+    ]);
   });
 });
