@@ -106,6 +106,11 @@ export function axesStepX(el: Axes): number {
   return el.xPi ? el.xPi * Math.PI : el.step;
 }
 
+/** Units between ticks on the y axis. */
+export function axesStepY(el: Axes): number {
+  return el.yStep ?? el.step;
+}
+
 /** Denominators π fractions are written with, smallest first. */
 const PI_DENOMINATORS = [1, 2, 3, 4, 6, 12];
 

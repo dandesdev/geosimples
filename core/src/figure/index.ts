@@ -15,3 +15,4 @@ export * from "./file";
 export * from "./library";
 export * from "./plot";
 export * from "./graphOps";
+export * from "./fit";

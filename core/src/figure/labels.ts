@@ -107,6 +107,7 @@ export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   function: [],
   vline: [],
   axes: [],
+  grid: [],
   numberline: [],
 };
 
@@ -206,7 +207,7 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
 }
 
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline" || el.type === "extension") return null;
+  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return null;
   const label = el.label;
   if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);

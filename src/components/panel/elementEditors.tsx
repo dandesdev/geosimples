@@ -7,6 +7,7 @@ import {
   type Extension,
   type FreeText,
   type FunctionGraph,
+  type Grid,
   type Point,
   type Polygon,
   type Segment,
@@ -190,6 +191,10 @@ export function NumberLineEditor({ el, update }: EditorProps<NumberLine>) {
       </Section>
     </div>
   );
+}
+
+export function GridEditor({ el, update }: EditorProps<Grid>) {
+  return <StrokeEditor title="Traço da malha" stroke={el.stroke} onChange={(stroke, key) => update((g) => ({ ...g, stroke }), key)} />;
 }
 
 export function AxesEditor({ el, update }: EditorProps<Axes>) {

@@ -1,4 +1,4 @@
-import { DEFAULT_AXES_STROKE, DEFAULT_GUIDE_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
+import { AXES_GRID, DEFAULT_AXES_STROKE, DEFAULT_GUIDE_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
 import { parseExpr } from "../plot";
 import {
   angleArc,
@@ -23,6 +23,7 @@ import type {
   ElementType,
   FigureDoc,
   FreeText,
+  Grid,
   Id,
   Point,
   NumberLine,
@@ -90,6 +91,7 @@ const PREFIX: Record<ElementType, string> = {
   function: "f",
   vline: "r",
   axes: "e",
+  grid: "m",
   numberline: "n",
 };
 
@@ -447,6 +449,7 @@ function referencedPoints(el: Element): Id[] {
     case "function":
     case "vline":
     case "axes":
+    case "grid":
     case "numberline":
       return [];
     case "segment":
@@ -1020,11 +1023,39 @@ export function newAxes(id: Id): Axes {
     y: [...DEFAULT_PLOT_WINDOW.y],
     step: 1,
     numbers: true,
-    grid: false,
     names: ["x", "y"],
     stroke: { ...DEFAULT_AXES_STROKE },
     size: 8,
+    fit: true,
   };
+}
+
+/** Axes on their own, before any graph: they fit the figure until their window is set by hand. */
+export function addAxes(doc: FigureDoc): OpResult {
+  if (doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura já tem eixos.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const axes = newAxes(idMaker(doc)("axes"));
+  // First, so everything else draws over them.
+  return ok(withElements(doc, [axes, ...doc.elements]), [axes.id]);
+}
+
+/**
+ * A printed square grid behind the figure: over the axes when there are
+ * some, or around everything else.
+ */
+export function addGrid(doc: FigureDoc): OpResult {
+  if (doc.elements.some((e) => e.type === "grid")) return fail(doc, "A figura já tem uma malha.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const grid: Grid = {
+    id: idMaker(doc)("grid"),
+    type: "grid",
+    x: [...DEFAULT_PLOT_WINDOW.x],
+    y: [...DEFAULT_PLOT_WINDOW.y],
+    step: 1,
+    follow: doc.elements.some((e) => e.type === "axes") ? "axes" : "figure",
+    stroke: { ...AXES_GRID },
+  };
+  return ok(withElements(doc, [grid, ...doc.elements]), [grid.id]);
 }
 
 /**
@@ -1085,7 +1116,7 @@ export function pointOnSelectedGraph(doc: FigureDoc, selection: Id[], opts: OpOp
 export function toggleGuides(doc: FigureDoc, selection: Id[]): OpResult {
   const points = selectedOfType(doc, selection, "point");
   if (points.length === 0) return fail(doc, "Selecione pontos.");
-  if (!doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura não tem eixos. Crie um gráfico antes.");
+  if (!doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura não tem eixos. Insira eixos antes: Gráficos › Eixos.");
   const on = points.some((p) => !p.guides);
   const next = updateElements(
     doc,

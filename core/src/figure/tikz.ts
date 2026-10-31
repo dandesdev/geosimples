@@ -1,4 +1,5 @@
-import { AXES_GRID, INK, isValidColor } from "./defaults";
+import { INK, isValidColor } from "./defaults";
+import { gridWindow } from "./fit";
 import {
   angleArc,
   angleArcRadii,
@@ -13,6 +14,7 @@ import { estimateTextWidth, formatNumber, labelPlacement, labelText, labelToLate
 import {
   axesOrigin,
   axesStepX,
+  axesStepY,
   axisTicks,
   endDotRadius,
   functionEnds,
@@ -93,10 +95,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       .join("\n");
 
   const sections: Record<
-    "coords" | "axes" | "guide" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    "coords" | "grid" | "axes" | "guide" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
     string[]
   > = {
     coords: [],
+    grid: [],
     axes: [],
     guide: [],
     polygon: [],
@@ -240,13 +243,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       case "axes": {
         const o = axesOrigin(el);
         const xs = axisTicks(el.x, axesStepX(el), o.x);
-        const ys = axisTicks(el.y, el.step, o.y);
-        if (el.grid) {
-          const grid = gridValues(el.x, axesStepX(el))
-            .map((x) => `(${at({ x, y: el.y[0] })}) -- (${at({ x, y: el.y[1] })})`)
-            .concat(gridValues(el.y, el.step).map((y) => `(${at({ x: el.x[0], y })}) -- (${at({ x: el.x[1], y })})`));
-          sections.axes.push(`\\draw${opts(strokeOpts(AXES_GRID))} ${grid.join(" ")};`);
-        }
+        const ys = axisTicks(el.y, axesStepY(el), o.y);
         const xEnd = at({ x: el.x[1], y: o.y });
         const yEnd = at({ x: o.x, y: el.y[1] });
         sections.axes.push(
@@ -278,6 +275,14 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         }
         if (el.names[0]) sections.label.push(node(el.names[0], xEnd, { x: 2, y: -el.size }));
         if (el.names[1]) sections.label.push(node(el.names[1], yEnd, { x: el.size * 0.9, y: 0 }));
+        break;
+      }
+      case "grid": {
+        const w = gridWindow(doc, el);
+        const grid = gridValues(w.x, w.stepX)
+          .map((x) => `(${at({ x, y: w.y[0] })}) -- (${at({ x, y: w.y[1] })})`)
+          .concat(gridValues(w.y, w.stepY).map((y) => `(${at({ x: w.x[0], y })}) -- (${at({ x: w.x[1], y })})`));
+        if (grid.length) sections.grid.push(`\\draw${opts(strokeOpts(el.stroke))} ${grid.join(" ")};`);
         break;
       }
       case "numberline": {
@@ -324,7 +329,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   // SVG's default miter limit: sharp corners get beveled instead of drawing long spikes.
   lines.push(`\\begin{tikzpicture}[x=${n(scale)}cm, y=${n(scale)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
-  const order = ["coords", "axes", "guide", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
+  const order = ["coords", "grid", "axes", "guide", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
   lines.push("\\end{tikzpicture}");
   return lines.join("\n") + "\n";
@@ -340,7 +345,7 @@ function textOptions(c: string, size: number, font: LabelFont, color: (c: string
 }
 
 function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline" || el.type === "extension") return null;
+  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return null;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return null;
   const { size, measure } = el.label;

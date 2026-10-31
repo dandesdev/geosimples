@@ -4,6 +4,7 @@ import {
   CircleEditor,
   ExtensionEditor,
   FunctionEditor,
+  GridEditor,
   PointEditor,
   PolygonEditor,
   SegmentEditor,
@@ -37,6 +38,7 @@ export function Formatting() {
       {el.type === "vline" && <VerticalLineEditor el={el} {...props} />}
       {el.type === "numberline" && <NumberLineEditor el={el} {...props} />}
       {el.type === "axes" && <AxesEditor el={el} {...props} />}
+      {el.type === "grid" && <GridEditor el={el} {...props} />}
     </>
   );
 }

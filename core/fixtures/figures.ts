@@ -6,6 +6,7 @@
  * testing the same drawing when the editing operations change.
  */
 import {
+  AXES_GRID,
   DEFAULT_ANGLE,
   DEFAULT_FILL,
   DEFAULT_LABEL,
@@ -265,7 +266,6 @@ function axes(id: string, x: [number, number], y: [number, number], over: Partia
     y,
     step: 1,
     numbers: true,
-    grid: false,
     names: ["x", "y"],
     stroke: { ...DEFAULT_AXES_STROKE },
     size: 8,
@@ -281,7 +281,8 @@ FIXTURES.push({
   name: "graphs",
   doc: doc([
     // fnplot: axes with a grid, a parabola cut by the range, 1/x broken at its asymptote, a dashed line.
-    axes("e1", [-4, 4], [-3, 5], { grid: true }),
+    { id: "m1", type: "grid", x: [-4, 4], y: [-3, 5], step: 1, follow: "axes", stroke: { ...AXES_GRID } },
+    axes("e1", [-4, 4], [-3, 5]),
     graph("f1", "x^2 - 1", [-4, 4], [-3, 5], "f"),
     graph("f2", "1/x", [-4, 4], [-3, 5], "g", { stroke: stroke({ color: "#1d4ed8" }) }),
     graph("f3", "-x/2 + 1", [-4, 4], [-3, 5], "h", { stroke: stroke({ dash: "dashed", color: "#d62828" }) }),

@@ -267,14 +267,22 @@ export interface VerticalLine {
   label?: Label;
 }
 
-/** Cartesian axes with arrows, ticks every `step` units, and an optional grid behind them. */
+/** Cartesian axes with arrows and ticks every `step` units. */
 export interface Axes {
   id: Id;
   type: "axes";
   x: [number, number];
   y: [number, number];
-  /** Units between ticks, on both axes. */
+  /** Units between ticks, on both axes unless `yStep` is set. */
   step: number;
+  /** Units between ticks on the y axis, when it counts differently from x. */
+  yStep?: number;
+  /**
+   * The window follows the rest of the figure: everything fits with a tick of
+   * room, and the steps keep the numbers apart. Setting the window or the
+   * steps by hand turns it off.
+   */
+  fit?: boolean;
   /**
    * When set, the x axis counts in multiples of π instead, with a tick every
    * `xPi`·π (0.5 for π/2), for trigonometry. `step` then only applies to y.
@@ -282,12 +290,31 @@ export interface Axes {
   xPi?: number;
   /** Numbers under and beside the ticks. */
   numbers: boolean;
-  grid: boolean;
   /** Names at the arrow tips, like "x" and "y". Empty for none. */
   names: [string, string];
   stroke: Stroke;
   /** Font size of numbers and names, in pt. */
   size: number;
+  label?: never;
+}
+
+/** What sets the window of a grid. */
+export type GridFollow = "axes" | "figure" | "none";
+
+/**
+ * A printed square grid, the malha quadriculada, behind everything else.
+ * Over the axes it takes their window and ticks; "figure" fits it around the
+ * rest of the figure with a square of room; "none" keeps `x` and `y`.
+ */
+export interface Grid {
+  id: Id;
+  type: "grid";
+  x: [number, number];
+  y: [number, number];
+  /** Side of a square, in world units. */
+  step: number;
+  follow: GridFollow;
+  stroke: Stroke;
   label?: never;
 }
 
@@ -319,6 +346,7 @@ export type Element =
   | FunctionGraph
   | VerticalLine
   | Axes
+  | Grid
   | NumberLine;
 export type ElementType = Element["type"];
 

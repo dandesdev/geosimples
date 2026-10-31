@@ -7,6 +7,7 @@ import {
   latestFigure,
   LIBRARY_KEY,
   deleteElements,
+  fitFigure,
   settleDoc,
   uniqueName,
   untitledName,
@@ -381,7 +382,9 @@ export const useFigureStore = create<FigureState>()(
       multiSelect: false,
       quickFigure: NO_QUICK_FIGURE,
 
-      commit: (next, coalesceKey) => {
+      commit: (edited, coalesceKey) => {
+        // Axes and grids that follow the figure take in what the edit changed.
+        const next = fitFigure(edited);
         if (next === get().doc) return;
         const now = Date.now();
         const merge =
@@ -429,7 +432,8 @@ export const useFigureStore = create<FigureState>()(
         flushSettle(get, set);
         transientBase = get().doc;
       },
-      setTransient: (doc) => {
+      setTransient: (dragged) => {
+        const doc = fitFigure(dragged);
         transientDoc = doc;
         set({ doc: settleDoc(transientBase ?? doc, doc).doc });
       },

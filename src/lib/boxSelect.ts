@@ -2,6 +2,7 @@ import {
   estimateTextWidth,
   extensionEnds,
   functionLines,
+  gridWindow,
   pointMap,
   type Box,
   type Element,
@@ -54,6 +55,10 @@ export function elementsInBox(doc: FigureDoc, k: number, box: Box): Id[] {
         return inside(el.x * k, -el.range[1] * k) && inside(el.x * k, -el.range[0] * k);
       case "axes":
         return inside(el.x[0] * k, -el.y[1] * k) && inside(el.x[1] * k, -el.y[0] * k);
+      case "grid": {
+        const w = gridWindow(doc, el);
+        return inside(w.x[0] * k, -w.y[1] * k) && inside(w.x[1] * k, -w.y[0] * k);
+      }
       case "text": {
         const w = estimateTextWidth(el.text, el.size) / 2;
         const h = el.size * 0.6;

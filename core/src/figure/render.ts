@@ -1,4 +1,5 @@
-import { AXES_GRID, PT_PER_CM, resolveColor } from "./defaults";
+import { PT_PER_CM, resolveColor } from "./defaults";
+import { gridWindow } from "./fit";
 import {
   angleArc,
   angleArcRadii,
@@ -22,6 +23,7 @@ import {
 import {
   axesOrigin,
   axesStepX,
+  axesStepY,
   axisTicks,
   endDotRadius,
   functionEnds,
@@ -171,6 +173,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   };
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
+    grid: [],
     numberline: [],
     function: [],
     vline: [],
@@ -434,14 +437,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         const stroke = paintStroke(el.stroke);
         const o = axesOrigin(el);
         const xs = axisTicks(el.x, axesStepX(el), o.x);
-        const ys = axisTicks(el.y, el.step, o.y);
-        if (el.grid) {
-          const lines = gridValues(el.x, axesStepX(el))
-            .map((x) => `M${f(x * k)} ${f(-el.y[0] * k)}L${f(x * k)} ${f(-el.y[1] * k)}`)
-            .concat(gridValues(el.y, el.step).map((y) => `M${f(el.x[0] * k)} ${f(-y * k)}L${f(el.x[1] * k)} ${f(-y * k)}`))
-            .join("");
-          layers.grid.push({ kind: "path", owner: el.id, d: lines, stroke: paintStroke(AXES_GRID), fill: null });
-        }
+        const ys = axisTicks(el.y, axesStepY(el), o.y);
         const x0 = P({ x: el.x[0], y: o.y });
         const x1 = P({ x: el.x[1], y: o.y });
         const y0 = P({ x: o.x, y: el.y[0] });
@@ -482,6 +478,23 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         if (xName) text(xName, { x: x1.x + 2, y: x1.y + el.size });
         if (yName) text(yName, { x: y1.x + el.size * 0.9, y: y1.y });
         hits.axes.push({ owner: el.id, type: "axes", d, area: false });
+        break;
+      }
+      case "grid": {
+        const w = gridWindow(doc, el);
+        const lines = gridValues(w.x, w.stepX)
+          .map((x) => `M${f(x * k)} ${f(-w.y[0] * k)}L${f(x * k)} ${f(-w.y[1] * k)}`)
+          .concat(gridValues(w.y, w.stepY).map((y) => `M${f(w.x[0] * k)} ${f(-y * k)}L${f(w.x[1] * k)} ${f(-y * k)}`))
+          .join("");
+        if (!lines) break;
+        layers.grid.push({ kind: "path", owner: el.id, d: lines, stroke: paintStroke(el.stroke), fill: null });
+        const a = P({ x: w.x[0], y: w.y[0] });
+        const b = P({ x: w.x[1], y: w.y[1] });
+        box.add(a.x, a.y);
+        box.add(b.x, b.y);
+        // Picked by its edge: a click inside it is still a click on the paper.
+        const edge = `M${f(a.x)} ${f(a.y)}H${f(b.x)}V${f(b.y)}H${f(a.x)}Z`;
+        hits.grid.push({ owner: el.id, type: "grid", d: edge, area: false });
         break;
       }
       case "numberline": {
@@ -543,6 +556,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...layers.label,
     ],
     hits: [
+      ...hits.grid,
       ...hits.axes,
       ...hits.numberline,
       ...hits.polygon,
@@ -567,7 +581,7 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline" || el.type === "extension") return;
+  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;

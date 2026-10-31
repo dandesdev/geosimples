@@ -12,6 +12,7 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   vline: { one: "reta vertical", many: "retas verticais", title: "Reta vertical" },
   numberline: { one: "reta numérica", many: "retas numéricas", title: "Reta numérica" },
   axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
+  grid: { one: "malha", many: "malhas", title: "Malha quadriculada" },
 };
 
 /** "2 pontos, 1 segmento", or null for an empty selection. */

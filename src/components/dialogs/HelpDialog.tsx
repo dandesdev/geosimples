@@ -67,8 +67,9 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </li>
           <li>
             <b>Gráficos.</b> Digite <code>f(x)=x^2-1</code> ou <code>y=2sen(x)</code> na barra de entrada, ou use o botão
-            Gráfico de função. Os eixos entram junto. Vale x², raiz(x), |x|, 1/x, sen, cos, tg, ln, log e decimais com
-            vírgula. Em Propriedades mude a expressão, onde a curva aparece e a janela, as marcas e a grade dos eixos.
+            Gráfico de função. Os eixos entram junto e se ajustam à figura. Vale x², raiz(x), |x|, 1/x, sen, cos, tg, ln, log
+            e decimais com vírgula. Em Propriedades mude a expressão, onde a curva aparece e a janela, as marcas e a malha
+            dos eixos. Eixos e malha quadriculada também entram sozinhos, pelo menu Gráficos.
           </li>
           <li>
             <b>Texto livre.</b> Em Rótulos e textos › Texto livre, ou na barra de entrada com <code>"Figura 1"@(2;-1)</code>.

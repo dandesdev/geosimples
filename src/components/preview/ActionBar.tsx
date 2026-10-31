@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   AngleIcon,
+  AxesIcon,
+  GridIcon,
   CircleThroughIcon,
   CloseLoopIcon,
   ConnectIcon,
@@ -271,7 +273,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Gráficos"
-            hint="Funções, retas verticais, reta numérica, pontos notáveis e formas que viram funções."
+            hint="Funções, eixos, malha, retas verticais, reta numérica, pontos notáveis e formas que viram funções."
             ready={anyGraphTool}
           >
             <ChartSpline />
@@ -308,6 +310,20 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
             hint="Intervalos na barra: [-2; 3[ ou ]-∞; 1]."
             availability={ALWAYS}
             onSelect={startTyping(actions.addNumberLine)}
+          />
+          <MenuItem
+            icon={<AxesIcon />}
+            title="Eixos"
+            hint="Sem gráfico também. Eles se ajustam à figura."
+            availability={av.axes}
+            onSelect={actions.addAxes}
+          />
+          <MenuItem
+            icon={<GridIcon />}
+            title="Malha quadriculada"
+            hint="Impressa, atrás da figura: sobre os eixos ou em volta de tudo."
+            availability={av.grid}
+            onSelect={actions.addGrid}
           />
           <DropdownMenuSeparator />
           <MenuItem

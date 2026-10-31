@@ -47,10 +47,8 @@ test("selecting a graph lets its expression and the axes window change", async (
     .poll(() => page.evaluate(() => localStorage.getItem(`geosimples-figure:${JSON.parse(localStorage.getItem("geosimples-library")!).activeId}`)))
     .toContain('"expr":"x^2"');
 
-  // On the x axis, near its arrow, away from the curve.
-  const axes = page.locator('[data-owner="e1"]').first();
-  const box = (await axes.boundingBox())!;
-  await axes.click({ position: { x: box.width * 0.9, y: box.height / 2 } });
+  // On the x axis, at x = 3.5, away from the curve: the path runs along x, then up y.
+  await clickAlong(page, "e1", 0.25);
   await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
   const xTo = page.getByRole("textbox", { name: "x de: até" });
   await xTo.fill("8");
@@ -450,4 +448,36 @@ test("a segment slid past a crossing reaches it with a dashed extension that can
   await clickAlong(page, "x1", 0.5);
   await expect(page.getByText(/^Prolongamento de AB até /).first()).toBeVisible();
   await expect(page.getByText("Traço do prolongamento")).toBeVisible();
+});
+
+test("axes come in without a graph, fit the figure as it grows, and stop when their window is set", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("A=(1;1)--B=(7;1)--C=(1;4)--");
+  await input.press("Enter");
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /^Eixos/ }).click();
+  const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { x: number[]; y: number[]; fit?: boolean };
+  await expect.poll(async () => (await axes())?.x).toEqual([-1, 8]);
+  expect((await axes()).y).toEqual([-1, 5]);
+
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Malha quadriculada/ }).click();
+  await expect.poll(() => counts(page)).toMatchObject({ axes: 1, grid: 1 });
+
+  // A point further right: the axes reach it.
+  await input.fill("D=(10;1)");
+  await input.press("Enter");
+  await expect.poll(async () => (await axes())?.x).toEqual([-1, 11]);
+
+  await leaveInput(page);
+  await clickAlong(page, "e1", 0.05);
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Ajustar à figura" })).toBeChecked();
+  await expect(page.getByRole("switch", { name: "Malha quadriculada" })).toBeChecked();
+  const xTo = page.getByRole("textbox", { name: "x de: até" });
+  await xTo.fill("14");
+  await xTo.press("Enter");
+  await expect.poll(async () => (await axes())?.fit).toBe(false);
+  expect((await axes()).x).toEqual([-1, 14]);
+  await expect(page.getByRole("switch", { name: "Ajustar à figura" })).not.toBeChecked();
 });

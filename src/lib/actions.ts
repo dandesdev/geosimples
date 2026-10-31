@@ -18,6 +18,8 @@ import {
   pointOnSelectedGraph,
   toggleGuides,
   addNumberLine,
+  addAxes,
+  addGrid,
   markNotable,
   toFunctions,
   type NotableFeature,
@@ -102,6 +104,12 @@ export const actions = {
     if (!perform((doc) => addNumberLine(doc))) return;
     startInput("[");
   },
+
+  /** Axes on their own, fitting the figure. */
+  addAxes: () => perform((doc) => addAxes(doc)),
+
+  /** A printed grid: over the axes, or around the figure when there are none. */
+  addGrid: () => perform((doc) => addGrid(doc)),
 
   /** Dashed lines from the selected points to the axes, or none when they all have them. */
   toggleGuides: () => perform((doc, sel) => toggleGuides(doc, sel), "keep"),
