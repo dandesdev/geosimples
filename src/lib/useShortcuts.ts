@@ -65,6 +65,9 @@ export function runAction(id: ActionId): boolean {
     case "toggleGrid":
       store.setSetting("showGrid", !store.settings.showGrid);
       return true;
+    case "toggleSnap":
+      store.setSetting("snapToGrid", !store.settings.snapToGrid);
+      return true;
     default:
       emitCommand(id);
       return true;

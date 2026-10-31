@@ -31,6 +31,8 @@ export interface Settings {
   pngBackground: "white" | "transparent";
   /** 1 cm grid behind the preview. Never exported. */
   showGrid: boolean;
+  /** Points placed or dragged near a grid crossing land on it, and graph ends near a tick on the tick. */
+  snapToGrid: boolean;
   /** Keep the whole figure in view as it changes. Zooming or panning turns it off. */
   autoFit: boolean;
 }
@@ -53,6 +55,7 @@ const DEFAULT_SETTINGS: Settings = {
   pngDpi: 300,
   pngBackground: "white",
   showGrid: true,
+  snapToGrid: true,
   autoFit: true,
 };
 

@@ -22,6 +22,7 @@ import {
   functionLines,
   gridValues,
   pointGuides,
+  xTickShift,
   xTickText,
 } from "./plot";
 import { PATTERN } from "./svg";
@@ -271,7 +272,10 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
           `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(base, offset)} {${labelToLatex(text, "serif")}};`;
         if (el.numbers) {
           const gap = el.size * 0.9;
-          for (const x of xs) sections.label.push(node(xTickText(el, x), at({ x, y: o.y }), { x: 0, y: -(tick + gap * 0.7) }));
+          for (const x of xs) {
+            const s = xTickText(el, x);
+            sections.label.push(node(s, at({ x, y: o.y }), { x: xTickShift(doc, el, x, s), y: -(tick + gap * 0.7) }));
+          }
           for (const y of ys) {
             const s = formatNumber(y);
             sections.label.push(node(s, at({ x: o.x, y }), { x: -(tick + 2 + estimateTextWidth(s, el.size) / 2), y: 0 }));

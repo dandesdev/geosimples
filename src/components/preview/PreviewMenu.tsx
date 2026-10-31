@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Keyboard, Plus, Scan, Trash2, ZoomIn, ZoomOut } from "lucide-react";
-import { formatNumber, type Vec } from "@geosimples/core/figure";
+import { formatNumber, type Id, type Vec } from "@geosimples/core/figure";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -29,7 +29,7 @@ import {
 } from "@/components/icons";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
 import { actions } from "@/lib/actions";
-import { CONSTRUCTION_KINDS, previewProps, useAvailability, type Availability } from "@/lib/availability";
+import { CONSTRUCTION_KINDS, previewProps, useAvailability, useGraphPointAt, type Availability } from "@/lib/availability";
 import { emitCommand } from "@/lib/commands";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { runAction } from "@/lib/useShortcuts";
@@ -37,6 +37,12 @@ import { useFigureStore } from "@/store/figureStore";
 import type { ActionId } from "@/store/prefsStore";
 import { CIRCLE_OPTIONS, CONSTRUCTIONS } from "./tools";
 import type { ZoomControls } from "./ZoomBar";
+
+/** A graph and the x on it where the preview was right-clicked. */
+export interface GraphSpot {
+  graph: Id;
+  x: number;
+}
 
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
@@ -88,12 +94,15 @@ function ActionItem({
 export function PreviewMenu({
   enabled,
   at,
+  graphAt,
   zoom,
   children,
 }: {
   /** Only the pro layout has it; the classic page keeps the browser's menu. */
   enabled: boolean;
   at: Vec | null;
+  /** The graph clicked, if one was, so "Ponto sobre o gráfico" puts the point where the click was. */
+  graphAt: GraphSpot | null;
   zoom: ZoomControls | null;
   children: ReactNode;
 }) {
@@ -105,16 +114,17 @@ export function PreviewMenu({
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-72" collisionPadding={8}>
-        <MenuBody at={at} zoom={zoom} />
+        <MenuBody at={at} graphAt={graphAt} zoom={zoom} />
       </ContextMenuContent>
     </ContextMenu>
   );
 }
 
-function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
+function MenuBody({ at, graphAt, zoom }: { at: Vec | null; graphAt: GraphSpot | null; zoom: ZoomControls | null }) {
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
   const showGrid = useFigureStore((s) => s.settings.showGrid);
+  const snap = useFigureStore((s) => s.settings.snapToGrid);
   const store = useFigureStore.getState;
 
   return (
@@ -130,7 +140,7 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
       )}
       {/* What was clicked decides: an object (it got selected) or an empty spot (`at`), whatever else is selected. */}
       {hasSelection && !at ? (
-        <SelectionActions />
+        <SelectionActions graphAt={graphAt} />
       ) : (
         <>
           <ContextMenuItem onSelect={() => emitCommand("focusInput")}>
@@ -173,6 +183,10 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
                 Grade
                 <Keys action="toggleGrid" />
               </ContextMenuCheckboxItem>
+              <ContextMenuCheckboxItem checked={snap} onCheckedChange={(on) => store().setSetting("snapToGrid", on)}>
+                Encaixar na grade
+                <Keys action="toggleSnap" />
+              </ContextMenuCheckboxItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
         </>
@@ -182,8 +196,9 @@ function MenuBody({ at, zoom }: { at: Vec | null; zoom: ZoomControls | null }) {
 }
 
 /** Only what the selection allows: anything unavailable is left out, not grayed. */
-function SelectionActions() {
+function SelectionActions({ graphAt }: { graphAt: GraphSpot | null }) {
   const av = useAvailability();
+  const graphPoint = useGraphPointAt(graphAt) ?? av.graphPoint;
   const circles = CIRCLE_OPTIONS.filter((o) => av[`circle-${o.mode}`].reason === null);
   const constructions = CONSTRUCTION_KINDS.filter((k) => av[`construct-${k}`].reason === null);
   return (
@@ -239,7 +254,7 @@ function SelectionActions() {
           </ContextMenuSubContent>
         </ContextMenuSub>
       )}
-      <ActionItem icon={<GraphPointIcon />} title="Ponto sobre o gráfico" availability={av.graphPoint} onSelect={actions.pointOnGraph} />
+      <ActionItem icon={<GraphPointIcon />} title="Ponto sobre o gráfico" availability={graphPoint} onSelect={() => actions.pointOnGraph(graphAt ?? undefined)} />
       <ActionItem icon={<RootsIcon />} title="Raízes" availability={av["notable-root"]} onSelect={() => actions.markNotable("root")} />
       <ActionItem
         icon={<ExtremumIcon />}

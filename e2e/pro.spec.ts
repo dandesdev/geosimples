@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { counts, leaveInput, pointInput, TRIANGLE } from "./helpers";
+import { counts, leaveInput, pointInput, savedFigure, TRIANGLE } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -77,6 +77,30 @@ test("pro layout: hidden point input and the right-click menu", async ({ page })
   await expect(page.getByRole("menuitem", { name: "Vista" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Apagar selecionados" })).toHaveCount(0);
   await page.keyboard.press("Escape");
+});
+
+test("pro layout: Ponto sobre o gráfico from a right click on a curve puts the point there", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("/");
+  await pointInput(page).fill("y=x");
+  await pointInput(page).press("Enter");
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1 });
+  await pointInput(page).press("Escape");
+  // Without snapping, the point goes exactly where the click was, not to the nearest grid crossing.
+  await page.getByRole("button", { name: "Encaixar na grade" }).click();
+  // The line runs from x = −3 to 3: 72% along it is x = 1.32.
+  const spot = await page.locator('[data-owner="f1"] path').last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() * 0.72);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.click(spot.x, spot.y, { button: "right" });
+  await page.getByRole("menuitem", { name: "Ponto sobre o gráfico" }).click();
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1, point: 1 });
+  const point = (await savedFigure(page))!.elements.find((e) => e.type === "point") as unknown as { x: number; y: number };
+  expect(point.x).toBeCloseTo(1.32, 1);
+  expect(point.y).toBeCloseTo(point.x, 6);
 });
 
 test("pro layout: / brings the point input without moving the preview", async ({ page }) => {

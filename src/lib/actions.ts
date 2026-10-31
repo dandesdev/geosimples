@@ -90,8 +90,12 @@ export const actions = {
   /** Starts a vertical line: "x = " in the input bar, ready for the number. */
   startVerticalLine: () => startInput("x = "),
 
-  /** A point on the selected graph, at a whole x; its x is set in Propriedades. */
-  pointOnGraph: () => perform((doc, sel) => pointOnSelectedGraph(doc, sel, opOptions())),
+  /**
+   * A point on the selected graph, at a whole x; its x is set in Propriedades.
+   * From the preview's menu, at the x right-clicked on the curve.
+   */
+  pointOnGraph: (at?: { graph: Id; x: number }) =>
+    perform((doc, sel) => (at ? addPointOnGraph(doc, at.graph, at.x, "", opOptions()) : pointOnSelectedGraph(doc, sel, opOptions()))),
 
   /** Roots, turning points or the y crossing of the selected graphs, as points that follow them. */
   markNotable: (feature: NotableFeature) => perform((doc, sel) => markNotable(doc, sel, feature, opOptions())),

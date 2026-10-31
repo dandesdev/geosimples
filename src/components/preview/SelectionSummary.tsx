@@ -2,15 +2,15 @@ import type { ElementType } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { TYPE_NAMES } from "@/lib/names";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
-import { useActivePrefs } from "@/store/useActivePrefs";
 import { cn } from "@/lib/utils";
 
-const SNAP_HINT = " Perto da grade, encaixa no cruzamento.";
+/** Where to turn it off, since it acts without asking. */
+const SNAP_HINT = " Perto da grade, encaixa; o ímã ao lado da prévia desliga.";
 
 const HINTS = {
   select: "Clique num objeto para selecioná-lo; com Shift, soma à seleção. Ou arraste uma caixa em volta deles.",
   pan: "Arraste para deslocar a vista. Clique num objeto para selecioná-lo; com Shift, soma à seleção.",
-  move: "Arraste um ponto ou texto, ou selecione vários (Shift) e arraste um deles.",
+  move: "Arraste um objeto, ou os quadradinhos nas pontas para mudar o tamanho. Com Shift, selecione vários e arraste um deles.",
   add: "Clique onde quer um ponto. Arraste para mover a vista.",
   figure: "Clique para pôr vértices; o 3º fecha o polígono. Clique no 1º vértice ou Esc para terminar.",
 } as const;
@@ -18,7 +18,7 @@ const HINTS = {
 const TOUCH_HINTS = {
   select: "Toque num objeto para selecioná-lo, ou arraste uma caixa em volta. Para somar, ligue Seleção múltipla.",
   pan: "Arraste para deslocar a vista, ou pince para aproximar. Toque num objeto para selecioná-lo.",
-  move: "Arraste um ponto, ou selecione vários e arraste um deles. Use dois dedos para mover a vista.",
+  move: "Arraste um objeto, ou os quadradinhos nas pontas para mudar o tamanho. Use dois dedos para mover a vista.",
   add: "Toque onde quer um ponto. Arraste para mover a vista.",
   figure: "Toque para pôr vértices; o 3º fecha o polígono. Toque no 1º vértice para terminar.",
 } as const;
@@ -32,7 +32,7 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "overla
   const selection = useFigureStore((s) => s.selection);
   const mode = useFigureStore((s) => s.mode);
   const coarse = useCoarsePointer();
-  const snap = useActivePrefs().behavior.snapToGrid;
+  const snap = useFigureStore((s) => s.settings.snapToGrid);
   const placing = mode === "add" || mode === "figure";
   // An empty figure has the welcome card, except where a click adds points: there this hint says what to do.
   if (doc.elements.length === 0 && !placing) return null;
@@ -47,7 +47,7 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "overla
   const text =
     parts.length > 0
       ? `Selecionados: ${parts.join(", ")}. ${coarse ? "Toque" : "Clique"} fora para limpar.`
-      : (coarse ? TOUCH_HINTS : HINTS)[mode] + (snap && placing ? SNAP_HINT : "");
+      : (coarse ? TOUCH_HINTS : HINTS)[mode] + (snap && (placing || mode === "move") ? SNAP_HINT : "");
 
   return (
     <p

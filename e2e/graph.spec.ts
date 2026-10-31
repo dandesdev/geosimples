@@ -55,7 +55,7 @@ test("selecting a graph lets its expression and the axes window change", async (
   await xTo.press("Enter");
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem(`geosimples-figure:${JSON.parse(localStorage.getItem("geosimples-library")!).activeId}`)))
-    .toMatch(/"domain":\[-5,8\]/);
+    .toMatch(/"domain":\[-3,8\]/);
 });
 
 test("a half-typed expression stays with its graph when another one is selected", async ({ page }) => {
@@ -497,14 +497,15 @@ test("Mover drags the ends of the axes and whole segments", async ({ page }) => 
   await expect.poll(async () => (await saved())?.find((e) => e.id === "e1")?.fit).toBe(true);
   const x0 = (await page.locator('[data-handle="e1:x0"]').boundingBox())!;
   const x1 = (await page.locator('[data-handle="e1:x1"]').boundingBox())!;
-  const unit = (x1.x - x0.x) / 10;
+  const win = (await saved()).find((e) => e.id === "e1")!.x as number[];
+  const unit = (x1.x - x0.x) / (win[1] - win[0]);
   await page.mouse.move(x1.x + x1.width / 2, x1.y + x1.height / 2);
   await page.mouse.down();
   await page.mouse.move(x1.x + x1.width / 2 + 2.2 * unit, x1.y + x1.height / 2, { steps: 8 });
   await page.mouse.up();
-  await expect.poll(async () => (await saved()).find((e) => e.id === "e1")?.x).toEqual([-5, 7]);
+  await expect.poll(async () => (await saved()).find((e) => e.id === "e1")?.x).toEqual([win[0], win[1] + 2]);
   expect((await saved()).find((e) => e.id === "e1")?.fit).toBe(false);
-  expect((await saved()).find((e) => e.id === "f1")?.domain).toEqual([-5, 7]);
+  expect((await saved()).find((e) => e.id === "f1")?.domain).toEqual([win[0], win[1] + 2]);
 
   // A press on the segment drags both its ends.
   const at = await page.locator('[data-owner="s1"] path').last().evaluate((el) => {
@@ -535,5 +536,40 @@ test("a smaller scale in y fits a steep graph whole", async ({ page }) => {
   await yUnit.press("Enter");
   const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { y: number[]; unit?: number[]; yStep?: number };
   await expect.poll(async () => (await axes())?.unit).toEqual([1, 0.2]);
-  expect(await axes()).toMatchObject({ y: [-5, 30], yStep: 5 });
+  expect(await axes()).toMatchObject({ y: [-5, 15], yStep: 5 });
+});
+
+test("graph ends follow the pointer in Mover, and land on a tick near one with Encaixar na grade", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x");
+  await input.press("Enter");
+  await leaveInput(page);
+  await page.keyboard.press("M");
+  const snap = page.getByRole("button", { name: "Encaixar na grade" });
+  await expect(snap).toHaveAttribute("aria-pressed", "true");
+  await clickAlong(page, "f1", 0.5);
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  const handle = (end: string) => page.locator(`[data-handle="f1:${end}"]`);
+  const domain = async () => ((await saved(page, "f1")) as { domain: number[] } | null)?.domain;
+  // Where the handles are now: the axes and the view refit after each drop.
+  const drag = async (end: string, by: number) => {
+    const [a, z] = (await domain())!;
+    const unit = ((await handle("x1").boundingBox())!.x - (await handle("x0").boundingBox())!.x) / (z - a);
+    const b = (await handle(end).boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + by * unit, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.up();
+  };
+
+  // Off: the end stays where it's let go, between ticks.
+  await snap.click();
+  await expect(snap).toHaveAttribute("aria-pressed", "false");
+  await drag("x0", 2.3);
+  await expect.poll(async () => (await domain())?.[0]).toBeCloseTo(-0.7, 1);
+  // On: an end let go close to a tick goes to it.
+  await page.keyboard.press("Shift+S");
+  await expect(snap).toHaveAttribute("aria-pressed", "true");
+  await drag("x1", -1.04);
+  await expect.poll(async () => (await domain())?.[1]).toBe(2);
 });

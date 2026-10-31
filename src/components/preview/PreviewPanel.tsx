@@ -27,12 +27,11 @@ import {
 } from "@geosimples/core/figure";
 import { actions } from "@/lib/actions";
 import { useFigureStore } from "@/store/figureStore";
-import { useActivePrefs } from "@/store/useActivePrefs";
 import { ActionBar } from "./ActionBar";
 import { ZoomBar } from "./ZoomBar";
 import { EmptyState } from "./EmptyState";
 import { SelectionSummary } from "./SelectionSummary";
-import { PreviewMenu } from "./PreviewMenu";
+import { PreviewMenu, type GraphSpot } from "./PreviewMenu";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
 import { usePreviewPaper } from "@/lib/theme";
@@ -130,7 +129,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const autoFit = useFigureStore((s) => s.settings.autoFit);
   const setSetting = useFigureStore((s) => s.setSetting);
   const quickFigure = useFigureStore((s) => s.quickFigure);
-  const snap = useActivePrefs().behavior.snapToGrid;
+  const snap = useFigureStore((s) => s.settings.snapToGrid);
   /** Modes where a click puts a point down. */
   const placing = mode === "add" || mode === "figure";
 
@@ -159,6 +158,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const [addAt, setAddAt] = useState<Vec | null>(null);
   /** Where the preview was right-clicked, for the menu's "Adicionar ponto aqui". */
   const [menuAt, setMenuAt] = useState<Vec | null>(null);
+  /** The graph right-clicked and the x there, for the menu's "Ponto sobre o gráfico". */
+  const [menuGraphAt, setMenuGraphAt] = useState<GraphSpot | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -262,6 +263,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const owner = onFigure ? ownerAt(e.target) : null;
     setMenuAt(onFigure && !owner ? pointAt(e.clientX, e.clientY) : null);
     const store = useFigureStore.getState();
+    const graph = owner && store.doc.elements.some((el) => el.id === owner && el.type === "function") ? owner : null;
+    setMenuGraphAt(graph ? { graph, x: pointAt(e.clientX, e.clientY).x } : null);
     if (owner && !store.selection.includes(owner)) store.pick(owner, false);
   };
 
@@ -375,7 +378,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < g.slop) return;
       g.moved = true;
       const p = toUser(svg, e.clientX, e.clientY);
-      useFigureStore.getState().setTransient(dragHandle(g.base, g, { x: p.x / ppu.x, y: -p.y / ppu.y }));
+      // With Encaixar na grade, an end near a tick lands on it, as points do on crossings.
+      const px = (coarse ? 14 : 8) * unitsPerPx;
+      const reach = snap ? { x: px / ppu.x, y: px / ppu.y } : undefined;
+      useFigureStore.getState().setTransient(dragHandle(g.base, g, { x: p.x / ppu.x, y: -p.y / ppu.y }, reach));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > g.slop) {
       // Adding points needs no box: a drag moves the view, as fingers expect.
       if (mode === "pan" || placing) {
@@ -469,7 +475,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
         )}
       >
         {!pro && <ActionBar layout={roomy ? "row" : "strip"} zoom={roomy ? null : zoom} />}
-        <PreviewMenu enabled={pro} at={menuAt} zoom={zoom}>
+        <PreviewMenu enabled={pro} at={menuAt} graphAt={menuGraphAt} zoom={zoom}>
           <div ref={containerRef} className="relative min-h-0 flex-1" onContextMenu={pro ? onContextMenu : undefined}>
             <svg
               ref={svgRef}
