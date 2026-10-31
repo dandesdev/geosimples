@@ -577,6 +577,8 @@ test("graph ends follow the pointer in Mover, and land on a tick near one with E
     await page.mouse.up();
   };
 
+  // The autosave writes a moment after the edit: wait for it before reading the domain.
+  await expect.poll(domain).toEqual([-3, 3]);
   // Off: the end stays where it's let go, between ticks.
   await snap.click();
   await expect(snap).toHaveAttribute("aria-pressed", "false");
