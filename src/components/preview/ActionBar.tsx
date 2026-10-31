@@ -23,6 +23,7 @@ import {
   ConstructionsIcon,
   ExtremumIcon,
   GraphPointIcon,
+  TangentIcon,
   GuidesIcon,
   NumberLineIcon,
   PolygonIcon,
@@ -331,7 +332,14 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
             title="Ponto sobre o gráfico"
             hint="Também P=f(2) na barra, ou um clique na curva."
             availability={av.graphPoint}
-            onSelect={actions.pointOnGraph}
+            onSelect={() => actions.pointOnGraph()}
+          />
+          <MenuItem
+            icon={<TangentIcon />}
+            title="Reta tangente"
+            hint="No ponto selecionado sobre o gráfico. Ou clique com o botão direito na curva."
+            availability={av["construct-tangent"]}
+            onSelect={() => actions.construct("tangent")}
           />
           <MenuItem
             icon={<RootsIcon />}

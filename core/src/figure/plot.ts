@@ -174,6 +174,71 @@ export function xTickShift(doc: FigureDoc, axes: Axes, x: number, text: string):
   return estimateTextWidth(text, axes.size) / 2 + 2 + line.stroke.width / 2;
 }
 
+/**
+ * The direction of a graph's tangent at x, as a unit vector pointing right
+ * (or up, where the tangent stands upright, as √x at 0). Null where f has
+ * no tangent: undefined there, or a corner like |x| at 0.
+ */
+export function tangentDirection(expr: string, x: number): Pt | null {
+  const fn = graphFn(expr);
+  if (!fn || !Number.isFinite(fn(x))) return null;
+  const h = 1e-5 * Math.max(1, Math.abs(x));
+  const right = (fn(x + h) - fn(x)) / h;
+  const left = (fn(x) - fn(x - h)) / h;
+  let slope: number;
+  if (Number.isFinite(right) && Number.isFinite(left)) {
+    // Sides that disagree past rounding are a corner.
+    if (Math.abs(right - left) > 1e-3 * Math.max(1, Math.abs(right), Math.abs(left))) return null;
+    slope = (right + left) / 2;
+  } else if (Number.isFinite(right)) slope = right;
+  else if (Number.isFinite(left)) slope = left;
+  else return null;
+  if (Math.abs(slope) > 1e6) return { x: 0, y: 1 };
+  const len = Math.hypot(1, slope);
+  return { x: 1 / len, y: slope / len };
+}
+
+/**
+ * The x in [lo, hi] of the graph's point nearest `to` on paper, where a unit
+ * of x and of y measure `unit` cm. Where the curve leaves its y cut it runs
+ * along the cut, as it's drawn. Null when f is defined nowhere there.
+ */
+export function nearestOnGraph(
+  graph: Pick<FunctionGraph, "expr" | "range">,
+  to: Pt,
+  [lo, hi]: [number, number],
+  unit: [number, number] = [1, 1],
+): number | null {
+  const fn = graphFn(graph.expr);
+  if (!fn || !(hi >= lo)) return null;
+  const far = (x: number) => {
+    const y = fn(x);
+    if (!Number.isFinite(y)) return Infinity;
+    const cut = Math.min(Math.max(y, graph.range[0]), graph.range[1]);
+    return ((x - to.x) * unit[0]) ** 2 + ((cut - to.y) * unit[1]) ** 2;
+  };
+  const n = 1000;
+  const at = (i: number) => lo + ((hi - lo) * i) / n;
+  let best = -1;
+  let bestFar = Infinity;
+  for (let i = 0; i <= n; i++) {
+    const d = far(at(i));
+    if (d < bestFar) [best, bestFar] = [i, d];
+  }
+  if (best < 0) return null;
+  // Closer, between the samples on either side.
+  let a = at(Math.max(best - 1, 0));
+  let b = at(Math.min(best + 1, n));
+  for (let k = 0; k < 40; k++) {
+    const m1 = a + (b - a) / 3;
+    const m2 = b - (b - a) / 3;
+    if (far(m1) <= far(m2)) b = m2;
+    else a = m1;
+  }
+  const x = (a + b) / 2;
+  return far(x) <= bestFar ? x : at(best);
+}
+
 /** The dashed lines from a point to the axes, in world units; none along an axis it sits on. */
 export function pointGuides(p: Pt, axes: Axes): [Pt, Pt][] {
   const o = axesOrigin(axes);

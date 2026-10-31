@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { formatNumber, labelText, perpendicularBisectorOf, type Element, type FigureDoc } from "@geosimples/core/figure";
+import { formatNumber, labelText, perpendicularBisectorOf, tangentOf, type Element, type FigureDoc } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { TYPE_NAMES } from "@/lib/names";
@@ -7,7 +7,15 @@ import { cn } from "@/lib/utils";
 import { useInspected, useInspector } from "./inspected";
 
 function describe(doc: FigureDoc, el: Element): string {
-  const name = perpendicularBisectorOf(doc, el) ? "Mediatriz" : TYPE_NAMES[el.type].title;
+  const tangent = tangentOf(doc, el);
+  const name = perpendicularBisectorOf(doc, el) ? "Mediatriz" : tangent ? "Reta tangente" : TYPE_NAMES[el.type].title;
+  if (tangent && !labelText(doc, el)) {
+    const named = (id: string) => {
+      const e = doc.elements.find((x) => x.id === id);
+      return (e && labelText(doc, e)) || id;
+    };
+    return `${name} a ${named(tangent.graph)} em ${named(tangent.point)}`;
+  }
   if (el.type === "text") return `${name} "${el.text}"`;
   if (el.type === "vline") return `${name} x = ${formatNumber(el.x)}`;
   if (el.type === "extension") {

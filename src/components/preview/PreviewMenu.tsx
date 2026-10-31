@@ -24,12 +24,13 @@ import {
   GuidesIcon,
   PolygonIcon,
   RootsIcon,
+  TangentIcon,
   ToFunctionsIcon,
   YInterceptIcon,
 } from "@/components/icons";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
 import { actions } from "@/lib/actions";
-import { CONSTRUCTION_KINDS, previewProps, useAvailability, useGraphPointAt, type Availability } from "@/lib/availability";
+import { CONSTRUCTION_KINDS, previewProps, useAvailability, useGraphSpotActions, type Availability } from "@/lib/availability";
 import { emitCommand } from "@/lib/commands";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { runAction } from "@/lib/useShortcuts";
@@ -198,7 +199,8 @@ function MenuBody({ at, graphAt, zoom }: { at: Vec | null; graphAt: GraphSpot | 
 /** Only what the selection allows: anything unavailable is left out, not grayed. */
 function SelectionActions({ graphAt }: { graphAt: GraphSpot | null }) {
   const av = useAvailability();
-  const graphPoint = useGraphPointAt(graphAt) ?? av.graphPoint;
+  const spot = useGraphSpotActions(graphAt);
+  const graphPoint = spot?.point ?? av.graphPoint;
   const circles = CIRCLE_OPTIONS.filter((o) => av[`circle-${o.mode}`].reason === null);
   const constructions = CONSTRUCTION_KINDS.filter((k) => av[`construct-${k}`].reason === null);
   return (
@@ -255,6 +257,9 @@ function SelectionActions({ graphAt }: { graphAt: GraphSpot | null }) {
         </ContextMenuSub>
       )}
       <ActionItem icon={<GraphPointIcon />} title="Ponto sobre o gráfico" availability={graphPoint} onSelect={() => actions.pointOnGraph(graphAt ?? undefined)} />
+      {graphAt && spot && (
+        <ActionItem icon={<TangentIcon />} title="Reta tangente" availability={spot.tangent} onSelect={() => actions.tangentAt(graphAt)} />
+      )}
       <ActionItem icon={<RootsIcon />} title="Raízes" availability={av["notable-root"]} onSelect={() => actions.markNotable("root")} />
       <ActionItem
         icon={<ExtremumIcon />}

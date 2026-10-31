@@ -188,6 +188,14 @@ export const GraphPointIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const TangentIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 7 Q12 25 21 7" />
+    <path d="M10.5 19.75 L21.5 8.75" strokeWidth={1.4} />
+    <Dot cx={16.5} cy={13.75} />
+  </Icon>
+);
+
 export const VerticalLineIcon = (p: IconProps) => (
   <Icon {...p}>
     <MiniAxes />

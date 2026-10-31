@@ -106,7 +106,13 @@ export type PointConstruction =
    * min) or crossing with the y axis, left to right. It follows the
    * expression, and is deleted when the graph no longer has it.
    */
-  | { kind: "notable"; graph: Id; feature: NotableFeature; index: number };
+  | { kind: "notable"; graph: Id; feature: NotableFeature; index: number }
+  /**
+   * An end of the tangent to a graph at `point`, a point on it: `along`
+   * world units from it in the direction of the curve there (negative goes
+   * left). It goes when the graph has no tangent there, as at a corner.
+   */
+  | { kind: "tangent"; graph: Id; point: Id; along: number };
 
 export type NotableFeature = "root" | "extremum" | "yAxis";
 

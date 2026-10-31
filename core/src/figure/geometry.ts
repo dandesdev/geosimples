@@ -1,5 +1,5 @@
 import { findRoots } from "../plot";
-import { functionValue, graphFn, notablePoints } from "./plot";
+import { functionValue, graphFn, notablePoints, tangentDirection } from "./plot";
 import type {
   Angle,
   Circle,
@@ -630,6 +630,12 @@ export function constructedPosition(
       const graph = graphs.get(c.graph);
       return graph?.type === "function" ? (notablePoints(graph, c.feature)[c.index] ?? null) : null;
     }
+    case "tangent": {
+      const graph = graphs.get(c.graph);
+      const p = pts.get(c.point);
+      const dir = p && graph?.type === "function" ? tangentDirection(graph.expr, p.x) : null;
+      return p && dir ? add(p, scale(dir, c.along)) : null;
+    }
   }
 }
 
@@ -650,11 +656,13 @@ export function constructionParents(c: PointConstruction): Id[] {
     case "onGraph":
     case "notable":
       return [c.graph];
+    case "tangent":
+      return [c.point, c.graph];
   }
 }
 
 /** Constructions whose point goes away when what it marks is gone, instead of staying where it was. */
-const VANISHING = new Set<PointConstruction["kind"]>(["intersection", "onGraph", "notable"]);
+const VANISHING = new Set<PointConstruction["kind"]>(["intersection", "onGraph", "notable", "tangent"]);
 
 /**
  * Constructed points whose crossing, root or turning point no longer exists,

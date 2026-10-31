@@ -15,6 +15,7 @@ import {
   PerpendicularBisectorIcon,
   ProjectionIcon,
   QuickFigureIcon,
+  TangentIcon,
 } from "@/components/icons";
 import type { CanvasMode } from "@/store/figureStore";
 import type { ActionId } from "@/store/prefsStore";
@@ -56,6 +57,11 @@ export const CONSTRUCTIONS: Record<ConstructionKind, { Icon: ComponentType; titl
     Icon: IntersectionIcon,
     title: "Interseção",
     hint: "Marca onde segmentos, circunferências, gráficos e retas verticais selecionados se cruzam.",
+  },
+  tangent: {
+    Icon: TangentIcon,
+    title: "Reta tangente",
+    hint: "Tangente ao gráfico no ponto selecionado sobre ele. Ou clique com o botão direito na curva.",
   },
 };
 

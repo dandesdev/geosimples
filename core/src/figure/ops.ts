@@ -12,7 +12,7 @@ import {
   signedArea2,
 } from "./geometry";
 import { formatNumber, labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
-import { functionValue } from "./plot";
+import { functionValue, nearestOnGraph } from "./plot";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Axes,
@@ -438,6 +438,9 @@ export function cascadeIds(doc: FigureDoc, ids: Id[]): Set<Id> {
     size = gone.size;
     for (const el of doc.elements) {
       if (!gone.has(el.id) && referencedPoints(el).some((r) => gone.has(r))) gone.add(el.id);
+      // A tangent's ends mean nothing without its point or graph: they go, and the tangent with them.
+      const c = el.type === "point" ? el.construction : undefined;
+      if (!gone.has(el.id) && c?.kind === "tangent" && (gone.has(c.point) || gone.has(c.graph))) gone.add(el.id);
     }
   }
   return gone;
@@ -535,7 +538,10 @@ function withOrphanHelpers(doc: FigureDoc, gone: Set<Id>): Set<Id> {
   return out;
 }
 
-/** Moves points and free texts. A point on a graph slides along it, following x. */
+/**
+ * Moves points and free texts. A point on a graph slides along it, to the
+ * curve's point nearest where it was taken, measured on paper.
+ */
 export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number }[]): FigureDoc {
   const byId = new Map(moves.map((m) => [m.id, m]));
   const elements = doc.elements.map((el) => {
@@ -546,7 +552,11 @@ export function movePoints(doc: FigureDoc, moves: { id: Id; x: number; y: number
       const graph = doc.elements.find((g) => g.id === c.graph);
       // Past where f is defined, like √x left of 0, the point waits at its last x.
       if (graph?.type !== "function") return el;
-      const x = Math.min(Math.max(m.x, graph.domain[0]), graph.domain[1]);
+      const axes = doc.elements.find((e) => e.type === "axes");
+      const unit = axes?.type === "axes" ? axes.unit : undefined;
+      const near = nearestOnGraph(graph, m, graph.domain, unit);
+      if (near === null) return el;
+      const x = Math.round(near * 1e4) / 1e4 || 0;
       if (functionValue(graph.expr, x) === null) return el;
       return { ...el, construction: { ...c, x } };
     }

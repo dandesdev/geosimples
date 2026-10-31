@@ -83,8 +83,9 @@ describe("axes that fit the figure", () => {
     const onIt = fitFigure(addPointOnGraph(parabola, "f1", 2.5).doc);
     expect(fitted(onIt)).toMatchObject({ x: [-3, 3] });
     expect(onIt.elements.find((e) => e.id === "f1")).toMatchObject({ domain: [-3, 3] });
-    // A free point there still gets its tick of room.
-    expect(fitted(addPoints(parabola, [{ x: 2.5, y: 1 }]).doc)).toMatchObject({ x: [-3, 4] });
+    // Nor for geometry inside its window; past it, geometry gets its tick of room.
+    expect(fitted(addPoints(parabola, [{ x: 2.5, y: 1 }]).doc)).toMatchObject({ x: [-3, 3] });
+    expect(fitted(addPoints(parabola, [{ x: 3.5, y: 1 }]).doc)).toMatchObject({ x: [-3, 5] });
   });
 
   it("fit graphs and geometry together, and leave hand-set axes alone", () => {
@@ -188,6 +189,11 @@ describe("Mover", () => {
     // Along the curve, not the x axis: from beside the parabola's arm, the end goes to the nearest point of it.
     const right = dragHandle(graph, { owner: "f1", end: "x1" }, { x: 2.5, y: 4 }).elements.find((e) => e.id === "f1");
     expect(right).toMatchObject({ domain: [-3, 2.03] });
+    // On the steep arm, reach is measured on paper along the curve: 0.1 left of the tick is 0.6 down it, out of reach.
+    const steep = (to: { x: number; y: number }) =>
+      dragHandle(graph, { owner: "f1", end: "x1" }, to, { x: 0.2, y: 0.2 }).elements.find((e) => e.id === "f1");
+    expect(steep({ x: 2.9, y: 8.41 })).toMatchObject({ domain: [-3, 2.9] });
+    expect(steep({ x: 2.98, y: 8.9 })).toMatchObject({ domain: [-3, 3] });
     // Over the axes, a grid has no ends of its own.
     const over = addGrid(graph).doc;
     expect(elementHandles(over, over.elements[0])).toEqual([]);
