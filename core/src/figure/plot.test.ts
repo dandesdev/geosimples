@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addFunction,
+  addGrid,
   addPointOnGraph,
   addPoints,
   addVerticalLine,
@@ -99,8 +100,13 @@ describe("function graphs", () => {
   it("draws grid lines when asked, and nothing for an unreadable saved expression", () => {
     const doc = graph("x");
     const axes = doc.elements[0] as Axes;
-    const gridded = { ...doc, elements: [{ ...axes, grid: true }, doc.elements[1]] };
+    const gridded = addGrid(doc).doc;
+    expect(gridded.elements[0]).toMatchObject({ type: "grid", follow: "axes" });
     expect(buildScene(gridded).prims.length).toBeGreaterThan(buildScene(doc).prims.length);
+    // Axes saved with a grid of their own, from before grids were elements, get one over them.
+    const old = normalizeDoc({ ...doc, elements: [{ ...axes, grid: true }, doc.elements[1]] });
+    expect(old.elements.map((e) => e.type)).toEqual(["grid", "axes", "function"]);
+    expect(old.elements[1]).not.toHaveProperty("grid");
     // Lines at both ends, not only at -5: the grid is even.
     const grid = toTikz(gridded).split("\n").find((l) => l.startsWith("\\draw[draw=gs1"))!;
     expect(grid).toContain("(5,-5) -- (5,5)");

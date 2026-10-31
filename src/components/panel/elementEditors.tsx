@@ -4,8 +4,10 @@ import {
   type Angle,
   type Axes,
   type Circle,
+  type Extension,
   type FreeText,
   type FunctionGraph,
+  type Grid,
   type Point,
   type Polygon,
   type Segment,
@@ -68,6 +70,15 @@ export function SegmentEditor({ el, update, updateLabel, multi }: EditorProps<Se
         />
       </Section>
       <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.segment} placeholder="Ex.: a, 5, x" />
+    </div>
+  );
+}
+
+export function ExtensionEditor({ el, update }: EditorProps<Extension>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor title="Traço do prolongamento" stroke={el.stroke} onChange={(stroke, key) => update((x) => ({ ...x, stroke }), key)} />
+      <p className="mb-1 text-xs text-muted-foreground">Ele aparece só enquanto o ponto fica fora do segmento.</p>
     </div>
   );
 }
@@ -180,6 +191,10 @@ export function NumberLineEditor({ el, update }: EditorProps<NumberLine>) {
       </Section>
     </div>
   );
+}
+
+export function GridEditor({ el, update }: EditorProps<Grid>) {
+  return <StrokeEditor title="Traço da malha" stroke={el.stroke} onChange={(stroke, key) => update((g) => ({ ...g, stroke }), key)} />;
 }
 
 export function AxesEditor({ el, update }: EditorProps<Axes>) {

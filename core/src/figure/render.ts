@@ -1,8 +1,10 @@
-import { AXES_GRID, PT_PER_CM, resolveColor } from "./defaults";
+import { PT_PER_CM, resolveColor } from "./defaults";
+import { gridWindow } from "./fit";
 import {
   angleArc,
   angleArcRadii,
   angleTicks,
+  extensionEnds,
   pointMap,
   rightAngleSquare,
   segmentTicks,
@@ -21,7 +23,9 @@ import {
 import {
   axesOrigin,
   axesStepX,
+  axesStepY,
   axisTicks,
+  figureUnits,
   endDotRadius,
   functionEnds,
   functionLines,
@@ -42,7 +46,7 @@ import type {
   Point,
   Stroke,
 } from "./types";
-import { mid, polar, type Vec } from "./vec";
+import { add, mid, polar, type Vec } from "./vec";
 
 /**
  * A scene is the figure laid out on paper: coordinates in pt with Y pointing
@@ -102,8 +106,11 @@ export interface Scene {
   hits: Hit[];
   /** Bounds of everything drawn, null for an empty figure. */
   box: Box | null;
-  /** Paper pt per world unit. */
+  /** Paper pt per cm of the figure: the export scale. */
   k: number;
+  /** Paper pt per world unit along x and y: k times each axis' scale. */
+  kx: number;
+  ky: number;
 }
 
 export interface SceneOptions {
@@ -140,17 +147,23 @@ export function paintFill(fl: Fill): PaintFill {
   return { color: resolveColor(fl.color), opacity: fl.opacity, pattern: fl.pattern, angle: fl.angle };
 }
 
-/** SVG path of a full circle. */
-export function circlePath(cx: number, cy: number, r: number): string {
+/** SVG path of a full circle, or of an ellipse when `ry` differs. */
+export function circlePath(cx: number, cy: number, r: number, ry = r): string {
   return (
     `M${f(cx - r)} ${f(cy)}` +
-    `A${f(r)} ${f(r)} 0 1 0 ${f(cx + r)} ${f(cy)}` +
-    `A${f(r)} ${f(r)} 0 1 0 ${f(cx - r)} ${f(cy)}Z`
+    `A${f(r)} ${f(ry)} 0 1 0 ${f(cx + r)} ${f(cy)}` +
+    `A${f(r)} ${f(ry)} 0 1 0 ${f(cx - r)} ${f(cy)}Z`
   );
 }
 
 export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   const k = PT_PER_CM * (options.scale ?? 1);
+  // Axes with their own scale stretch the whole figure, so graphs and geometry stay on one plane.
+  const unit = figureUnits(doc);
+  const kx = k * unit.x;
+  const ky = k * unit.y;
+  /** A world point as it lies on paper, before the pt conversion: directions there are what shows. */
+  const S = (w: Vec): Vec => ({ x: w.x * unit.x, y: w.y * unit.y });
   const pts = pointMap(doc);
   const box = new BoxBuilder();
   const layers: Record<
@@ -170,6 +183,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   };
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
+    grid: [],
     numberline: [],
     function: [],
     vline: [],
@@ -177,31 +191,36 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     circle: [],
     angle: [],
     segment: [],
+    extension: [],
     point: [],
     text: [],
   };
 
   /** World point to paper. */
-  const P = (w: Vec): Vec => ({ x: w.x * k, y: -w.y * k });
+  const P = (w: Vec): Vec => ({ x: w.x * kx, y: -w.y * ky });
   /** Paper position of a pt offset (Y up) from a world point. */
-  const O = (w: Vec, o: Vec): Vec => ({ x: w.x * k + o.x, y: -w.y * k - o.y });
+  const O = (w: Vec, o: Vec): Vec => ({ x: w.x * kx + o.x, y: -w.y * ky - o.y });
 
-  /** Arc around paper center c, counterclockwise on screen from `start` over `sweep` degrees. */
-  const arc = (c: Vec, r: number, start: number, sweep: number, moveTo = true): string => {
-    if (sweep >= 359.999) return circlePath(c.x, c.y, r);
-    const p0 = { x: c.x + r * Math.cos((start * Math.PI) / 180), y: c.y - r * Math.sin((start * Math.PI) / 180) };
+  /**
+   * Arc around paper center c, counterclockwise on screen from `start` over
+   * `sweep` degrees. With `ry`, an arc of an ellipse, the angles being where a
+   * circle's would be before the axes stretched it.
+   */
+  const arc = (c: Vec, r: number, start: number, sweep: number, moveTo = true, ry = r): string => {
+    if (sweep >= 359.999) return circlePath(c.x, c.y, r, ry);
+    const p0 = { x: c.x + r * Math.cos((start * Math.PI) / 180), y: c.y - ry * Math.sin((start * Math.PI) / 180) };
     const end = start + sweep;
-    const p1 = { x: c.x + r * Math.cos((end * Math.PI) / 180), y: c.y - r * Math.sin((end * Math.PI) / 180) };
+    const p1 = { x: c.x + r * Math.cos((end * Math.PI) / 180), y: c.y - ry * Math.sin((end * Math.PI) / 180) };
     const large = sweep > 180 ? 1 : 0;
-    return `${moveTo ? `M${f(p0.x)} ${f(p0.y)}` : `L${f(p0.x)} ${f(p0.y)}`}A${f(r)} ${f(r)} 0 ${large} 0 ${f(p1.x)} ${f(p1.y)}`;
+    return `${moveTo ? `M${f(p0.x)} ${f(p0.y)}` : `L${f(p0.x)} ${f(p0.y)}`}A${f(r)} ${f(ry)} 0 ${large} 0 ${f(p1.x)} ${f(p1.y)}`;
   };
 
   /** Includes an arc in the bounds: its ends and any axis extreme it passes. */
-  const boxArc = (c: Vec, r: number, start: number, sweep: number, pad: number) => {
+  const boxArc = (c: Vec, r: number, start: number, sweep: number, pad: number, ry = r) => {
     const angles = [start, start + sweep];
     for (let a = Math.ceil(start / 90) * 90; a < start + sweep; a += 90) angles.push(a);
     for (const a of angles) {
-      box.add(c.x + r * Math.cos((a * Math.PI) / 180), c.y - r * Math.sin((a * Math.PI) / 180), pad);
+      box.add(c.x + r * Math.cos((a * Math.PI) / 180), c.y - ry * Math.sin((a * Math.PI) / 180), pad);
     }
   };
 
@@ -265,7 +284,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
             kind: "path",
             owner: el.id,
             // Tick offsets are relative to the midpoint, like in the TikZ export.
-            d: offsetLines(mid(a, b), segmentTicks(a, b, el.ticks)),
+            d: offsetLines(mid(a, b), segmentTicks(S(a), S(b), el.ticks)),
             stroke: solid(stroke),
             fill: null,
           });
@@ -275,11 +294,23 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         hits.segment.push({ owner: el.id, type: "segment", d, area: false });
         break;
       }
+      case "extension": {
+        const ends = extensionEnds(el, pts);
+        if (!ends) break;
+        const [pa, pb] = ends.map(P);
+        const d = `M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`;
+        const stroke = paintStroke(el.stroke);
+        layers.segment.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        box.add(pb.x, pb.y, stroke.width / 2);
+        hits.extension.push({ owner: el.id, type: "extension", d, area: false });
+        break;
+      }
       case "angle": {
         const a = pts.get(el.a);
         const v = pts.get(el.vertex);
         const b = pts.get(el.b);
-        const geo = a && v && b ? angleArc(a, v, b, el.reflex) : null;
+        // The arc spans the angle as drawn, which axes at different scales bend.
+        const geo = a && v && b ? angleArc(S(a), S(v), S(b), el.reflex) : null;
         if (!v || !geo) break;
         const c = P(v);
         const stroke = paintStroke(el.stroke);
@@ -328,19 +359,21 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         const center = pts.get(el.center);
         if (!center) break;
         const c = P(center);
-        const r = el.radius * k;
+        // An ellipse when the axes count x and y at different scales.
+        const r = el.radius * kx;
+        const ry = el.radius * ky;
         const stroke = paintStroke(el.stroke);
         const start = el.arc?.start ?? 0;
         const sweep = el.arc ? ((el.arc.end - el.arc.start) % 360 + 360) % 360 || 360 : 360;
-        const outline = arc(c, r, start, sweep);
+        const outline = arc(c, r, start, sweep, true, ry);
         if (el.fill) {
-          const d = sweep >= 359.999 ? outline : `M${f(c.x)} ${f(c.y)}${arc(c, r, start, sweep, false)}Z`;
+          const d = sweep >= 359.999 ? outline : `M${f(c.x)} ${f(c.y)}${arc(c, r, start, sweep, false, ry)}Z`;
           layers.circle.push({ kind: "path", owner: el.id, d, stroke: null, fill: paintFill(el.fill) });
         }
         layers.circle.push({ kind: "path", owner: el.id, d: outline, stroke, fill: null });
         if (el.radii && sweep < 359.999) {
-          const p0 = O(center, polar(r, start));
-          const p1 = O(center, polar(r, start + sweep));
+          const p0 = P(add(center, polar(el.radius, start)));
+          const p1 = P(add(center, polar(el.radius, start + sweep)));
           layers.circle.push({
             kind: "path",
             owner: el.id,
@@ -350,7 +383,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           });
           box.add(c.x, c.y);
         }
-        boxArc(c, r, start, sweep, stroke.width / 2);
+        boxArc(c, r, start, sweep, stroke.width / 2, ry);
         hits.circle.push({ owner: el.id, type: "circle", d: outline, area: false });
         break;
       }
@@ -421,14 +454,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         const stroke = paintStroke(el.stroke);
         const o = axesOrigin(el);
         const xs = axisTicks(el.x, axesStepX(el), o.x);
-        const ys = axisTicks(el.y, el.step, o.y);
-        if (el.grid) {
-          const lines = gridValues(el.x, axesStepX(el))
-            .map((x) => `M${f(x * k)} ${f(-el.y[0] * k)}L${f(x * k)} ${f(-el.y[1] * k)}`)
-            .concat(gridValues(el.y, el.step).map((y) => `M${f(el.x[0] * k)} ${f(-y * k)}L${f(el.x[1] * k)} ${f(-y * k)}`))
-            .join("");
-          layers.grid.push({ kind: "path", owner: el.id, d: lines, stroke: paintStroke(AXES_GRID), fill: null });
-        }
+        const ys = axisTicks(el.y, axesStepY(el), o.y);
         const x0 = P({ x: el.x[0], y: o.y });
         const x1 = P({ x: el.x[1], y: o.y });
         const y0 = P({ x: o.x, y: el.y[0] });
@@ -451,24 +477,41 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         });
         const tick = 2.5;
         const tickD =
-          xs.map((x) => `M${f(x * k)} ${f(x0.y - tick)}L${f(x * k)} ${f(x0.y + tick)}`).join("") +
-          ys.map((y) => `M${f(y0.x - tick)} ${f(-y * k)}L${f(y0.x + tick)} ${f(-y * k)}`).join("");
+          xs.map((x) => `M${f(x * kx)} ${f(x0.y - tick)}L${f(x * kx)} ${f(x0.y + tick)}`).join("") +
+          ys.map((y) => `M${f(y0.x - tick)} ${f(-y * ky)}L${f(y0.x + tick)} ${f(-y * ky)}`).join("");
         if (tickD) layers.axes.push({ kind: "path", owner: el.id, d: tickD, stroke: { ...stroke, dash: "solid" }, fill: null });
         for (const p of [x0, x1, y0, y1]) box.add(p.x, p.y, tick);
         const text = (s: string, at: Vec) =>
           textRect(layers.label, el.id, at, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
         if (el.numbers) {
           const gap = el.size * 0.9;
-          for (const x of xs) text(xTickText(el, x), { x: x * k, y: x0.y + tick + gap * 0.7 });
+          for (const x of xs) text(xTickText(el, x), { x: x * kx, y: x0.y + tick + gap * 0.7 });
           for (const y of ys) {
             const s = formatNumber(y);
-            text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * k });
+            text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * ky });
           }
         }
         const [xName, yName] = el.names;
         if (xName) text(xName, { x: x1.x + 2, y: x1.y + el.size });
         if (yName) text(yName, { x: y1.x + el.size * 0.9, y: y1.y });
         hits.axes.push({ owner: el.id, type: "axes", d, area: false });
+        break;
+      }
+      case "grid": {
+        const w = gridWindow(doc, el);
+        const lines = gridValues(w.x, w.stepX)
+          .map((x) => `M${f(x * kx)} ${f(-w.y[0] * ky)}L${f(x * kx)} ${f(-w.y[1] * ky)}`)
+          .concat(gridValues(w.y, w.stepY).map((y) => `M${f(w.x[0] * kx)} ${f(-y * ky)}L${f(w.x[1] * kx)} ${f(-y * ky)}`))
+          .join("");
+        if (!lines) break;
+        layers.grid.push({ kind: "path", owner: el.id, d: lines, stroke: paintStroke(el.stroke), fill: null });
+        const a = P({ x: w.x[0], y: w.y[0] });
+        const b = P({ x: w.x[1], y: w.y[1] });
+        box.add(a.x, a.y);
+        box.add(b.x, b.y);
+        // Picked by its edge: a click inside it is still a click on the paper.
+        const edge = `M${f(a.x)} ${f(a.y)}H${f(b.x)}V${f(b.y)}H${f(a.x)}Z`;
+        hits.grid.push({ owner: el.id, type: "grid", d: edge, area: false });
         break;
       }
       case "numberline": {
@@ -488,14 +531,14 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         });
         const tick = 2.5;
         const xs = axisTicks(el.x, el.step, NaN);
-        const tickD = xs.map((x) => `M${f(x * k)} ${f(a.y - tick)}L${f(x * k)} ${f(a.y + tick)}`).join("");
+        const tickD = xs.map((x) => `M${f(x * kx)} ${f(a.y - tick)}L${f(x * kx)} ${f(a.y + tick)}`).join("");
         if (tickD) layers.axes.push({ kind: "path", owner: el.id, d: tickD, stroke: solid(stroke), fill: null });
         box.add(a.x, a.y, tick);
         box.add(b.x, b.y, half);
         if (el.numbers) {
           for (const x of xs) {
             const s = formatNumber(x);
-            textRect(layers.label, el.id, { x: x * k, y: a.y + tick + el.size * 0.9 }, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
+            textRect(layers.label, el.id, { x: x * kx, y: a.y + tick + el.size * 0.9 }, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
           }
         }
         hits.numberline.push({ owner: el.id, type: "numberline", d, area: false });
@@ -530,6 +573,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...layers.label,
     ],
     hits: [
+      ...hits.grid,
       ...hits.axes,
       ...hits.numberline,
       ...hits.polygon,
@@ -537,12 +581,15 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...hits.function,
       ...hits.vline,
       ...hits.angle,
+      ...hits.extension,
       ...hits.segment,
       ...hits.text,
       ...hits.point,
     ],
     box: box.box,
     k,
+    kx,
+    ky,
   };
 }
 
@@ -553,7 +600,7 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text" || el.type === "axes" || el.type === "numberline") return;
+  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;

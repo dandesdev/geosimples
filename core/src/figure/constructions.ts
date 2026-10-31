@@ -26,8 +26,8 @@ import {
   type OpOptions,
   type OpResult,
 } from "./ops";
-import type { Circle, Element, FigureDoc, Id, NotableFeature, Point, PointConstruction, Segment, Stroke } from "./types";
-import { add, dist, dot, mid, perp, polar, scale, sub, type Vec } from "./vec";
+import type { Circle, Element, Extension, FigureDoc, Id, NotableFeature, Point, PointConstruction, Segment, Stroke } from "./types";
+import { add, dist, mid, perp, polar, scale, sub, type Vec } from "./vec";
 
 /** The classic constructions, as offered by the editor's Construções menu. */
 export type ConstructionKind =
@@ -102,6 +102,28 @@ function draft(doc: FigureDoc, opts: OpOptions) {
       if (a === b || segmentExists(working, a, b)) return;
       const s = newSegment(nextId("segment"), a, b, opts);
       push({ ...s, stroke: { ...s.stroke, ...stroke } });
+    },
+    /**
+     * A dashed continuation of the line through `line` out to `point`, which
+     * shows only while the point is beyond the segment between them. It takes
+     * the look of the segment drawn there, when there is one.
+     */
+    extension(line: [Id, Id], point: Id) {
+      if (line.includes(point)) return;
+      const same = (e: Element) =>
+        e.type === "extension" && e.point === point && [...e.line].sort().join() === [...line].sort().join();
+      if (working.elements.some(same)) return;
+      const side = working.elements.find(
+        (e): e is Segment => e.type === "segment" && line.includes(e.a) && line.includes(e.b),
+      );
+      const ext: Extension = {
+        id: nextId("extension"),
+        type: "extension",
+        line,
+        point,
+        stroke: { ...(side?.stroke ?? styles.stroke), dash: "dashed" },
+      };
+      push(ext);
     },
     /** Marks the angle a → vertex → b, which the construction makes right, with a square. */
     rightAngle(a: Id, vertex: Id, b: Id) {
@@ -303,10 +325,8 @@ function dropPerpendiculars(doc: FigureDoc, d: ReturnType<typeof draft>, found: 
           ? b
           : d.point(foot, { kind: "foot", point: vertex, line: [a, b] });
     d.segment(vertex, footId, { dash });
-    const ab = sub(pb, pa);
-    const t = dot(sub(foot, pa), ab) / dot(ab, ab);
-    if (t < 0 && footId !== a) d.segment(a, footId, { dash: "dashed" });
-    if (t > 1 && footId !== b) d.segment(b, footId, { dash: "dashed" });
+    // It shows while the foot is beyond the side, and follows when the points move.
+    d.extension([a, b], footId);
     const arm = footId === a ? b : footId === b ? a : dist(foot, pa) > dist(foot, pb) ? a : b;
     d.rightAngle(vertex, footId, arm);
   }
@@ -639,7 +659,9 @@ export function makeIntersection(doc: FigureDoc, selection: Id[], opts: OpOption
         crossed++;
         const taken = d.doc.elements.some((e) => e.type === "point" && dist(e, x.point) < SAME);
         if (taken) continue;
-        d.point(x.point, { kind: "intersection", of: [curves[i].id, curves[j].id], index: x.index });
+        const id = d.point(x.point, { kind: "intersection", of: [curves[i].id, curves[j].id], index: x.index });
+        // A segment moved off the crossing still reaches it along its line, dashed.
+        for (const curve of [curves[i], curves[j]]) if (curve.type === "segment") d.extension([curve.a, curve.b], id);
       }
     }
   }

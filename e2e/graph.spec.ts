@@ -47,10 +47,8 @@ test("selecting a graph lets its expression and the axes window change", async (
     .poll(() => page.evaluate(() => localStorage.getItem(`geosimples-figure:${JSON.parse(localStorage.getItem("geosimples-library")!).activeId}`)))
     .toContain('"expr":"x^2"');
 
-  // On the x axis, near its arrow, away from the curve.
-  const axes = page.locator('[data-owner="e1"]').first();
-  const box = (await axes.boundingBox())!;
-  await axes.click({ position: { x: box.width * 0.9, y: box.height / 2 } });
+  // On the x axis, at x = 3.5, away from the curve: the path runs along x, then up y.
+  await clickAlong(page, "e1", 0.25);
   await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
   const xTo = page.getByRole("textbox", { name: "x de: até" });
   await xTo.fill("8");
@@ -369,4 +367,173 @@ test("slow typing in a field and a quick switch to another keep each mark's sing
   await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
   // Counted once, not waited on: the first toast fading would hide a second one.
   expect(await page.getByText("x₂ foi apagado: o que marcava deixou de existir.").count()).toBe(1);
+});
+
+test("a crossing dragged away hides while the drag lasts, and is deleted only if it's still gone at the drop", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x^2", "A=(-2;1)--B=(2;1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await clickAlong(page, "f1", 0.9);
+  await page.keyboard.down("Shift");
+  await clickAlong(page, "s1", 0.1);
+  await page.keyboard.up("Shift");
+  await toolbarButton(page, "Construções").click();
+  await page.getByRole("menuitem", { name: /Interseção/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 4, segment: 1, extension: 2 });
+  const crossings = page.locator('[data-owner="p3"], [data-owner="p4"]');
+  await expect(crossings).not.toHaveCount(0);
+
+  // Both ends move together: the segment slides down, 4 units long.
+  await page.locator('[data-owner="p1"]').first().click();
+  await page.keyboard.down("Shift");
+  await page.locator('[data-owner="p2"]').first().click();
+  await page.keyboard.up("Shift");
+  await page.keyboard.press("M");
+  const a = (await page.locator('[data-owner="p1"]').first().boundingBox())!;
+  const b = (await page.locator('[data-owner="p2"]').first().boundingBox())!;
+  const unit = (b.x - a.x) / 4;
+  const from = { x: a.x + a.width / 2, y: a.y + a.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  // Below the vertex, y = -1: no crossing, so none is drawn, not even where it was.
+  await page.mouse.move(from.x + 0.2 * unit, from.y + 2 * unit, { steps: 8 });
+  await expect(crossings).toHaveCount(0);
+  // Back above it, they come back.
+  await page.mouse.move(from.x + 0.2 * unit, from.y + 0.5 * unit, { steps: 8 });
+  await expect(crossings).not.toHaveCount(0);
+  await page.mouse.move(from.x + 0.2 * unit, from.y + 2 * unit, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByText(/foram apagados: o que marcavam deixou de existir/)).toBeVisible();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2, segment: 1 });
+});
+
+test("a segment slid past a crossing reaches it with a dashed extension that can be styled", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x^2", "A=(-2;1)--B=(2;1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await clickAlong(page, "f1", 0.9);
+  await page.keyboard.down("Shift");
+  await clickAlong(page, "s1", 0.1);
+  await page.keyboard.up("Shift");
+  await toolbarButton(page, "Construções").click();
+  await page.getByRole("menuitem", { name: /Interseção/ }).click();
+  // Over the segment, the crossings need no extension.
+  await expect(page.locator('[data-owner^="x"]')).toHaveCount(0);
+
+  await page.locator('[data-owner="p1"]').first().click();
+  await page.keyboard.down("Shift");
+  await page.locator('[data-owner="p2"]').first().click();
+  await page.keyboard.up("Shift");
+  await page.keyboard.press("M");
+  const a = (await page.locator('[data-owner="p1"]').first().boundingBox())!;
+  const b = (await page.locator('[data-owner="p2"]').first().boundingBox())!;
+  const unit = (b.x - a.x) / 4;
+  const from = { x: a.x + a.width / 2, y: a.y + a.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 2 * unit, from.y, { steps: 8 });
+  await page.mouse.up();
+  // A is now at x = 0, right of the crossing at x = -1: the line reaches it, dashed.
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 4, segment: 1, extension: 2 });
+  const extension = page.locator('[data-owner="x1"]');
+  await expect(extension).not.toHaveCount(0);
+
+  await page.keyboard.press("V");
+  await clickAlong(page, "x1", 0.5);
+  await expect(page.getByText(/^Prolongamento de AB até /).first()).toBeVisible();
+  await expect(page.getByText("Traço do prolongamento")).toBeVisible();
+});
+
+test("axes come in without a graph, fit the figure as it grows, and stop when their window is set", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("A=(1;1)--B=(7;1)--C=(1;4)--");
+  await input.press("Enter");
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /^Eixos/ }).click();
+  const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { x: number[]; y: number[]; fit?: boolean };
+  await expect.poll(async () => (await axes())?.x).toEqual([-1, 8]);
+  expect((await axes()).y).toEqual([-1, 5]);
+
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Malha quadriculada/ }).click();
+  await expect.poll(() => counts(page)).toMatchObject({ axes: 1, grid: 1 });
+
+  // A point further right: the axes reach it.
+  await input.fill("D=(10;1)");
+  await input.press("Enter");
+  await expect.poll(async () => (await axes())?.x).toEqual([-1, 11]);
+
+  await leaveInput(page);
+  await clickAlong(page, "e1", 0.05);
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Ajustar à figura" })).toBeChecked();
+  await expect(page.getByRole("switch", { name: "Malha quadriculada" })).toBeChecked();
+  const xTo = page.getByRole("textbox", { name: "x de: até" });
+  await xTo.fill("14");
+  await xTo.press("Enter");
+  await expect.poll(async () => (await axes())?.fit).toBe(false);
+  expect((await axes()).x).toEqual([-1, 14]);
+  await expect(page.getByRole("switch", { name: "Ajustar à figura" })).not.toBeChecked();
+});
+
+test("Mover drags the ends of the axes and whole segments", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x", "A=(1;1)--B=(3;1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await page.keyboard.press("M");
+  const saved = async () => (await savedFigure(page))?.elements as unknown as { id: string; x: number | number[]; y: number | number[]; fit?: boolean; domain?: number[] }[];
+  // A tap on a handle selects the axes and leaves them fitting.
+  await page.locator('[data-handle="e1:x1"]').click();
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  await expect.poll(async () => (await saved())?.find((e) => e.id === "e1")?.fit).toBe(true);
+  const x0 = (await page.locator('[data-handle="e1:x0"]').boundingBox())!;
+  const x1 = (await page.locator('[data-handle="e1:x1"]').boundingBox())!;
+  const unit = (x1.x - x0.x) / 10;
+  await page.mouse.move(x1.x + x1.width / 2, x1.y + x1.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x1.x + x1.width / 2 + 2.2 * unit, x1.y + x1.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await saved()).find((e) => e.id === "e1")?.x).toEqual([-5, 7]);
+  expect((await saved()).find((e) => e.id === "e1")?.fit).toBe(false);
+  expect((await saved()).find((e) => e.id === "f1")?.domain).toEqual([-5, 7]);
+
+  // A press on the segment drags both its ends.
+  const at = await page.locator('[data-owner="s1"] path').last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() / 2);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x, at.y - unit, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await saved()).filter((e) => e.id === "p1" || e.id === "p2").map((p) => [p.x, p.y])).toEqual([
+    [1, 2],
+    [3, 2],
+  ]);
+});
+
+test("a smaller scale in y fits a steep graph whole", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2");
+  await input.press("Enter");
+  await leaveInput(page);
+  await clickAlong(page, "e1", 0.05);
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  const yUnit = page.getByRole("textbox", { name: "Centímetros por unidade em y" });
+  await yUnit.fill("0,2");
+  await yUnit.press("Enter");
+  const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { y: number[]; unit?: number[]; yStep?: number };
+  await expect.poll(async () => (await axes())?.unit).toEqual([1, 0.2]);
+  expect(await axes()).toMatchObject({ y: [-5, 30], yStep: 5 });
 });

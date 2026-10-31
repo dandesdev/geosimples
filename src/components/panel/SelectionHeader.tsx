@@ -10,6 +10,13 @@ function describe(doc: FigureDoc, el: Element): string {
   const name = perpendicularBisectorOf(doc, el) ? "Mediatriz" : TYPE_NAMES[el.type].title;
   if (el.type === "text") return `${name} "${el.text}"`;
   if (el.type === "vline") return `${name} x = ${formatNumber(el.x)}`;
+  if (el.type === "extension") {
+    const point = (id: string) => {
+      const p = doc.elements.find((e) => e.id === id);
+      return (p && labelText(doc, p)) || id;
+    };
+    return `${name} de ${el.line.map(point).join("")} até ${point(el.point)}`;
+  }
   const text = labelText(doc, el);
   return text ? `${name} ${text}` : `${name} ${el.id}`;
 }

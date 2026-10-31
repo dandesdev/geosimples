@@ -106,8 +106,8 @@ export const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: s
   {
     mode: "move",
     action: "modeMove",
-    label: "Mover pontos",
-    hint: "Arraste um ponto, ou vários selecionados, para mudá-los de lugar.",
+    label: "Mover",
+    hint: "Arraste pontos, segmentos, polígonos e circunferências. Os quadradinhos nas pontas dos eixos, da malha e das retas mudam o tamanho delas.",
     Icon: Move,
   },
   {

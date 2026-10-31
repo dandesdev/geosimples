@@ -6,6 +6,7 @@ import {
   construct,
   deleteElements,
   emptyDoc,
+  extensionEnds,
   freePoints,
   makeCircle,
   makePolygon,
@@ -23,6 +24,7 @@ import {
   type Circle,
   toTikz,
   type Angle,
+  type Extension,
   type FigureDoc,
   type Id,
   type Point,
@@ -71,13 +73,20 @@ describe("constructions", () => {
     expect(construct(r.doc, ["p3", "p1", "p2"], "altitude").error).toMatch(/já existe/);
   });
 
-  it("extends the side with a dashed segment when the foot falls outside it", () => {
+  it("extends the side, dashed, only while the foot falls outside it", () => {
     const doc = movePoints(triangle(), [{ id: "p3", x: -2, y: 3 }]);
     const r = construct(doc, ["p3", "s1"], "altitude");
-    const segments = created(r.doc, r.created, "segment") as Segment[];
-    const extension = segments.find((s) => s.stroke.dash === "dashed");
-    expect(extension).toMatchObject({ a: "p1" });
-    expect(point(r.doc, extension!.b)).toMatchObject({ x: -2, y: 0 });
+    const [extension] = created(r.doc, r.created, "extension") as Extension[];
+    expect(extension).toMatchObject({ line: ["p1", "p2"], stroke: { dash: "dashed" } });
+    const ends = (d: FigureDoc) => extensionEnds(d.elements.find((e) => e.id === extension.id) as Extension, pointMap(d));
+    expect(ends(r.doc)?.map((p) => [p.x, p.y])).toEqual([[0, 0], [-2, 0]]);
+    expect(toTikz(r.doc)).toContain(`dashed] (p1) -- (${extension.point});`);
+    // Back over the side, the foot needs no extension; past the other end, it comes from there.
+    expect(ends(movePoints(r.doc, [{ id: "p3", x: 2, y: 3 }]))).toBeNull();
+    expect(ends(movePoints(r.doc, [{ id: "p3", x: 8, y: 3 }]))?.map((p) => p.id)).toEqual(["p2", extension.point]);
+    // It goes with the side's points, and comes back from a saved file.
+    expect(deleteElements(r.doc, ["p2"]).doc.elements.some((e) => e.type === "extension")).toBe(false);
+    expect(normalizeDoc(JSON.parse(JSON.stringify(r.doc)))).toEqual(r.doc);
   });
 
   it("uses the existing vertex as the foot in a right triangle", () => {

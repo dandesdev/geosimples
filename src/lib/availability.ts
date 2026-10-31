@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import {
+  addAxes,
+  addGrid,
   construct,
   connectPoints,
+  fitFigure,
   fillShapes,
   makeAngles,
   makeCircle,
@@ -32,7 +35,9 @@ export type CheckId =
   | "graphPoint"
   | "guides"
   | `notable-${NotableFeature}`
-  | "toFunctions";
+  | "toFunctions"
+  | "axes"
+  | "grid";
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -68,7 +73,9 @@ function check(doc: FigureDoc, result: OpResult, selectionText: string | null): 
       preview: null,
     };
   }
-  return { reason: null, preview: { doc: result.doc, ids: changedIds(doc, result.doc) } };
+  // As the edit will be: axes and grids that follow the figure fit what it adds.
+  const after = fitFigure(result.doc);
+  return { reason: null, preview: { doc: after, ids: changedIds(doc, after) } };
 }
 
 /**
@@ -93,6 +100,8 @@ export function useAvailability(): Record<CheckId, Availability> {
       graphPoint: check(doc, pointOnSelectedGraph(doc, selection, opts), text),
       guides: check(doc, toggleGuides(doc, selection), text),
       toFunctions: check(doc, toFunctions(doc, selection, opts), text),
+      axes: check(doc, addAxes(doc), null),
+      grid: check(doc, addGrid(doc), null),
     } as Record<CheckId, Availability>;
     for (const feature of NOTABLE_FEATURES) {
       out[`notable-${feature}`] = check(doc, markNotable(doc, selection, feature, opts), text);

@@ -260,3 +260,24 @@ export const Logo = (p: IconProps) => (
     <circle cx={20} cy={19} r={1.7} fill="currentColor" />
   </svg>
 );
+
+export const AxesIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 15 L21 15 M18.5 12.5 L21 15 L18.5 17.5" strokeWidth={1.3} />
+    <path d="M9 21 L9 3 M6.5 5.5 L9 3 L11.5 5.5" strokeWidth={1.3} />
+    <path d="M13 13.5 V16.5 M17 13.5 V16.5 M7.5 11 H10.5 M7.5 7 H10.5" strokeWidth={1.1} />
+  </Icon>
+);
+
+export const GridIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 4 H20 V20 H4 Z M9.33 4 V20 M14.67 4 V20 M4 9.33 H20 M4 14.67 H20" strokeWidth={1.1} />
+  </Icon>
+);
+
+export const FitIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 8 V3 H8 M16 3 H21 V8 M21 16 V21 H16 M8 21 H3 V16" strokeWidth={1.3} />
+    <path d="M8 15 C10 9 14 9 16 15" />
+  </Icon>
+);

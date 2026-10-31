@@ -7,6 +7,7 @@ import {
   latestFigure,
   LIBRARY_KEY,
   deleteElements,
+  fitFigure,
   settleDoc,
   uniqueName,
   untitledName,
@@ -81,6 +82,7 @@ interface FigureState extends LibrarySlice {
   run: (op: (doc: FigureDoc, selection: Id[]) => OpResult, select?: "created" | "keep" | "none") => OpResult;
   /** Starts a drag: changes until endTransient are one undo step. */
   beginTransient: () => void;
+  /** Shows a drag's figure as a drop would leave it, without the points it would delete. */
   setTransient: (doc: FigureDoc) => void;
   endTransient: () => void;
 
@@ -173,6 +175,12 @@ function dropPendingSettle() {
   pendingSettle = null;
 }
 let transientBase: FigureDoc | null = null;
+/**
+ * The drag's figure with everything in it. The store shows it as a drop there
+ * would leave it, so a crossing dragged away hides instead of waiting where it
+ * was, and comes back if the drag does.
+ */
+let transientDoc: FigureDoc | null = null;
 
 const pruneSelection = (doc: FigureDoc, selection: Id[]) => {
   const ids = new Set(doc.elements.map((e) => e.id));
@@ -274,6 +282,7 @@ function withLibrary(
       // Callers settled the old figure through flushSave, or dropped it when deleting it.
       lastCommit = null;
       transientBase = null;
+      transientDoc = null;
       savedDoc = doc;
       set((s) => ({
         figureId,
@@ -373,7 +382,9 @@ export const useFigureStore = create<FigureState>()(
       multiSelect: false,
       quickFigure: NO_QUICK_FIGURE,
 
-      commit: (next, coalesceKey) => {
+      commit: (edited, coalesceKey) => {
+        // Axes and grids that follow the figure take in what the edit changed.
+        const next = fitFigure(edited);
         if (next === get().doc) return;
         const now = Date.now();
         const merge =
@@ -421,14 +432,20 @@ export const useFigureStore = create<FigureState>()(
         flushSettle(get, set);
         transientBase = get().doc;
       },
-      setTransient: (doc) => set({ doc }),
+      setTransient: (dragged) => {
+        const doc = fitFigure(dragged);
+        transientDoc = doc;
+        set({ doc: settleDoc(transientBase ?? doc, doc).doc });
+      },
       endTransient: () => {
         const base = transientBase;
+        const dragged = transientDoc ?? get().doc;
         transientBase = null;
+        transientDoc = null;
         lastCommit = null;
-        const { doc: dragged, past, selection } = get();
+        const { past, selection } = get();
         if (!base || base === dragged) return;
-        // Settled at the end only: a crossing lost mid-drag can come back before the drop.
+        // Deleted for good only at the drop: until then a lost crossing was just hidden, and could come back.
         const settled = settleDoc(base, dragged);
         const doc = settled.doc;
         set({ doc, past: [...past, base].slice(-HISTORY_LIMIT), future: [], selection: pruneSelection(doc, selection) });

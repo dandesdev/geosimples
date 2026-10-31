@@ -3,6 +3,7 @@ import { formatNumber, type Element, type ElementType, type FigureDoc, type Id, 
 export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title: string }> = {
   point: { one: "ponto", many: "pontos", title: "Ponto" },
   segment: { one: "segmento", many: "segmentos", title: "Segmento" },
+  extension: { one: "prolongamento", many: "prolongamentos", title: "Prolongamento" },
   angle: { one: "ângulo", many: "ângulos", title: "Ângulo" },
   circle: { one: "circunferência", many: "circunferências", title: "Circunferência" },
   polygon: { one: "polígono", many: "polígonos", title: "Polígono" },
@@ -11,6 +12,7 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   vline: { one: "reta vertical", many: "retas verticais", title: "Reta vertical" },
   numberline: { one: "reta numérica", many: "retas numéricas", title: "Reta numérica" },
   axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
+  grid: { one: "malha", many: "malhas", title: "Malha quadriculada" },
 };
 
 /** "2 pontos, 1 segmento", or null for an empty selection. */

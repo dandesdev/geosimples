@@ -3,8 +3,12 @@ import {
   addFunction,
   buildScene,
   darkColor,
+  dragHandle,
+  draggedPoints,
+  elementHandles,
   formatNumber,
-  movePoints,
+  isDraggable,
+  moveElements,
   paddedBox,
   paintScene,
   paperColor,
@@ -12,6 +16,8 @@ import {
   sceneMarkup,
   type Box,
   type FigureDoc,
+  type Handle,
+  type HandleEnd,
   type Hit,
   type Id,
   type Paper,
@@ -36,6 +42,9 @@ import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camer
 import { useCoarsePointer, useRoomyPreview } from "@/lib/useMediaQuery";
 
 const PRIMARY = "#10b981";
+
+/** Paper pt per world unit along x and y: they differ when the axes count x and y at different scales. */
+type PerUnit = { x: number; y: number };
 /** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
 const EMPTY_WORLD = { minX: -1, minY: -1, maxX: 6, maxY: 4 };
 
@@ -71,13 +80,24 @@ type Gesture =
   /** Two fingers: pinch to zoom and drag to pan, in any mode. */
   | { kind: "pinch"; ids: [number, number]; from: Pinch; at: { x: number; y: number }; view: View; unitsPerPx: number }
   /** A finger left a pinch: the rest are ignored until all are up, so nothing gets selected by accident. */
-  | { kind: "spent" };
+  | { kind: "spent" }
+  /** Mover dragging an end of axes, a grid, a number line, a vertical line or a graph. */
+  | { kind: "handle"; owner: Id; end: HandleEnd; base: FigureDoc; moved: boolean; x: number; y: number; slop: number };
 
-/** Elements that "Mover pontos" drags: points and free texts. */
-function movables(doc: FigureDoc): Map<Id, { id: Id; x: number; y: number }> {
-  const map = new Map<Id, { id: Id; x: number; y: number }>();
-  for (const el of doc.elements) if (el.type === "point" || el.type === "text") map.set(el.id, el);
-  return map;
+/** Elements Mover drags: points, texts, shapes by their points, vertical lines and number lines. */
+function movables(doc: FigureDoc): Set<Id> {
+  return new Set(doc.elements.filter(isDraggable).map((e) => e.id));
+}
+
+/**
+ * The ends Mover can drag: always those of axes, grids and number lines,
+ * and those of the selected graphs and vertical lines.
+ */
+function figureHandles(doc: FigureDoc, selection: Id[]): Handle[] {
+  const selected = new Set(selection);
+  return doc.elements.flatMap((el) =>
+    el.type === "axes" || el.type === "grid" || el.type === "numberline" || selected.has(el.id) ? elementHandles(doc, el) : [],
+  );
 }
 
 function fitView(box: Box | null, k: number): View {
@@ -125,6 +145,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     return sceneMarkup({ ...result, prims: result.prims.filter((p) => ids.has(p.owner)).map(tint) });
   }, [actionPreview, scale]);
   const k = scene.k;
+  const ppu: PerUnit = { x: scene.kx, y: scene.ky };
 
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -162,8 +183,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   }, [ghost, doc, scale]);
 
   const fitted = useMemo(
-    () => fitView(unionBox(scene.box, (ghost && ghostBox(ghost, k)) ?? graphGhost?.box ?? null), k),
-    [scene.box, ghost, graphGhost, k],
+    () => fitView(unionBox(scene.box, (ghost && ghostBox(ghost, { x: scene.kx, y: scene.ky })) ?? graphGhost?.box ?? null), k),
+    [scene.box, scene.kx, scene.ky, ghost, graphGhost, k],
   );
   const vb = frozen ?? (autoFit ? fitted : (view ?? fitted));
   const unitsPerPx = Math.max(vb.w / Math.max(size.w, 1), vb.h / Math.max(size.h, 1));
@@ -219,15 +240,15 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   /** The grid crossing near `at` (world units), when snapping is on and one is in reach. */
   const crossingNear = (at: Vec): Vec | null => {
     if (!snap) return null;
-    const reach = ((coarse ? 14 : 8) * unitsPerPx) / k;
+    const reach = (coarse ? 14 : 8) * unitsPerPx;
     const g = { x: Math.round(at.x) || 0, y: Math.round(at.y) || 0 };
-    return Math.hypot(at.x - g.x, at.y - g.y) <= reach ? g : null;
+    return Math.hypot((at.x - g.x) * ppu.x, (at.y - g.y) * ppu.y) <= reach ? g : null;
   };
 
   /** The world position for a new point under the pointer: a grid crossing in reach, or rounded to tenths. */
   const pointAt = (clientX: number, clientY: number): Vec => {
     const p = toUser(svgRef.current!, clientX, clientY);
-    const at = { x: p.x / k, y: -p.y / k };
+    const at = { x: p.x / ppu.x, y: -p.y / ppu.y };
     return crossingNear(at) ?? { x: Math.round(at.x * 10) / 10 || 0, y: Math.round(at.y * 10) / 10 || 0 };
   };
 
@@ -249,7 +270,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const g = gesture.current;
     gesture.current = { kind: "none" };
     if (g.kind === "box") setBox(null);
-    else if (g.kind === "drag") {
+    else if (g.kind === "drag" || g.kind === "handle") {
       const store = useFigureStore.getState();
       if (g.moved) store.setTransient(g.base);
       // The doc is the base again, so this adds no undo step.
@@ -292,6 +313,14 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const store = useFigureStore.getState();
     const keys = e.shiftKey || e.ctrlKey || e.metaKey;
     const additive = keys || store.multiSelect;
+    const handle = mode === "move" && e.target instanceof Element ? e.target.closest("[data-handle]") : null;
+    if (handle) {
+      const [id, end] = handle.getAttribute("data-handle")!.split(":") as [Id, HandleEnd];
+      store.beginTransient();
+      setFrozen(vb);
+      gesture.current = { kind: "handle", owner: id, end, base: store.doc, moved: false, x: e.clientX, y: e.clientY, slop };
+      return;
+    }
     const movable = movables(store.doc);
     if (mode === "move" && owner && movable.has(owner)) {
       const selectedMovable = store.selection.filter((id) => movable.has(id));
@@ -328,23 +357,25 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       if (tracked && a && b) placeCamera(pinchView(g.view, g.unitsPerPx, g.at, g.from, pinchOf(a, b)));
     } else if (g.kind === "drag") {
       const p = toUser(svg, e.clientX, e.clientY);
-      let dx = (p.x - g.start.x) / k;
-      let dy = -(p.y - g.start.y) / k;
-      if (!g.moved && Math.hypot(dx, dy) * k < g.slop * unitsPerPx) return;
+      let dx = (p.x - g.start.x) / ppu.x;
+      let dy = -(p.y - g.start.y) / ppu.y;
+      if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) < g.slop * unitsPerPx) return;
       g.moved = true;
-      const movable = movables(g.base);
-      // The point under the pointer lands on a crossing in reach; the others keep their offsets.
-      const held = pointMap(g.base).get(g.owner);
+      // The point under the pointer, or the first of the shape held, lands on a crossing in reach; the rest keeps its offsets.
+      const owner = g.base.elements.find((el) => el.id === g.owner);
+      const held = owner && pointMap(g.base).get(draggedPoints(owner)[0]);
       const crossing = held && crossingNear({ x: held.x + dx, y: held.y + dy });
       if (held && crossing) {
         dx = crossing.x - held.x;
         dy = crossing.y - held.y;
       }
-      const moves = g.ids
-        .map((id) => movable.get(id))
-        .filter((m) => m !== undefined)
-        .map((m) => ({ id: m.id, x: round2(m.x + dx), y: round2(m.y + dy) }));
-      useFigureStore.getState().setTransient(movePoints(g.base, moves));
+      useFigureStore.getState().setTransient(moveElements(g.base, g.ids, { x: dx, y: dy }));
+    } else if (g.kind === "handle") {
+      // A tap jitters: it selects, and only a real drag moves the end.
+      if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < g.slop) return;
+      g.moved = true;
+      const p = toUser(svg, e.clientX, e.clientY);
+      useFigureStore.getState().setTransient(dragHandle(g.base, g, { x: p.x / ppu.x, y: -p.y / ppu.y }));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > g.slop) {
       // Adding points needs no box: a drag moves the view, as fingers expect.
       if (mode === "pan" || placing) {
@@ -402,9 +433,13 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       store.endTransient();
       setFrozen(null);
       if (!g.moved) store.pick(g.owner, g.additive);
+    } else if (g.kind === "handle") {
+      store.endTransient();
+      setFrozen(null);
+      if (!g.moved) store.pick(g.owner, false);
     } else if (g.kind === "box") {
       setBox(null);
-      const found = elementsInBox(store.doc, k, boxFrom(g.start, g.end));
+      const found = elementsInBox(store.doc, ppu, boxFrom(g.start, g.end));
       if (g.additive) {
         const kept = new Set(store.selection);
         store.select([...store.selection, ...found.filter((id) => !kept.has(id))]);
@@ -458,7 +493,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               onMouseDown={(e) => e.button === 1 && e.preventDefault()}
               onAuxClick={(e) => e.preventDefault()}
             >
-              {showGrid && <Grid k={k} vb={vb} unitsPerPx={unitsPerPx} paper={paper} />}
+              {showGrid && <Grid ppu={ppu} vb={vb} unitsPerPx={unitsPerPx} paper={paper} />}
               <g dangerouslySetInnerHTML={{ __html: markup }} />
               {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
               <Overlay
@@ -467,14 +502,16 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 pointOrder={pointOrder}
                 unitsPerPx={unitsPerPx}
                 moveMode={mode === "move"}
+                handles={mode === "move" ? figureHandles(doc, selection) : []}
+                ppu={ppu}
                 doc={doc}
                 hit={coarse ? HIT_COARSE : HIT_FINE}
                 paper={paper}
               />
-              {ghost && <DraftGhost parsed={ghost} k={k} px={unitsPerPx} paper={paper} />}
+              {ghost && <DraftGhost parsed={ghost} ppu={ppu} px={unitsPerPx} paper={paper} />}
               {graphGhost && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: graphGhost.markup }} />}
               {placing && addAt && (
-                <AddMarker at={addAt} k={k} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
+                <AddMarker at={addAt} ppu={ppu} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
               )}
               {box && (
                 <rect
@@ -513,16 +550,16 @@ function quickEnds(doc: FigureDoc, points: Id[]): Vec[] {
 }
 
 /** Where the next click puts a point, with its coordinates, and the sides it would draw to `joins`. */
-function AddMarker({ at, k, px, joins }: { at: Vec; k: number; px: number; joins: Vec[] }) {
-  const cx = at.x * k;
-  const cy = -at.y * k;
+function AddMarker({ at, ppu, px, joins }: { at: Vec; ppu: PerUnit; px: number; joins: Vec[] }) {
+  const cx = at.x * ppu.x;
+  const cy = -at.y * ppu.y;
   return (
     <g pointerEvents="none">
       {joins.map((p, i) => (
         <line
           key={i}
-          x1={p.x * k}
-          y1={-p.y * k}
+          x1={p.x * ppu.x}
+          y1={-p.y * ppu.y}
           x2={cx}
           y2={cy}
           stroke={PRIMARY}
@@ -537,10 +574,6 @@ function AddMarker({ at, k, px, joins }: { at: Vec; k: number; px: number; joins
       </text>
     </g>
   );
-}
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
 }
 
 /** Synthetic or already-released pointers can't be captured; the gesture still works without it. */
@@ -559,15 +592,17 @@ function toUser(svg: SVGSVGElement, clientX: number, clientY: number) {
   return { x: p.x, y: p.y };
 }
 
-function Grid({ k, vb, unitsPerPx, paper }: { k: number; vb: View; unitsPerPx: number; paper: Paper }) {
+function Grid({ ppu, vb, unitsPerPx, paper }: { ppu: PerUnit; vb: View; unitsPerPx: number; paper: Paper }) {
   // One line per world unit, or every 5 or 10 units when zoomed far out.
+  const k = Math.min(ppu.x, ppu.y);
   const step = k / unitsPerPx < 8 ? (k * 5) / unitsPerPx < 8 ? 10 : 5 : 1;
-  const s = k * step;
+  const sx = ppu.x * step;
+  const sy = ppu.y * step;
   return (
     <g pointerEvents="none">
       <defs>
-        <pattern id="gs-preview-grid" patternUnits="userSpaceOnUse" width={s} height={s} x={0} y={0}>
-          <path d={`M${s} 0H0V${s}`} fill="none" stroke={onPaper("#e5e7eb", paper)} strokeWidth={unitsPerPx} />
+        <pattern id="gs-preview-grid" patternUnits="userSpaceOnUse" width={sx} height={sy} x={0} y={0}>
+          <path d={`M${sx} 0H0V${sy}`} fill="none" stroke={onPaper("#e5e7eb", paper)} strokeWidth={unitsPerPx} />
         </pattern>
       </defs>
       <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#gs-preview-grid)" />
@@ -586,6 +621,8 @@ function Overlay({
   pointOrder,
   unitsPerPx,
   moveMode,
+  handles,
+  ppu,
   doc,
   hit,
   paper,
@@ -595,6 +632,9 @@ function Overlay({
   pointOrder: Id[];
   unitsPerPx: number;
   moveMode: boolean;
+  /** Ends Mover can drag, drawn over everything. */
+  handles: Handle[];
+  ppu: PerUnit;
   doc: FigureDoc;
   /** Hit target sizes in screen px. They only change the preview, never the export. */
   hit: { point: number; stroke: number };
@@ -605,6 +645,7 @@ function Overlay({
     doc.elements.filter((e) => e.type === "point" && e.shape === "none").map((e) => e.id),
   );
   const px = unitsPerPx;
+  const movable = movables(doc);
   return (
     <g>
       {hits.map((h) => {
@@ -624,7 +665,7 @@ function Overlay({
           );
         }
         return (
-          <g key={h.owner} data-owner={h.owner} className={moveMode && h.type === "text" ? "cursor-move" : "cursor-pointer"}>
+          <g key={h.owner} data-owner={h.owner} className={moveMode && movable.has(h.owner) ? "cursor-move" : "cursor-pointer"}>
             {isSel && (
               <path
                 d={h.d}
@@ -664,15 +705,44 @@ function Overlay({
             </g>
           );
         })}
+      {handles.map((h) => {
+        const size = (moveHandleSize(hit) * px) / 2;
+        return (
+          <rect
+            key={`${h.owner}:${h.end}`}
+            data-handle={`${h.owner}:${h.end}`}
+            aria-label={HANDLE_NAMES[h.end]}
+            x={h.at.x * ppu.x - size}
+            y={-h.at.y * ppu.y - size}
+            width={size * 2}
+            height={size * 2}
+            rx={1.5 * px}
+            fill={paperColor(paper)}
+            stroke={PRIMARY}
+            strokeWidth={1.5 * px}
+            className={h.end[0] === "x" ? "cursor-ew-resize" : "cursor-ns-resize"}
+          />
+        );
+      })}
     </g>
   );
 }
 
-function ghostBox(parsed: ParsedInput, k: number): Box | null {
+/** Side of a handle in screen px: a finger needs a bigger one. */
+const moveHandleSize = (hit: { point: number }) => Math.max(9, hit.point * 1.2);
+
+const HANDLE_NAMES: Record<HandleEnd, string> = {
+  x0: "Início em x",
+  x1: "Fim em x",
+  y0: "Início em y",
+  y1: "Fim em y",
+};
+
+function ghostBox(parsed: ParsedInput, ppu: PerUnit): Box | null {
   const spots = [...parsed.nodes, ...parsed.texts];
   if (spots.length === 0) return null;
-  const xs = spots.map((n) => n.x * k);
-  const ys = spots.map((n) => -n.y * k);
+  const xs = spots.map((n) => n.x * ppu.x);
+  const ys = spots.map((n) => -n.y * ppu.y);
   return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
 }
 
@@ -688,8 +758,8 @@ function unionBox(a: Box | null, b: Box | null): Box | null {
 }
 
 /** Dashed preview of what the point input would add. */
-function DraftGhost({ parsed, k, px, paper }: { parsed: ParsedInput; k: number; px: number; paper: Paper }) {
-  const at = (i: number) => ({ x: parsed.nodes[i].x * k, y: -parsed.nodes[i].y * k });
+function DraftGhost({ parsed, ppu, px, paper }: { parsed: ParsedInput; ppu: PerUnit; px: number; paper: Paper }) {
+  const at = (i: number) => ({ x: parsed.nodes[i].x * ppu.x, y: -parsed.nodes[i].y * ppu.y });
   return (
     <g pointerEvents="none">
       {parsed.segments.map(([p, q], i) => {
@@ -726,8 +796,8 @@ function DraftGhost({ parsed, k, px, paper }: { parsed: ParsedInput; k: number; 
       {parsed.texts.map((t, i) => (
         <text
           key={`text-${i}`}
-          x={t.x * k}
-          y={-t.y * k + 4 * px}
+          x={t.x * ppu.x}
+          y={-t.y * ppu.y + 4 * px}
           fontSize={12 * px}
           textAnchor="middle"
           fill={PRIMARY}

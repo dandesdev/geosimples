@@ -1,4 +1,4 @@
-import { DEFAULT_AXES_STROKE, DEFAULT_LABEL, DEFAULT_PLOT_WINDOW, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
+import { AXES_GRID, DEFAULT_AXES_STROKE, DEFAULT_LABEL, DEFAULT_PLOT_WINDOW, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
 import { MAX_EXPR_LENGTH } from "../plot";
 import { MEASURES } from "./labels";
 import type {
@@ -14,6 +14,8 @@ import type {
   FillPattern,
   FreeText,
   FunctionGraph,
+  Grid,
+  GridFollow,
   Label,
   LabelMeasure,
   MeasureKind,
@@ -118,6 +120,8 @@ export function normalizeDoc(input: unknown): FigureDoc {
   const points = new Set<string>();
   const pointRaws = new Set<Raw>();
   const out: Element[] = [];
+  /** Axes saved with a grid of their own, from before grids were elements. */
+  let axesGrid = false;
 
   for (const r of raws) {
     if (r.type !== "point" || !idOk(r.id) || ids.has(r.id)) continue;
@@ -164,6 +168,13 @@ export function normalizeDoc(input: unknown): FigureDoc {
           ticks: ticks(r.ticks),
         };
         out.push(withLabel(s, r));
+        break;
+      }
+      case "extension": {
+        const line = Array.isArray(r.line) && r.line.length === 2 && r.line.every((p) => points.has(p as string)) ? r.line : null;
+        if (ids.has(id) || !line || line[0] === line[1] || !points.has(r.point as string)) break;
+        ids.add(id);
+        out.push({ id, type: "extension", line: [line[0], line[1]], point: r.point as string, stroke: stroke(r.stroke) });
         break;
       }
       case "angle": {
@@ -283,14 +294,34 @@ export function normalizeDoc(input: unknown): FigureDoc {
           x: interval(r.x, DEFAULT_PLOT_WINDOW.x),
           y: interval(r.y, DEFAULT_PLOT_WINDOW.y),
           step: num(r.step, 0.01, 1000, 1),
+          ...(typeof r.yStep === "number" && r.yStep > 0 ? { yStep: num(r.yStep, 0.01, 1000, 1) } : {}),
           numbers: r.numbers !== false,
-          grid: r.grid === true,
           names: [str(names[0])?.slice(0, 20) ?? "x", str(names[1])?.slice(0, 20) ?? "y"],
           stroke: isObj(r.stroke) ? stroke(r.stroke) : { ...DEFAULT_AXES_STROKE },
           size: num(r.size, 4, 72, 8),
           ...(typeof r.xPi === "number" && r.xPi > 0 ? { xPi: num(r.xPi, 1 / 12, 4, 0.5) } : {}),
+          ...(r.fit === true ? { fit: true } : {}),
+          ...(Array.isArray(r.unit) && r.unit.length === 2
+            ? { unit: [num(r.unit[0], 0.05, 20, 1), num(r.unit[1], 0.05, 20, 1)] as [number, number] }
+            : {}),
         };
+        if (r.grid === true) axesGrid = true;
         out.push(a);
+        break;
+      }
+      case "grid": {
+        if (ids.has(id)) break;
+        ids.add(id);
+        const g: Grid = {
+          id,
+          type: "grid",
+          x: interval(r.x, DEFAULT_PLOT_WINDOW.x),
+          y: interval(r.y, DEFAULT_PLOT_WINDOW.y),
+          step: num(r.step, 0.05, 1000, 1),
+          follow: oneOf<GridFollow>(r.follow, ["axes", "figure", "none"], "none"),
+          stroke: isObj(r.stroke) ? stroke(r.stroke) : { ...AXES_GRID },
+        };
+        out.push(g);
         break;
       }
       case "numberline": {
@@ -330,6 +361,12 @@ export function normalizeDoc(input: unknown): FigureDoc {
         break;
       }
     }
+  }
+  if (axesGrid && !out.some((e) => e.type === "grid")) {
+    let n = 1;
+    while (ids.has(`m${n}`)) n++;
+    const grid: Grid = { id: `m${n}`, type: "grid", x: [...DEFAULT_PLOT_WINDOW.x], y: [...DEFAULT_PLOT_WINDOW.y], step: 1, follow: "axes", stroke: { ...AXES_GRID } };
+    out.unshift(grid);
   }
   return { kind: "geo", version: 1, elements: withPointConstructions(out, pointRaws) };
 }

@@ -1,10 +1,11 @@
-import { DEFAULT_AXES_STROKE, DEFAULT_GUIDE_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
+import { AXES_GRID, DEFAULT_AXES_STROKE, DEFAULT_GUIDE_STROKE, DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS, type StyleDefaults } from "./defaults";
 import { parseExpr } from "../plot";
 import {
   angleArc,
   circumcircle,
   constructionParents,
   distanceToLine,
+  keepGraphMarks,
   loopFromSegments,
   pointMap,
   resolveConstructions,
@@ -23,6 +24,7 @@ import type {
   ElementType,
   FigureDoc,
   FreeText,
+  Grid,
   Id,
   Point,
   NumberLine,
@@ -82,6 +84,7 @@ function buildPoints(doc: FigureDoc, specs: ParsedPoint[], opts: OpOptions, next
 const PREFIX: Record<ElementType, string> = {
   point: "p",
   segment: "s",
+  extension: "x",
   angle: "a",
   circle: "c",
   polygon: "g",
@@ -89,6 +92,7 @@ const PREFIX: Record<ElementType, string> = {
   function: "f",
   vline: "r",
   axes: "e",
+  grid: "m",
   numberline: "n",
 };
 
@@ -429,9 +433,12 @@ export function makeCircle(doc: FigureDoc, selection: Id[], mode: CircleMode, op
 /** Ids that also go away when `ids` are deleted. */
 export function cascadeIds(doc: FigureDoc, ids: Id[]): Set<Id> {
   const gone = new Set(ids);
-  for (const el of doc.elements) {
-    const refs = referencedPoints(el);
-    if (refs.some((r) => gone.has(r))) gone.add(el.id);
+  // Until nothing more goes: an extension can come before the segment it continues.
+  for (let size = -1; size !== gone.size; ) {
+    size = gone.size;
+    for (const el of doc.elements) {
+      if (!gone.has(el.id) && referencedPoints(el).some((r) => gone.has(r))) gone.add(el.id);
+    }
   }
   return gone;
 }
@@ -443,10 +450,13 @@ function referencedPoints(el: Element): Id[] {
     case "function":
     case "vline":
     case "axes":
+    case "grid":
     case "numberline":
       return [];
     case "segment":
       return [el.a, el.b];
+    case "extension":
+      return [...el.line, el.point];
     case "angle":
       return [el.a, el.vertex, el.b];
     case "circle":
@@ -559,7 +569,7 @@ export function updateElements(
     if (next !== el) changed = true;
     return next;
   });
-  return changed ? resolveConstructions(withElements(doc, elements)) : doc;
+  return changed ? resolveConstructions(keepGraphMarks(doc, withElements(doc, elements))) : doc;
 }
 
 /** Inserts a point on a segment, at a fraction of its length or a distance from its first end. */
@@ -744,7 +754,7 @@ export function addText(doc: FigureDoc, at: { x: number; y: number }, text: stri
 
 export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
-    if (el.type === "text" || el.type === "axes") return el;
+    if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return el;
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
       const next = { ...el };
@@ -1014,11 +1024,39 @@ export function newAxes(id: Id): Axes {
     y: [...DEFAULT_PLOT_WINDOW.y],
     step: 1,
     numbers: true,
-    grid: false,
     names: ["x", "y"],
     stroke: { ...DEFAULT_AXES_STROKE },
     size: 8,
+    fit: true,
   };
+}
+
+/** Axes on their own, before any graph: they fit the figure until their window is set by hand. */
+export function addAxes(doc: FigureDoc): OpResult {
+  if (doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura já tem eixos.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const axes = newAxes(idMaker(doc)("axes"));
+  // First, so everything else draws over them.
+  return ok(withElements(doc, [axes, ...doc.elements]), [axes.id]);
+}
+
+/**
+ * A printed square grid behind the figure: over the axes when there are
+ * some, or around everything else.
+ */
+export function addGrid(doc: FigureDoc): OpResult {
+  if (doc.elements.some((e) => e.type === "grid")) return fail(doc, "A figura já tem uma malha.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const grid: Grid = {
+    id: idMaker(doc)("grid"),
+    type: "grid",
+    x: [...DEFAULT_PLOT_WINDOW.x],
+    y: [...DEFAULT_PLOT_WINDOW.y],
+    step: 1,
+    follow: doc.elements.some((e) => e.type === "axes") ? "axes" : "figure",
+    stroke: { ...AXES_GRID },
+  };
+  return ok(withElements(doc, [grid, ...doc.elements]), [grid.id]);
 }
 
 /**
@@ -1079,7 +1117,7 @@ export function pointOnSelectedGraph(doc: FigureDoc, selection: Id[], opts: OpOp
 export function toggleGuides(doc: FigureDoc, selection: Id[]): OpResult {
   const points = selectedOfType(doc, selection, "point");
   if (points.length === 0) return fail(doc, "Selecione pontos.");
-  if (!doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura não tem eixos. Crie um gráfico antes.");
+  if (!doc.elements.some((e) => e.type === "axes")) return fail(doc, "A figura não tem eixos. Insira eixos antes: Gráficos › Eixos.");
   const on = points.some((p) => !p.guides);
   const next = updateElements(
     doc,
@@ -1117,5 +1155,5 @@ export function setAxesWindow(doc: FigureDoc, id: Id, x: [number, number], y: [n
       range: sameInterval(el.range, axes.y) ? y : el.range,
     };
   });
-  return ok(resolveConstructions(withElements(doc, elements)));
+  return ok(resolveConstructions(keepGraphMarks(doc, withElements(doc, elements))));
 }

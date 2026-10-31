@@ -4,6 +4,7 @@ import type {
   Angle,
   Circle,
   Element,
+  Extension,
   FigureDoc,
   FunctionGraph,
   Id,
@@ -165,6 +166,24 @@ export function distanceToLine(p: Vec, a: Vec, b: Vec): number {
   const l = len(ab);
   if (l === 0) return dist(p, a);
   return Math.abs(cross(ab, sub(p, a))) / l;
+}
+
+/**
+ * Where an extension is drawn now: from the nearer end of its segment to its
+ * point, or null while the point is on the segment (or no longer on its line).
+ */
+export function extensionEnds(ext: Extension, pts: Map<Id, Point>): [Point, Point] | null {
+  const a = pts.get(ext.line[0]);
+  const b = pts.get(ext.line[1]);
+  const p = pts.get(ext.point);
+  if (!a || !b || !p) return null;
+  const ab = sub(b, a);
+  const l2 = dot(ab, ab);
+  if (l2 < 1e-18 || distanceToLine(p, a, b) > 1e-6 * Math.max(1, Math.sqrt(l2))) return null;
+  const t = dot(sub(p, a), ab) / l2;
+  if (t < -1e-6) return [a, p];
+  if (t > 1 + 1e-6) return [b, p];
+  return null;
 }
 
 /** Foot of the perpendicular from p to the line through a and b. */
@@ -658,4 +677,51 @@ export function vanishedPoints(doc: FigureDoc): Point[] {
     if (!constructionParents(el.construction).every((id) => byId.has(id))) return false;
     return constructedPosition(el.construction, pts, segments, circles, graphs) === null;
   });
+}
+
+/**
+ * Marks on graphs whose domain or y cut changed, as when the axes' window
+ * does, stay where they are (a new expression or line x still carries them by place):
+ * each root, turning point and graph crossing
+ * takes the entry of the new list at its spot, instead of the same place in
+ * a list that now starts elsewhere. One whose spot left the window gets an
+ * index past the list, so it goes like any mark whose feature is gone.
+ */
+export function keepGraphMarks(before: FigureDoc, after: FigureDoc): FigureDoc {
+  const old = new Map(before.elements.map((e) => [e.id, e]));
+  const changed = new Set(
+    after.elements
+      .filter((e) => {
+        const prev = old.get(e.id);
+        if (!prev || prev === e) return false;
+        // A graph with a new expression, or a line moved to a new x, carries its marks by place.
+        if (e.type === "vline") return prev.type === "vline" && prev.x === e.x;
+        return e.type === "function" && prev.type === "function" && prev.expr === e.expr;
+      })
+      .map((e) => e.id),
+  );
+  if (changed.size === 0) return after;
+  const pts = pointMap(after);
+  const curves = new Map<Id, Curve>();
+  for (const el of after.elements) if (isCurve(el)) curves.set(el.id, el);
+  let moved = false;
+  const elements = after.elements.map((el) => {
+    if (el.type !== "point" || !el.construction) return el;
+    const c = el.construction;
+    let spots: Vec[] | null = null;
+    if (c.kind === "notable" && changed.has(c.graph)) {
+      const g = curves.get(c.graph);
+      if (g?.type === "function") spots = notablePoints(g, c.feature);
+    } else if (c.kind === "intersection" && c.of.some((id) => changed.has(id))) {
+      const [a, b] = c.of.map((id) => curves.get(id));
+      if (a && b && !(isPlain(a) && isPlain(b))) spots = graphCrossings(a, b, pts).map((x) => x.point);
+    }
+    if (!spots || (c.kind !== "notable" && c.kind !== "intersection")) return el;
+    const found = spots.findIndex((p) => dist(p, el) < 1e-6);
+    const index = found >= 0 ? found : spots.length;
+    if (index === c.index) return el;
+    moved = true;
+    return { ...el, construction: { ...c, index } };
+  });
+  return moved ? { ...after, elements } : after;
 }

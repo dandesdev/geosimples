@@ -364,7 +364,7 @@ function SettingsBody() {
               options={[
                 { value: "select", label: "Selecionar" },
                 { value: "pan", label: "Mover a vista" },
-                { value: "move", label: "Mover pontos" },
+                { value: "move", label: "Mover" },
                 { value: "add", label: "Adicionar pontos" },
               ]}
               onChange={(mode) => behavior({ mode })}

@@ -1,6 +1,6 @@
 import { findExtrema, findRoots, parseExpr, sampleFunction, type Pt } from "../plot";
 import { formatNumber } from "./labels";
-import type { Axes, FunctionGraph, NotableFeature } from "./types";
+import type { Axes, FigureDoc, FunctionGraph, NotableFeature } from "./types";
 
 /**
  * Geometry of fnplot's elements in world units, shared by the scene, the
@@ -104,6 +104,20 @@ export const endDotRadius = (strokeWidth: number) => 1.4 + strokeWidth * 0.6;
 /** Units between ticks on the x axis: a fraction of π when it counts in π. */
 export function axesStepX(el: Axes): number {
   return el.xPi ? el.xPi * Math.PI : el.step;
+}
+
+/**
+ * cm per world unit along x and y: the scale of the figure's axes, which
+ * stretches everything with them. 1 and 1 without axes.
+ */
+export function figureUnits(doc: FigureDoc): { x: number; y: number } {
+  const axes = doc.elements.find((e): e is Axes => e.type === "axes");
+  return { x: axes?.unit?.[0] ?? 1, y: axes?.unit?.[1] ?? 1 };
+}
+
+/** Units between ticks on the y axis. */
+export function axesStepY(el: Axes): number {
+  return el.yStep ?? el.step;
 }
 
 /** Denominators π fractions are written with, smallest first. */

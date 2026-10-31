@@ -2,7 +2,9 @@ import {
   AngleEditor,
   AxesEditor,
   CircleEditor,
+  ExtensionEditor,
   FunctionEditor,
+  GridEditor,
   PointEditor,
   PolygonEditor,
   SegmentEditor,
@@ -27,6 +29,7 @@ export function Formatting() {
     <>
       {el.type === "point" && <PointEditor el={el} {...props} />}
       {el.type === "segment" && <SegmentEditor el={el} {...props} />}
+      {el.type === "extension" && <ExtensionEditor el={el} {...props} />}
       {el.type === "angle" && <AngleEditor el={el} {...props} />}
       {el.type === "circle" && <CircleEditor el={el} {...props} />}
       {el.type === "polygon" && <PolygonEditor el={el} {...props} />}
@@ -35,6 +38,7 @@ export function Formatting() {
       {el.type === "vline" && <VerticalLineEditor el={el} {...props} />}
       {el.type === "numberline" && <NumberLineEditor el={el} {...props} />}
       {el.type === "axes" && <AxesEditor el={el} {...props} />}
+      {el.type === "grid" && <GridEditor el={el} {...props} />}
     </>
   );
 }

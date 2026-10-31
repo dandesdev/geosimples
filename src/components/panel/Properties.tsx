@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from "react";
 import {
   DEFAULT_GUIDE_STROKE,
+  axesStepY,
+  deleteElements,
   functionValue,
+  gridWindow,
   moveNumberLine,
   piText,
   piWindow,
@@ -10,6 +13,8 @@ import {
   type Axes,
   type EndMark,
   type FunctionGraph,
+  type Grid,
+  type GridFollow,
   type NumberLine,
   type VerticalLine,
 } from "@geosimples/core/figure";
@@ -66,6 +71,7 @@ export function Properties() {
       {el.type === "vline" && <VerticalLineProperties el={el} {...props} />}
       {el.type === "numberline" && <NumberLineProperties el={el} {...props} />}
       {el.type === "axes" && <AxesProperties el={el} {...props} />}
+      {el.type === "grid" && <GridProperties el={el} {...props} />}
     </div>
   );
 }
@@ -120,7 +126,7 @@ function PointPlace({ el, update, multi, doc }: EditorProps<Point>) {
   if (c?.kind === "onGraph") {
     return (
       <Section title="Sobre o gráfico">
-        <Hint>{describeConstruction(doc, c)}. Acompanha a função quando ela muda, e desliza por ela no modo Mover pontos.</Hint>
+        <Hint>{describeConstruction(doc, c)}. Acompanha a função quando ela muda, e desliza por ela no modo Mover.</Hint>
         <Field label="x">
           <NumberInput
             ariaLabel="x do ponto no gráfico"
@@ -374,7 +380,7 @@ function TextProperties({ el, update, multi }: EditorProps<FreeText>) {
         <NumberInput ariaLabel="Coordenada X" value={el.x} suffix="x" onChange={(x) => update((t) => ({ ...t, x }), "x")} />
         <NumberInput ariaLabel="Coordenada Y" value={el.y} suffix="y" onChange={(y) => update((t) => ({ ...t, y }), "y")} />
       </div>
-      <Hint>Para arrastar o texto, use o modo Mover pontos.</Hint>
+      <Hint>Para arrastar o texto, use o modo Mover.</Hint>
     </Section>
   );
 }
@@ -507,12 +513,22 @@ const PI_STEPS = [
   { value: "1", label: "π" },
 ];
 
-function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
+function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
+  /** A window or step set by hand stops the axes fitting the figure. */
+  const byHand = (d: FigureDoc) => updateElements(d, [el.id], (a) => (a.type === "axes" ? { ...a, fit: false } : a));
   const setWindow = (x: [number, number], y: [number, number]) => {
     const store = useFigureStore.getState();
     const r = setAxesWindow(store.doc, el.id, x, y);
-    if (!r.error) store.commit(r.doc, `${el.id}:window`);
+    if (!r.error) store.commit(byHand(r.doc), `${el.id}:window`);
   };
+  /** Ticks every `x` and `y`: one step when they match, and `yStep` when y counts on its own. */
+  const setSteps = (x: number, y: number, key: string) =>
+    update((a) => {
+      const next: Axes = { ...a, step: x, fit: false };
+      if (y === x) delete next.yStep;
+      else next.yStep = y;
+      return next;
+    }, key);
   /** Counts x in π (every xPi·π) or in plain numbers, and puts the window's ends on ticks. */
   const setPi = (xPi: number | null) => {
     const store = useFigureStore.getState();
@@ -527,10 +543,39 @@ function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
     const r = setAxesWindow(counted, el.id, x, el.y);
     if (!r.error) store.commit(r.doc, `${el.id}:pi`);
   };
+  const grids = doc.elements.filter((e): e is Grid => e.type === "grid");
+  const gridOn = grids.some((g) => g.follow === "axes");
+  const setGrid = (on: boolean) => {
+    const store = useFigureStore.getState();
+    if (!on) {
+      store.commit(deleteElements(store.doc, grids.filter((g) => g.follow === "axes").map((g) => g.id)).doc);
+      return;
+    }
+    // A grid already in the figure moves onto the axes instead of a second one coming in.
+    if (grids.length > 0) store.commit(updateElements(store.doc, [grids[0].id], (g) => (g.type === "grid" ? { ...g, follow: "axes" } : g)));
+    else actions.addGrid();
+  };
+  const unit = el.unit ?? [1, 1];
+  /** cm per unit on each axis; 1 and 1 is the plain figure. */
+  const setUnit = (next: [number, number]) =>
+    update((a) => {
+      if (next[0] !== 1 || next[1] !== 1) return { ...a, unit: next };
+      const rest = { ...a };
+      delete rest.unit;
+      return rest;
+    }, "unit");
+  const distorted = doc.elements.some((e) => e.type === "circle" || e.type === "angle" || e.type === "polygon");
   if (multi) return <Hint>Com vários eixos selecionados, a janela se ajusta um por vez.</Hint>;
+  const stepY = axesStepY(el);
   return (
     <>
       <Section title="Janela">
+        <SwitchField
+          label="Ajustar à figura"
+          checked={!!el.fit}
+          onChange={(fit) => update((a) => ({ ...a, fit }), "fit")}
+          help="Os eixos cobrem a figura toda, com uma marca de folga, e as marcas se espaçam para os números não se amontoarem. Mudar a janela ou as marcas à mão desliga o ajuste."
+        />
         <IntervalFields label="x de" value={el.x} onChange={(x) => setWindow(x, el.y)} />
         <IntervalFields label="y de" value={el.y} onChange={(y) => setWindow(el.x, y)} />
         <Hint>Os gráficos desenhados na janela dos eixos acompanham a mudança.</Hint>
@@ -546,23 +591,52 @@ function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
           onChange={(v) => setPi(v === "pi" ? 0.5 : null)}
           help="Em múltiplos de π, para gráficos de seno, cosseno e tangente. As pontas da janela vão para as marcas mais próximas."
         />
-        {el.xPi && (
-          <Choice
-            label="Marcas em x a cada"
-            value={String(el.xPi)}
-            options={
-              PI_STEPS.some((s) => s.value === String(el.xPi))
-                ? PI_STEPS
-                : [...PI_STEPS, { value: String(el.xPi), label: piText(el.xPi * Math.PI) ?? `${el.xPi}π` }]
-            }
-            onChange={(v) => setPi(Number(v))}
-          />
+        {el.xPi ? (
+          <>
+            <Choice
+              label="Marcas em x a cada"
+              value={String(el.xPi)}
+              options={
+                PI_STEPS.some((s) => s.value === String(el.xPi))
+                  ? PI_STEPS
+                  : [...PI_STEPS, { value: String(el.xPi), label: piText(el.xPi * Math.PI) ?? `${el.xPi}π` }]
+              }
+              onChange={(v) => setPi(Number(v))}
+            />
+            <Field label="Marcas em y a cada">
+              <NumberInput ariaLabel="Distância entre marcas em y" value={stepY} min={0.01} onChange={(y) => setSteps(y, y, "step")} />
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label="Marcas em x a cada">
+              <NumberInput ariaLabel="Distância entre marcas em x" value={el.step} min={0.01} onChange={(x) => setSteps(x, stepY, "step")} />
+            </Field>
+            <Field label="Marcas em y a cada">
+              <NumberInput ariaLabel="Distância entre marcas em y" value={stepY} min={0.01} onChange={(y) => setSteps(el.step, y, "y-step")} />
+            </Field>
+          </>
         )}
-        <Field label={el.xPi ? "De quanto em quanto em y" : "De quanto em quanto"}>
-          <NumberInput ariaLabel="Distância entre marcas" value={el.step} min={0.01} onChange={(step) => update((a) => ({ ...a, step }), "step")} />
-        </Field>
         <SwitchField label="Números" checked={el.numbers} onChange={(numbers) => update((a) => ({ ...a, numbers }), "numbers")} />
-        <SwitchField label="Grade" checked={el.grid} onChange={(grid) => update((a) => ({ ...a, grid }), "grid")} />
+        <SwitchField
+          label="Malha quadriculada"
+          checked={gridOn}
+          onChange={setGrid}
+          help="Impressa, atrás da figura, nas marcas dos eixos. A grade do editor fica em Vista."
+        />
+      </Section>
+      <Section title="Escala">
+        <Field label="1 em x mede">
+          <NumberInput ariaLabel="Centímetros por unidade em x" value={unit[0]} min={0.05} max={20} suffix="cm" onChange={(x) => setUnit([x, unit[1]])} />
+        </Field>
+        <Field label="1 em y mede">
+          <NumberInput ariaLabel="Centímetros por unidade em y" value={unit[1]} min={0.05} max={20} suffix="cm" onChange={(y) => setUnit([unit[0], y])} />
+        </Field>
+        {unit[0] !== unit[1] && distorted ? (
+          <Hint>Com escalas diferentes, circunferências viram elipses e ângulos ficam deformados na figura.</Hint>
+        ) : (
+          <Hint>Escalas diferentes em x e y destacam uma parte do gráfico, como uma curva que sobe rápido.</Hint>
+        )}
       </Section>
       <Section title="Nomes">
         <div className="grid grid-cols-2 gap-2">
@@ -581,5 +655,45 @@ function AxesProperties({ el, update, multi }: EditorProps<Axes>) {
         </div>
       </Section>
     </>
+  );
+}
+
+const GRID_FOLLOW: { value: GridFollow; label: string; title: string }[] = [
+  { value: "axes", label: "Eixos", title: "Na janela e nas marcas dos eixos" },
+  { value: "figure", label: "Figura", title: "Em volta da figura toda, com um quadrado de folga" },
+  { value: "none", label: "Fixa", title: "Na janela escolhida abaixo" },
+];
+
+function GridProperties({ el, update, multi, doc }: EditorProps<Grid>) {
+  const hasAxes = doc.elements.some((e) => e.type === "axes");
+  const w = gridWindow(doc, el);
+  /** A window set by hand keeps the grid where it is from then on. */
+  const setWindow = (x: [number, number], y: [number, number]) => update((g) => ({ ...g, x, y, follow: "none" }), "window");
+  return (
+    <Section title="Malha">
+      <Choice
+        label="Acompanha"
+        // Without axes, a grid that followed them fits the figure.
+        value={el.follow === "axes" && !hasAxes ? "figure" : el.follow}
+        options={hasAxes ? GRID_FOLLOW : GRID_FOLLOW.filter((o) => o.value !== "axes")}
+        // Fixed where it is now, so choosing Fixa doesn't make it jump.
+        onChange={(follow) => update((g) => ({ ...g, follow, ...(follow === "none" ? { x: w.x, y: w.y } : {}) }), "follow")}
+      />
+      {el.follow === "axes" && hasAxes ? (
+        <Hint>Os quadrados seguem as marcas dos eixos: mude-as nas propriedades dos eixos.</Hint>
+      ) : (
+        <>
+          {!multi && (
+            <>
+              <IntervalFields label="x de" value={w.x} onChange={(x) => setWindow(x, w.y)} />
+              <IntervalFields label="y de" value={w.y} onChange={(y) => setWindow(w.x, y)} />
+            </>
+          )}
+          <Field label="Lado do quadrado">
+            <NumberInput ariaLabel="Lado do quadrado" value={el.step} min={0.05} onChange={(step) => update((g) => ({ ...g, step }), "step")} />
+          </Field>
+        </>
+      )}
+    </Section>
   );
 }

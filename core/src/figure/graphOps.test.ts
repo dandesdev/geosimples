@@ -6,9 +6,11 @@ import {
   addPoints,
   addVerticalLine,
   applyInput,
+  buildScene,
   construct,
   connectPoints,
   emptyDoc,
+  extensionEnds,
   functionLines,
   linearExpr,
   makeCircle,
@@ -18,12 +20,14 @@ import {
   movePoints,
   normalizeDoc,
   parseInput,
+  pointMap,
   setAxesWindow,
   settleDoc,
   toFunctions,
   toTikz,
   updateElements,
   type Element,
+  type Extension,
   type FigureDoc,
   type FunctionGraph,
   type Point,
@@ -133,6 +137,24 @@ describe("intersections with graphs and vertical lines", () => {
     expect(at(cross(withSeg, ["r1", "s1"])).slice(-1)).toEqual([[1, 1]]);
   });
 
+  it("reach a segment slid off the crossing along its line, dashed, and go only when the line misses", () => {
+    let doc = applyInput(graph("x^2"), parseInput("A=(-2;1)--B=(2;1)")).doc;
+    doc = cross(doc, ["f1", "s1"]);
+    const extensions = doc.elements.filter((e): e is Extension => e.type === "extension");
+    expect(extensions.map((e) => e.line)).toEqual([["p1", "p2"], ["p1", "p2"]]);
+    const shown = (d: FigureDoc) => extensions.flatMap((e) => (extensionEnds(e, pointMap(d)) ? [e.point] : []));
+    expect(shown(doc)).toEqual([]);
+    // Slid right, the left crossing is behind A: the line still reaches it.
+    const right = movePoints(doc, [{ id: "p1", x: 0, y: 1 }, { id: "p2", x: 4, y: 1 }]);
+    expect(settleDoc(doc, right).dropped).toEqual([]);
+    expect(shown(right)).toEqual([extensions[0].point]);
+    expect(buildScene(right).hits.filter((h) => h.type === "extension")).toHaveLength(1);
+    // Under the vertex the line misses the curve: the crossings and their extensions go.
+    const below = settleDoc(doc, movePoints(doc, [{ id: "p1", x: -2, y: -1 }, { id: "p2", x: 2, y: -1 }]));
+    expect(below.dropped).toHaveLength(2);
+    expect(below.doc.elements.some((e) => e.type === "extension")).toBe(false);
+  });
+
   it("drop a segment and circle crossing once the circle moves away", () => {
     let doc = addPoints(emptyDoc(), [{ x: 0, y: 0 }, { x: -2, y: 0 }, { x: 2, y: 0 }]).doc;
     doc = makeCircle(doc, ["p1"], "radius").doc;
@@ -236,10 +258,10 @@ describe("turning shapes into functions", () => {
 });
 
 describe("review fixes", () => {
-  it("move notable points right away when the axes window changes the graph's domain", () => {
+  it("keep notable points on their roots when the axes window changes the graph's domain", () => {
     const doc = markNotable(graph("sen(x)"), ["f1"], "root").doc;
     const wider = setAxesWindow(doc, "e1", [-7, 7], [-5, 5]).doc;
-    expect(points(wider).map((p) => Math.round(p.x * 1e4) / 1e4)).toEqual([-6.2832, -3.1416, 0]);
+    expect(points(wider).map((p) => Math.round(p.x * 1e4) / 1e4)).toEqual([-3.1416, 0, 3.1416]);
   });
 
   it("keep a vertex as its own point where a root also is", () => {

@@ -676,7 +676,7 @@ describe("live measure labels", () => {
       doc = {
         ...doc,
         elements: doc.elements.map((e) =>
-          e.id === id && e.type !== "text" && e.type !== "axes" && e.type !== "numberline" ? { ...e, label: { ...DEFAULT_STYLES.label, text: "?", measure: m } } : e,
+          e.id === id && e.type !== "text" && e.type !== "axes" && e.type !== "numberline" && e.type !== "extension" && e.type !== "grid" ? { ...e, label: { ...DEFAULT_STYLES.label, text: "?", measure: m } } : e,
         ),
       };
       return labelText(doc, doc.elements.find((e) => e.id === id)!);
