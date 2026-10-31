@@ -1,7 +1,7 @@
 import { keepGraphMarks, pointMap, resolveConstructions } from "./geometry";
 import { moveNumberLine, movePoints, setAxesWindow, withElements } from "./ops";
-import { axesOrigin, axesStepX, axesStepY, functionValue } from "./plot";
-import type { Axes, Element, FigureDoc, Id } from "./types";
+import { axesOrigin, axesStepX, axesStepY, functionValue, graphFn } from "./plot";
+import type { Axes, Element, FigureDoc, FunctionGraph, Id } from "./types";
 import type { Vec } from "./vec";
 
 /**
@@ -60,6 +60,45 @@ function withEnd([a, b]: [number, number], end: 0 | 1, v: number, gap: number): 
   return end === 0 ? [Math.min(v, b - gap), b] : [a, Math.max(v, a + gap)];
 }
 
+/**
+ * The x of the point of a graph's curve nearest `to` on paper, so its end is
+ * dragged along the curve and not along the x axis. Looked for on the end's
+ * side of the other end, out to a stretch past it. Where the curve leaves its
+ * y cut it runs along the cut, as the handle does.
+ */
+function alongCurve(el: FunctionGraph, end: 0 | 1, to: Vec, unit: [number, number]): number {
+  const fn = graphFn(el.expr);
+  if (!fn) return to.x;
+  const reachOut = Math.max(el.domain[1] - el.domain[0], 10);
+  const lo = end === 0 ? el.domain[0] - reachOut : el.domain[0];
+  const hi = end === 0 ? el.domain[1] : el.domain[1] + reachOut;
+  const far = (x: number) => {
+    const y = fn(x);
+    if (!Number.isFinite(y)) return Infinity;
+    const cut = Math.min(Math.max(y, el.range[0]), el.range[1]);
+    return ((x - to.x) * unit[0]) ** 2 + ((cut - to.y) * unit[1]) ** 2;
+  };
+  const n = 1000;
+  const at = (i: number) => lo + ((hi - lo) * i) / n;
+  let best = -1;
+  let bestFar = Infinity;
+  for (let i = 0; i <= n; i++) {
+    const d = far(at(i));
+    if (d < bestFar) [best, bestFar] = [i, d];
+  }
+  if (best < 0) return to.x;
+  // Closer, between the samples on either side.
+  let a = at(Math.max(best - 1, 0));
+  let b = at(Math.min(best + 1, n));
+  for (let k = 0; k < 40; k++) {
+    const m1 = a + (b - a) / 3;
+    const m2 = b - (b - a) / 3;
+    if (far(m1) <= far(m2)) b = m2;
+    else a = m1;
+  }
+  return (a + b) / 2;
+}
+
 /** To hundredths, as Mover places points. */
 const fine = (v: number) => Math.round(v * 100) / 100 || 0;
 
@@ -81,10 +120,10 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
   const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
   const axes = firstAxes(doc);
   /** On the tick when one is in reach, else where the pointer is. */
-  const free = (step: number) => {
-    const tick = snap(along, step);
+  const free = (step: number, at = along) => {
+    const tick = snap(at, step);
     const r = reach && (handle.end[0] === "x" ? reach.x : reach.y);
-    return r !== undefined && Math.abs(tick - along) <= r ? tick : fine(along);
+    return r !== undefined && Math.abs(tick - at) <= r ? tick : fine(at);
   };
   // Ends this close stay apart, the way they read on the paper.
   const gap = 0.01;
@@ -113,7 +152,8 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
       return same(range, el.range) ? doc : replace({ ...el, range });
     }
     case "function": {
-      const domain = withEnd(el.domain, end, free(axes ? axesStepX(axes) : 1), gap);
+      const at = alongCurve(el, end, to, axes?.unit ?? [1, 1]);
+      const domain = withEnd(el.domain, end, free(axes ? axesStepX(axes) : 1, at), gap);
       return same(domain, el.domain) ? doc : replace({ ...el, domain });
     }
     default:

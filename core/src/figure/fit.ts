@@ -123,6 +123,22 @@ function atLeast(w: Interval, width: number, step: number): Interval {
   return [tidy(Math.floor((mid - width / 2) / step + 1e-9) * step), tidy(Math.ceil((mid + width / 2) / step - 1e-9) * step)];
 }
 
+/** Points that sit on a graph drawn over the axes' x: on it, at its roots or turning points, or where it crosses something. */
+function pointsOnFollowing(doc: FigureDoc, axes: Axes): Set<Id> {
+  const following = new Set(doc.elements.filter((e) => e.type === "function" && sameInterval(e.domain, axes.x)).map((e) => e.id));
+  const out = new Set<Id>();
+  if (following.size === 0) return out;
+  for (const el of doc.elements) {
+    const c = el.type === "point" ? el.construction : undefined;
+    if (!c) continue;
+    const on =
+      ((c.kind === "onGraph" || c.kind === "notable") && following.has(c.graph)) ||
+      (c.kind === "intersection" && c.of.some((id) => following.has(id)));
+    if (on) out.add(el.id);
+  }
+  return out;
+}
+
 /** The window and steps that fit everything but the axes themselves, grids and number lines. */
 export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" | "step" | "yStep"> {
   const skip = onNumberLines(doc);
@@ -133,13 +149,15 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
   const following: FunctionGraph[] = [];
   /** y values of curves, which may run off to infinity: they are capped, the rest is not. */
   const curves = new Span();
+  const onFollowing = pointsOnFollowing(doc, axes);
 
   for (const el of doc.elements) {
     switch (el.type) {
       case "point":
       case "text":
         if (skip.has(el.id)) break;
-        xs.add(el.x);
+        // A point on a graph that follows the axes is inside its window already: room around it would stretch the curve.
+        if (!onFollowing.has(el.id)) xs.add(el.x);
         ys.add(el.y);
         break;
       case "circle": {

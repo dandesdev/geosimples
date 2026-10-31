@@ -6,6 +6,7 @@ import {
   addVerticalLine,
   construct,
   addPoints,
+  addPointOnGraph,
   connectPoints,
   dragHandle,
   elementHandles,
@@ -75,6 +76,15 @@ describe("axes that fit the figure", () => {
     expect(fitted(withGraph("2x + 10"))).toMatchObject({ x: [-6, 1] });
     // A curve far above the origin still shows: the cut keeps its part nearest the origin.
     expect(fitted(withGraph("x + 100"))).toMatchObject({ y: [-10, 120] });
+  });
+
+  it("don't stretch a graph for a point on it, its roots or its crossings", () => {
+    const parabola = fitFigure(withGraph("x^2"));
+    const onIt = fitFigure(addPointOnGraph(parabola, "f1", 2.5).doc);
+    expect(fitted(onIt)).toMatchObject({ x: [-3, 3] });
+    expect(onIt.elements.find((e) => e.id === "f1")).toMatchObject({ domain: [-3, 3] });
+    // A free point there still gets its tick of room.
+    expect(fitted(addPoints(parabola, [{ x: 2.5, y: 1 }]).doc)).toMatchObject({ x: [-3, 4] });
   });
 
   it("fit graphs and geometry together, and leave hand-set axes alone", () => {
@@ -168,13 +178,16 @@ describe("Mover", () => {
     expect(dragHandle(line, { owner: "n1", end: "x0" }, { x: -8.2, y: 0 }).elements[0]).toMatchObject({ x: [-8, 5] });
     const graph = fitFigure(withGraph("x^2"));
     const domainAt = (x: number, reach?: number) =>
-      dragHandle(graph, { owner: "f1", end: "x0" }, { x, y: 0 }, reach === undefined ? undefined : { x: reach, y: reach }).elements.find(
+      dragHandle(graph, { owner: "f1", end: "x0" }, { x, y: x * x }, reach === undefined ? undefined : { x: reach, y: reach }).elements.find(
         (e) => e.id === "f1",
       );
     // A graph's end follows the pointer, and lands on a tick only near one.
     expect(domainAt(0.234)).toMatchObject({ domain: [0.23, 3] });
     expect(domainAt(0.234, 0.3)).toMatchObject({ domain: [0, 3] });
     expect(domainAt(0.534, 0.3)).toMatchObject({ domain: [0.53, 3] });
+    // Along the curve, not the x axis: from beside the parabola's arm, the end goes to the nearest point of it.
+    const right = dragHandle(graph, { owner: "f1", end: "x1" }, { x: 2.5, y: 4 }).elements.find((e) => e.id === "f1");
+    expect(right).toMatchObject({ domain: [-3, 2.03] });
     // Over the axes, a grid has no ends of its own.
     const over = addGrid(graph).doc;
     expect(elementHandles(over, over.elements[0])).toEqual([]);
