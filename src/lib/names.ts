@@ -62,5 +62,7 @@ export function describeConstruction(doc: FigureDoc, c: PointConstruction): stri
       return `No gráfico de ${name(c.graph)}`;
     case "notable":
       return `${NOTABLE_NAMES[c.feature]} de ${name(c.graph)}`;
+    case "tangent":
+      return `Na reta tangente a ${name(c.graph)} em ${name(c.point)}`;
   }
 }

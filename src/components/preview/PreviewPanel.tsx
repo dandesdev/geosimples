@@ -99,6 +99,12 @@ function figureHandles(doc: FigureDoc, selection: Id[]): Handle[] {
   );
 }
 
+/** The cursor over a handle, or while it's dragged: a graph's end slides along its curve, the rest along an axis. */
+function handleCursor(doc: FigureDoc, owner: Id, end: HandleEnd, dragging = false): string {
+  if (doc.elements.some((e) => e.id === owner && e.type === "function")) return dragging ? "cursor-grabbing" : "cursor-grab";
+  return end[0] === "x" ? "cursor-ew-resize" : "cursor-ns-resize";
+}
+
 function fitView(box: Box | null, k: number): View {
   const b =
     box ??
@@ -153,6 +159,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const [view, setView] = useState<View | null>(initialView);
   /** Holds the camera still while a point is dragged. */
   const [frozen, setFrozen] = useState<View | null>(null);
+  /** The cursor for the whole preview while something is dragged, so it doesn't change under the pointer. */
+  const [dragCursor, setDragCursor] = useState<string | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   /** Where a click would put a point in add mode, under the mouse. */
   const [addAt, setAddAt] = useState<Vec | null>(null);
@@ -279,6 +287,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       // The doc is the base again, so this adds no undo step.
       store.endTransient();
       setFrozen(null);
+      setDragCursor(null);
     }
   };
 
@@ -321,6 +330,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       const [id, end] = handle.getAttribute("data-handle")!.split(":") as [Id, HandleEnd];
       store.beginTransient();
       setFrozen(vb);
+      setDragCursor(handleCursor(store.doc, id, end, true));
       gesture.current = { kind: "handle", owner: id, end, base: store.doc, moved: false, x: e.clientX, y: e.clientY, slop };
       return;
     }
@@ -330,6 +340,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       const ids = store.selection.includes(owner) ? selectedMovable : [owner];
       store.beginTransient();
       setFrozen(vb);
+      setDragCursor("cursor-grabbing");
       gesture.current = {
         kind: "drag",
         owner,
@@ -438,10 +449,12 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     } else if (g.kind === "drag") {
       store.endTransient();
       setFrozen(null);
+      setDragCursor(null);
       if (!g.moved) store.pick(g.owner, g.additive);
     } else if (g.kind === "handle") {
       store.endTransient();
       setFrozen(null);
+      setDragCursor(null);
       if (!g.moved) store.pick(g.owner, false);
     } else if (g.kind === "box") {
       setBox(null);
@@ -485,6 +498,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 mode === "pan" && "cursor-grab active:cursor-grabbing",
                 mode === "select" && "cursor-crosshair",
                 placing && "cursor-copy",
+                dragCursor,
               )}
               // The paper's color comes from core, which also colors the figure on it.
               style={{ backgroundColor: paperColor(paper) }}
@@ -726,7 +740,7 @@ function Overlay({
             fill={paperColor(paper)}
             stroke={PRIMARY}
             strokeWidth={1.5 * px}
-            className={h.end[0] === "x" ? "cursor-ew-resize" : "cursor-ns-resize"}
+            className={handleCursor(doc, h.owner, h.end)}
           />
         );
       })}

@@ -3,6 +3,7 @@ import {
   addAxes,
   addGrid,
   addPointOnGraph,
+  addTangentAt,
   construct,
   connectPoints,
   fitFigure,
@@ -59,6 +60,7 @@ export const CONSTRUCTION_KINDS: ConstructionKind[] = [
   "bisector",
   "perpendicularBisector",
   "intersection",
+  "tangent",
 ];
 
 /** Elements an operation adds or changes. Operations keep unchanged elements as the same objects. */
@@ -117,14 +119,17 @@ export function useAvailability(): Record<CheckId, Availability> {
   }, [doc, selection, prefs]);
 }
 
-/** "Ponto sobre o gráfico" at a spot right-clicked on a graph, or null without one. */
-export function useGraphPointAt(spot: { graph: Id; x: number } | null): Availability | null {
+/** "Ponto sobre o gráfico" and "Reta tangente" at a spot right-clicked on a graph, or null without one. */
+export function useGraphSpotActions(spot: { graph: Id; x: number } | null): { point: Availability; tangent: Availability } | null {
   const doc = useFigureStore((s) => s.doc);
   const prefs = useActivePrefs();
   return useMemo(() => {
     if (!spot) return null;
     const opts = prefs && opOptions();
-    return check(doc, addPointOnGraph(doc, spot.graph, spot.x, "", opts), null);
+    return {
+      point: check(doc, addPointOnGraph(doc, spot.graph, spot.x, "", opts), null),
+      tangent: check(doc, addTangentAt(doc, spot.graph, spot.x, opts), null),
+    };
   }, [doc, prefs, spot]);
 }
 

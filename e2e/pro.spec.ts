@@ -103,6 +103,41 @@ test("pro layout: Ponto sobre o gráfico from a right click on a curve puts the 
   expect(point.y).toBeCloseTo(point.x, 6);
 });
 
+test("pro layout: Reta tangente from a right click on a curve adds the point and its tangent", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("/");
+  await pointInput(page).fill("y=x^2");
+  await pointInput(page).press("Enter");
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1 });
+  await pointInput(page).press("Escape");
+  const spot = await page.locator('[data-owner="f1"] path').last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() * 0.6);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.click(spot.x, spot.y, { button: "right" });
+  await page.getByRole("menuitem", { name: "Reta tangente" }).click();
+  // The point and the two hidden ends of the tangent, joined by a segment.
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1, point: 3, segment: 1 });
+  const doc = (await savedFigure(page))!;
+  const ends = doc.elements.filter((e) => (e as { construction?: { kind: string } }).construction?.kind === "tangent");
+  expect(ends).toHaveLength(2);
+  // Selected on its own, it shows its equation.
+  await page.keyboard.press("Escape");
+  const segment = (doc.elements.find((e) => e.type === "segment") as { id: string }).id;
+  // Near one end, away from the point it touches.
+  const on = await page.locator(`[data-owner="${segment}"] path`).last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() * 0.15);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.click(on.x, on.y);
+  await expect(page.getByText(/^Reta tangente/).first()).toBeVisible();
+  await expect(page.getByText(/^y = /)).toBeVisible();
+});
+
 test("pro layout: / brings the point input without moving the preview", async ({ page }) => {
   await leaveInput(page);
   const preview = page.getByRole("region", { name: "Prévia da figura" });

@@ -453,6 +453,12 @@ function pointConstruction(
       if (typeof graph !== "string" || types.get(graph) !== "function" || at === null) return undefined;
       return { kind: "onGraph", graph, x: at };
     }
+    case "tangent": {
+      const graph = x.graph;
+      const along = coord(x.along);
+      if (typeof graph !== "string" || types.get(graph) !== "function" || !isPoint(x.point) || along === null) return undefined;
+      return { kind: "tangent", graph, point: x.point, along: num(along, -1000, 1000, 2) };
+    }
   }
   return undefined;
 }

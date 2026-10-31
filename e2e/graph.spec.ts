@@ -590,3 +590,37 @@ test("graph ends follow the pointer in Mover, and land on a tick near one with E
   await drag("x1", -1.04);
   await expect.poll(async () => (await domain())?.[1]).toBe(2);
 });
+
+test("in Mover, a point on a graph slides along the curve, and a steep end leaves its tick as soon as it's dragged", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x^2", "P=f(1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await page.keyboard.press("M");
+  const p = page.locator('[data-owner="p1"]');
+  await expect(p).toBeVisible();
+  const axes = page.locator('[data-handle="e1:x0"]');
+  await expect.poll(async () => ((await saved(page, "e1")) as { x: number[] } | null)?.x).toEqual([-3, 3]);
+  const unit = ((await page.locator('[data-handle="e1:x1"]').boundingBox())!.x - (await axes.boundingBox())!.x) / 6;
+  // Straight up from (1, 1) to (1, 4): the point goes to the curve's nearest point, right of x = 1.
+  const b = (await p.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 - 3 * unit, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => ((await saved(page, "p1")) as { x: number } | null)?.x).toBeGreaterThan(1.5);
+  const point = (await saved(page, "p1")) as { x: number; y: number };
+  expect(point.y).toBeCloseTo(point.x * point.x, 3);
+
+  // With snapping on, a short drag down the steep arm, from x = 3 to 2.9, already moves the end.
+  await clickAlong(page, "f1", 0.1);
+  await expect(page.getByText(/Selecionados: 1 gráfico/)).toBeVisible();
+  const end = (await page.locator('[data-handle="f1:x1"]').boundingBox())!;
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2 - 0.1 * unit, end.y + end.height / 2 + 0.59 * unit, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => ((await saved(page, "f1")) as { domain: number[] } | null)?.domain[1]).toBeCloseTo(2.9, 1);
+});

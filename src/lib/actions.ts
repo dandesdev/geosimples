@@ -14,6 +14,8 @@ import {
   markPerpendicularBisector,
   fillShapes,
   addPointOnGraph,
+  addTangentAt,
+  resizeTangent,
   pointMap,
   pointOnSelectedGraph,
   toggleGuides,
@@ -96,6 +98,17 @@ export const actions = {
    */
   pointOnGraph: (at?: { graph: Id; x: number }) =>
     perform((doc, sel) => (at ? addPointOnGraph(doc, at.graph, at.x, "", opOptions()) : pointOnSelectedGraph(doc, sel, opOptions()))),
+
+  /** From the preview's menu: a point on the graph at the x right-clicked, with the tangent there. */
+  tangentAt: (at: { graph: Id; x: number }) => perform((doc) => addTangentAt(doc, at.graph, at.x, opOptions())),
+
+  /** Sets a tangent's length, half on each side of its point; typing several digits stays one undo step. */
+  resizeTangent: (id: Id, length: number) => {
+    const store = useFigureStore.getState();
+    const result = resizeTangent(store.doc, id, length);
+    if (result.error) toast.error(result.error);
+    else store.commit(result.doc, `${id}:tangent-length`);
+  },
 
   /** Roots, turning points or the y crossing of the selected graphs, as points that follow them. */
   markNotable: (feature: NotableFeature) => perform((doc, sel) => markNotable(doc, sel, feature, opOptions())),

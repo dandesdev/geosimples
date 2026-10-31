@@ -72,7 +72,8 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             dos eixos. Eixos e malha quadriculada também entram sozinhos, pelo menu Gráficos. No modo Mover, os
             quadradinhos nas pontas dos eixos, da malha e das retas mudam o tamanho deles; a ponta de um gráfico desliza pela curva. Com o ímã ao lado da prévia
             (Encaixar na grade) ligado, a ponta perto de uma marca vai para a marca; desligado, fica onde você soltar.
-            Clique com o botão direito numa curva para pôr um ponto sobre ela ali.
+            Clique com o botão direito numa curva para pôr ali um ponto ou a reta tangente; com um ponto do gráfico
+            selecionado, a tangente também está em Construções. No modo Mover, o ponto desliza pela curva e a tangente acompanha.
           </li>
           <li>
             <b>Texto livre.</b> Em Rótulos e textos › Texto livre, ou na barra de entrada com <code>"Figura 1"@(2;-1)</code>.

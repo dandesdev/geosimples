@@ -26,6 +26,8 @@ import {
   formatNumber,
   perpendicularBisectorOf,
   pointMap,
+  tangentOf,
+  type Tangent,
   sectorRadii,
   signedArea2,
   type Angle,
@@ -176,16 +178,52 @@ function SegmentProperties({ el, doc, multi }: EditorProps<Segment>) {
   const b = pts.get(el.b);
   const decimals = useFigureStore((s) => s.settings.decimals);
   const bisector = multi ? null : perpendicularBisectorOf(doc, el);
+  const tangent = multi ? null : tangentOf(doc, el);
   return (
     <>
-      {!bisector && (
+      {!bisector && !tangent && (
         <Section title="Medidas">
           <Readout label="Comprimento" value={a && b ? formatNumber(dist(a, b), decimals) : ""} />
         </Section>
       )}
       {bisector && <BisectorFields el={el} bisector={bisector} doc={doc} />}
-      {!multi && !bisector && <PointOnSegment el={el} doc={doc} />}
+      {tangent && <TangentFields el={el} tangent={tangent} doc={doc} />}
+      {!multi && !bisector && !tangent && <PointOnSegment el={el} doc={doc} />}
     </>
+  );
+}
+
+/** Its equation, its length and the point it touches, which slides along the graph in Mover. */
+function TangentFields({ el, tangent, doc }: { el: Segment; tangent: Tangent; doc: FigureDoc }) {
+  const decimals = useFigureStore((s) => s.settings.decimals);
+  const p = pointMap(doc).get(tangent.point);
+  const n = (v: number) => formatNumber(v, decimals);
+  let equation = "";
+  if (p && tangent.slope === null) equation = `x = ${n(p.x)}`;
+  else if (p && tangent.slope !== null) {
+    const m = tangent.slope;
+    const q = p.y - m * p.x;
+    const slope = n(m) === "0" ? "" : `${n(m) === "1" ? "" : n(m) === "-1" ? "-" : n(m)}x`;
+    const shift = n(q) === "0" ? "" : `${slope ? (q < 0 ? " - " : " + ") : q < 0 ? "-" : ""}${n(Math.abs(q))}`;
+    equation = `y = ${slope + shift || "0"}`;
+  }
+  return (
+    <Section title="Reta tangente">
+      <Hint>
+        Tangente a {nameOf(doc, tangent.graph)} em {nameOf(doc, tangent.point)}. Arraste o ponto no modo Mover e ela acompanha a curva.
+      </Hint>
+      <Readout label="Equação" value={equation} />
+      {tangent.slope !== null && <Readout label="Inclinação" value={n(tangent.slope)} />}
+      <Field label="Comprimento">
+        <NumberInput
+          ariaLabel="Comprimento da tangente"
+          value={tangent.length}
+          min={0.01}
+          max={200}
+          onChange={(length) => actions.resizeTangent(el.id, length)}
+        />
+      </Field>
+    </Section>
   );
 }
 

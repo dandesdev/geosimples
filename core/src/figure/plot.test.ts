@@ -212,8 +212,11 @@ describe("points on graphs", () => {
     const doc = graph("x^2");
     const r = addPointOnGraph(doc, "f1", 1);
     const id = r.created[0];
-    const moved = movePoints(r.doc, [{ id, x: -2, y: 0 }]);
+    const moved = movePoints(r.doc, [{ id, x: -2, y: 4 }]);
     expect(moved.elements.find((e) => e.id === id)).toMatchObject({ x: -2, y: 4 });
+    // Taken beside the steep arm, it goes to the curve's nearest point, not straight up from the pointer's x.
+    const beside = movePoints(r.doc, [{ id, x: 2.5, y: 4 }]).elements.find((e) => e.id === id) as Point;
+    expect(beside.x).toBeCloseTo(2.03, 2);
     const freed = deleteElements(moved, ["f1"]).doc.elements.find((e) => e.id === id) as Point;
     expect(freed.construction).toBeUndefined();
     expect([freed.x, freed.y]).toEqual([-2, 4]);

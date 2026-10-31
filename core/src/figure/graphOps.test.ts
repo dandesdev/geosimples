@@ -3,12 +3,15 @@ import { findExtrema, findRoots } from "../plot";
 import {
   addFunction,
   addNumberLine,
+  addPointOnGraph,
+  addTangentAt,
   addPoints,
   addVerticalLine,
   applyInput,
   buildScene,
   construct,
   connectPoints,
+  deleteElements,
   emptyDoc,
   extensionEnds,
   functionLines,
@@ -21,8 +24,10 @@ import {
   normalizeDoc,
   parseInput,
   pointMap,
+  resizeTangent,
   setAxesWindow,
   settleDoc,
+  tangentOf,
   toFunctions,
   toTikz,
   updateElements,
@@ -106,6 +111,46 @@ describe("notable points", () => {
     const settled = settleDoc(doc, setExpr(doc, "f1", "x^3 - x"));
     expect(settled.dropped).toEqual([]);
     expect(settled.notes).toEqual(["f tem 3 raízes agora; só 1 estão marcados."]);
+  });
+});
+
+describe("tangents", () => {
+  const segmentOf = (doc: FigureDoc) => doc.elements.find((e): e is Segment => e.type === "segment")!;
+  const ends = (doc: FigureDoc) => {
+    const s = segmentOf(doc);
+    return [s.a, s.b].map((id) => {
+      const p = byId(doc, id) as Point;
+      return [p.x, p.y].map((v) => Math.round(v * 1000) / 1000);
+    });
+  };
+
+  it("touch a graph at a point on it, and follow the point along the curve", () => {
+    const placed = addPointOnGraph(graph("x^2"), "f1", 1);
+    const doc = construct(placed.doc, placed.created, "tangent").doc;
+    // Along (1, 2), 2 units each way from (1, 1).
+    expect(ends(doc)).toEqual([[0.106, -0.789], [1.894, 2.789]]);
+    expect(tangentOf(doc, segmentOf(doc))).toMatchObject({ point: placed.created[0], length: 4 });
+    expect(tangentOf(doc, segmentOf(doc))!.slope).toBeCloseTo(2, 4);
+    // Slid to x = -1, the tangent turns with it.
+    const slid = movePoints(doc, [{ id: placed.created[0], x: -1, y: 1 }]);
+    expect(tangentOf(slid, segmentOf(slid))!.slope).toBeCloseTo(-2, 4);
+    // Longer, still centered on its point.
+    const longer = resizeTangent(doc, segmentOf(doc).id, 6).doc;
+    expect(tangentOf(longer, segmentOf(longer))!.length).toBe(6);
+    expect(construct(doc, placed.created, "tangent").error).toMatch(/já existe/);
+    expect(normalizeDoc(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
+    // Deleting its point takes the tangent too.
+    expect(deleteElements(doc, [placed.created[0]]).doc.elements.map((e) => e.type)).toEqual(["axes", "function"]);
+  });
+
+  it("come from a spot on the curve, lie flat at a turning point, and skip corners", () => {
+    const at = addTangentAt(graph("x^2 - 1"), "f1", 0.5);
+    expect(at.created).toHaveLength(4);
+    const vertex = markNotable(graph("x^2 - 1"), ["f1"], "extremum");
+    const flat = construct(vertex.doc, vertex.created, "tangent").doc;
+    expect(ends(flat)).toEqual([[-2, -1], [2, -1]]);
+    expect(addTangentAt(graph("abs(x)"), "f1", 0).error).toMatch(/bico/);
+    expect(construct(graph("x^2"), ["f1"], "tangent").error).toMatch(/Selecione um ponto sobre um gráfico/);
   });
 });
 

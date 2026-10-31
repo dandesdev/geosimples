@@ -11,8 +11,9 @@ import {
   projectOntoLine,
 } from "./geometry";
 import { nextPointNames, withText } from "./labels";
-import { notablePoints } from "./plot";
+import { notablePoints, tangentDirection } from "./plot";
 import {
+  addPointOnGraph,
   angleExists,
   deleteElements,
   idMaker,
@@ -26,7 +27,19 @@ import {
   type OpOptions,
   type OpResult,
 } from "./ops";
-import type { Circle, Element, Extension, FigureDoc, Id, NotableFeature, Point, PointConstruction, Segment, Stroke } from "./types";
+import type {
+  Circle,
+  Element,
+  Extension,
+  FigureDoc,
+  FunctionGraph,
+  Id,
+  NotableFeature,
+  Point,
+  PointConstruction,
+  Segment,
+  Stroke,
+} from "./types";
 import { add, dist, mid, perp, polar, scale, sub, type Vec } from "./vec";
 
 /** The classic constructions, as offered by the editor's Construções menu. */
@@ -37,7 +50,8 @@ export type ConstructionKind =
   | "median"
   | "bisector"
   | "perpendicularBisector"
-  | "intersection";
+  | "intersection"
+  | "tangent";
 
 export function construct(doc: FigureDoc, selection: Id[], kind: ConstructionKind, opts: OpOptions = {}): OpResult {
   switch (kind) {
@@ -55,6 +69,8 @@ export function construct(doc: FigureDoc, selection: Id[], kind: ConstructionKin
       return makePerpendicularBisector(doc, selection, true, opts);
     case "intersection":
       return makeIntersection(doc, selection, opts);
+    case "tangent":
+      return makeTangent(doc, selection, opts);
   }
 }
 
@@ -484,6 +500,94 @@ export function makePerpendicularBisector(
     if (withMark) d.rightAngle(top, m, points[1]);
   }
   return d.result(coincident === pairs.length ? "Os dois pontos coincidem." : "Essa mediatriz já existe.");
+}
+
+/** Length of a new tangent, in world units, half on each side of its point. */
+export const TANGENT_LENGTH = 4;
+
+/** The graph a point sits on: put on it, one of its roots or turning points, or a crossing of it. */
+function graphOfPoint(doc: FigureDoc, p: Point): FunctionGraph | null {
+  const c = p.construction;
+  const graphId =
+    c?.kind === "onGraph" || c?.kind === "notable"
+      ? c.graph
+      : c?.kind === "intersection"
+        ? c.of.find((id) => doc.elements.some((e) => e.id === id && e.type === "function"))
+        : undefined;
+  return doc.elements.find((e): e is FunctionGraph => e.id === graphId && e.type === "function") ?? null;
+}
+
+/**
+ * The tangents to graphs at the selected points on them: a segment through
+ * each point along the curve there, TANGENT_LENGTH long. Its ends are hidden
+ * points that follow the point as it slides along the graph.
+ */
+export function makeTangent(doc: FigureDoc, selection: Id[], opts: OpOptions = {}): OpResult {
+  const on = selectedOfType(doc, selection, "point").flatMap((p) => {
+    const graph = graphOfPoint(doc, p);
+    return graph ? [{ p, graph }] : [];
+  });
+  if (on.length === 0) return fail(doc, "Selecione um ponto sobre um gráfico, ou clique com o botão direito na curva.");
+  const d = draft(doc, opts);
+  let none = 0;
+  for (const { p, graph } of on) {
+    const dir = tangentDirection(graph.expr, p.x);
+    if (!dir) {
+      none++;
+      continue;
+    }
+    const end = (along: number) => d.point(add(p, scale(dir, along)), { kind: "tangent", graph: graph.id, point: p.id, along }, true);
+    d.segment(end(-TANGENT_LENGTH / 2), end(TANGENT_LENGTH / 2));
+  }
+  if (none === on.length) return fail(doc, "O gráfico não tem reta tangente nesse ponto, como num bico.");
+  return d.result("Essa reta tangente já existe.");
+}
+
+/** A point on a graph at x, with the tangent there: the right-click menu's Reta tangente. */
+export function addTangentAt(doc: FigureDoc, graph: Id, x: number, opts: OpOptions = {}): OpResult {
+  const placed = addPointOnGraph(doc, graph, x, "", opts);
+  if (placed.error) return placed;
+  const tangent = makeTangent(placed.doc, placed.created, opts);
+  if (tangent.error) return { doc, created: [], error: tangent.error };
+  return { doc: tangent.doc, created: [...placed.created, ...tangent.created] };
+}
+
+/** A tangent drawn by makeTangent, as the editor shows it. */
+export interface Tangent {
+  graph: Id;
+  /** The point it touches the graph at. */
+  point: Id;
+  /** Length in world units. */
+  length: number;
+  /** Its slope, f'(x) at the point, or null where it stands upright. */
+  slope: number | null;
+}
+
+/** The tangent a segment is, or null for other segments. */
+export function tangentOf(doc: FigureDoc, el: Element): Tangent | null {
+  if (el.type !== "segment") return null;
+  const pts = pointMap(doc);
+  const ca = pts.get(el.a)?.construction;
+  const cb = pts.get(el.b)?.construction;
+  if (ca?.kind !== "tangent" || cb?.kind !== "tangent" || ca.point !== cb.point || ca.graph !== cb.graph) return null;
+  if (Math.sign(ca.along) !== -Math.sign(cb.along)) return null;
+  const graph = doc.elements.find((e): e is FunctionGraph => e.id === ca.graph && e.type === "function");
+  const p = pts.get(ca.point);
+  const dir = graph && p ? tangentDirection(graph.expr, p.x) : null;
+  const slope = dir && dir.x > 1e-12 ? dir.y / dir.x : null;
+  return { graph: ca.graph, point: ca.point, length: Math.abs(ca.along) + Math.abs(cb.along), slope };
+}
+
+/** Sets the length of a tangent, half on each side of its point. */
+export function resizeTangent(doc: FigureDoc, id: Id, length: number): OpResult {
+  const el = doc.elements.find((e) => e.id === id);
+  if (!el || el.type !== "segment" || !tangentOf(doc, el)) return fail(doc, "Selecione uma reta tangente.");
+  if (!(length > 0)) return fail(doc, "O comprimento precisa ser maior que zero.");
+  const next = updateElements(doc, [el.a, el.b], (p) => {
+    if (p.type !== "point" || p.construction?.kind !== "tangent") return p;
+    return { ...p, construction: { ...p.construction, along: (Math.sign(p.construction.along) * length) / 2 } };
+  });
+  return { doc: next, created: [] };
 }
 
 /** A perpendicular bisector drawn by makePerpendicularBisector, as the editor shows it. */

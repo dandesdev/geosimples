@@ -204,7 +204,8 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
   let x: Interval = xs.empty && following.length === 0 ? [...DEFAULT_PLOT_WINDOW.x] : withRoom(geoX, stepX);
   if (following.length > 0) {
     const g = atLeast(withRoom(graphX, stepX), MIN_GRAPH_WIDTH, stepX);
-    x = xs.empty ? g : [Math.min(x[0], g[0]), Math.max(x[1], g[1])];
+    // Geometry gets its tick of room only where it passes the graphs' window: inside it, room would stretch the curves.
+    x = xs.empty ? g : [geoX[0] < g[0] ? x[0] : g[0], geoX[1] > g[1] ? x[1] : g[1]];
   }
   if (pi) x = piWindow(x, pi);
 
