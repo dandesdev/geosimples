@@ -370,3 +370,44 @@ test("slow typing in a field and a quick switch to another keep each mark's sing
   // Counted once, not waited on: the first toast fading would hide a second one.
   expect(await page.getByText("x₂ foi apagado: o que marcava deixou de existir.").count()).toBe(1);
 });
+
+test("a crossing dragged away hides while the drag lasts, and is deleted only if it's still gone at the drop", async ({ page }) => {
+  const input = pointInput(page);
+  for (const text of ["y=x^2", "A=(-2;1)--B=(2;1)"]) {
+    await input.fill(text);
+    await input.press("Enter");
+  }
+  await leaveInput(page);
+  await clickAlong(page, "f1", 0.9);
+  await page.keyboard.down("Shift");
+  await clickAlong(page, "s1", 0.1);
+  await page.keyboard.up("Shift");
+  await toolbarButton(page, "Construções").click();
+  await page.getByRole("menuitem", { name: /Interseção/ }).click();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 4, segment: 1 });
+  const crossings = page.locator('[data-owner="p3"], [data-owner="p4"]');
+  await expect(crossings).not.toHaveCount(0);
+
+  // Both ends move together: the segment slides down, 4 units long.
+  await page.locator('[data-owner="p1"]').first().click();
+  await page.keyboard.down("Shift");
+  await page.locator('[data-owner="p2"]').first().click();
+  await page.keyboard.up("Shift");
+  await page.keyboard.press("M");
+  const a = (await page.locator('[data-owner="p1"]').first().boundingBox())!;
+  const b = (await page.locator('[data-owner="p2"]').first().boundingBox())!;
+  const unit = (b.x - a.x) / 4;
+  const from = { x: a.x + a.width / 2, y: a.y + a.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  // Below the vertex, y = -1: no crossing, so none is drawn, not even where it was.
+  await page.mouse.move(from.x + 0.2 * unit, from.y + 2 * unit, { steps: 8 });
+  await expect(crossings).toHaveCount(0);
+  // Back above it, they come back.
+  await page.mouse.move(from.x + 0.2 * unit, from.y + 0.5 * unit, { steps: 8 });
+  await expect(crossings).not.toHaveCount(0);
+  await page.mouse.move(from.x + 0.2 * unit, from.y + 2 * unit, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByText(/foram apagados: o que marcavam deixou de existir/)).toBeVisible();
+  await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 2, segment: 1 });
+});
