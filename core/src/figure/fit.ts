@@ -1,7 +1,7 @@
 import { DEFAULT_PLOT_WINDOW } from "./defaults";
 import { pointMap } from "./geometry";
 import { setAxesWindow, withElements } from "./ops";
-import { axesStepX, axesStepY, functionLines, graphFn, piWindow } from "./plot";
+import { axesStepX, axesStepY, functionLines, graphFn, notablePoints, piWindow } from "./plot";
 import type { Axes, Element, FigureDoc, FunctionGraph, Grid, Id, NumberLine, Point } from "./types";
 
 /**
@@ -15,7 +15,13 @@ type Interval = [number, number];
 const MAX_TICKS = 12;
 
 /** A graph's curve may make the axes at most this many times taller than wide on paper; past it the curve is cut. */
-const MAX_TALL = 2;
+const MAX_TALL = 1.5;
+
+/** Narrowest x window, in units, a graph gets: enough to show the shape around what it marks. */
+const MIN_GRAPH_WIDTH = 6;
+
+/** Where a graph's turning points are looked for: a rise past this between samples is an asymptote, not a peak. */
+const FEATURE_RANGE: Interval = [-100, 100];
 
 /** Closest ticks may come on paper, in cm, before the numbers run together. */
 const MIN_TICK_CM = 0.5;
@@ -101,6 +107,22 @@ function capped(span: Span, cap: number): Interval | null {
   return span.lo > 0 ? [span.lo, Math.min(span.hi, span.lo + cap)] : [Math.max(span.lo, span.hi - cap), span.hi];
 }
 
+/**
+ * The x of what a reader looks for on a graph, within the usual window: its
+ * roots, turning points and crossing with the y axis.
+ */
+function featureXs(g: FunctionGraph): number[] {
+  const look = { expr: g.expr, domain: DEFAULT_PLOT_WINDOW.x, range: FEATURE_RANGE };
+  return (["root", "extremum", "yAxis"] as const).flatMap((f) => notablePoints(look, f).map((p) => p.x));
+}
+
+/** `w` widened to `width`, about its middle, with ends on ticks. */
+function atLeast(w: Interval, width: number, step: number): Interval {
+  if (w[1] - w[0] >= width) return w;
+  const mid = (w[0] + w[1]) / 2;
+  return [tidy(Math.floor((mid - width / 2) / step + 1e-9) * step), tidy(Math.ceil((mid + width / 2) / step - 1e-9) * step)];
+}
+
 /** The window and steps that fit everything but the axes themselves, grids and number lines. */
 export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" | "step" | "yStep"> {
   const skip = onNumberLines(doc);
@@ -149,14 +171,23 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
     }
   }
 
-  // x: the figure with a tick of room, at least a tick past the origin, and the usual window for graphs.
+  // x: the figure with a tick of room, at least a tick past the origin, and for graphs
+  // their roots, turning points and y crossing, over at least MIN_GRAPH_WIDTH.
   const pi = axes.xPi;
   const cm = { x: axes.unit?.[0] ?? 1, y: axes.unit?.[1] ?? 1 };
   const geoX: Interval = xs.empty ? [0, 0] : [Math.min(xs.lo, 0), Math.max(xs.hi, 0)];
-  const step = pi ? axes.step : niceStep(Math.max(geoX[1] - geoX[0], following.length > 0 ? 10 : 0), cm.x);
+  const features = new Span();
+  features.add(0);
+  for (const g of following) for (const fx of featureXs(g)) features.add(fx);
+  const graphX: Interval = [features.lo, features.hi];
+  const span = Math.max(geoX[1] - geoX[0], following.length > 0 ? Math.max(graphX[1] - graphX[0], MIN_GRAPH_WIDTH) : 0);
+  const step = pi ? axes.step : niceStep(span, cm.x);
   const stepX = pi ? pi * Math.PI : step;
   let x: Interval = xs.empty && following.length === 0 ? [...DEFAULT_PLOT_WINDOW.x] : withRoom(geoX, stepX);
-  if (following.length > 0) x = [Math.min(x[0], DEFAULT_PLOT_WINDOW.x[0]), Math.max(x[1], DEFAULT_PLOT_WINDOW.x[1])];
+  if (following.length > 0) {
+    const g = atLeast(withRoom(graphX, stepX), MIN_GRAPH_WIDTH, stepX);
+    x = xs.empty ? g : [Math.min(x[0], g[0]), Math.max(x[1], g[1])];
+  }
   if (pi) x = piWindow(x, pi);
 
   for (const g of following) addCurve(curves, g, x, axes);

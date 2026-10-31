@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   addAxes,
   addGrid,
+  addPointOnGraph,
   construct,
   connectPoints,
   fitFigure,
@@ -114,6 +115,17 @@ export function useAvailability(): Record<CheckId, Availability> {
     }
     return out;
   }, [doc, selection, prefs]);
+}
+
+/** "Ponto sobre o gráfico" at a spot right-clicked on a graph, or null without one. */
+export function useGraphPointAt(spot: { graph: Id; x: number } | null): Availability | null {
+  const doc = useFigureStore((s) => s.doc);
+  const prefs = useActivePrefs();
+  return useMemo(() => {
+    if (!spot) return null;
+    const opts = prefs && opOptions();
+    return check(doc, addPointOnGraph(doc, spot.graph, spot.x, "", opts), null);
+  }, [doc, prefs, spot]);
 }
 
 /** Props that show an action's result while its control is hovered or focused. */

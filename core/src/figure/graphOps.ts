@@ -1,5 +1,6 @@
 import { DEFAULT_PLOT_WINDOW, DEFAULT_STYLES, LIMITS } from "./defaults";
 import { pointMap, vanishedPoints } from "./geometry";
+import { fitFigure } from "./fit";
 import { formatNumber, withText } from "./labels";
 import { deleteElements, idMaker, LIMIT_ERROR, newAxes, type OpOptions, type OpResult } from "./ops";
 import { graphFn, notablePoints } from "./plot";
@@ -223,7 +224,8 @@ const FEATURE_WORDS = { root: "raízes", extremum: "máximos e mínimos" } as co
  */
 export function settleDoc(before: FigureDoc, after: FigureDoc): Settled {
   const gone = vanishedPoints(after);
-  const doc = gone.length > 0 ? deleteElements(after, gone.map((p) => p.id)).doc : after;
+  // Axes and grids that fit the figure give back the room they kept for what went.
+  const doc = gone.length > 0 ? fitFigure(deleteElements(after, gone.map((p) => p.id)).doc) : after;
   const dropped = gone.map((p) => p.label?.text ?? "");
   const droppedIds = gone.map((p) => p.id);
   const notes: string[] = [];

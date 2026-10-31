@@ -26,6 +26,7 @@ export type ActionId =
   | "zoomOut"
   | "toggleAutoFit"
   | "toggleGrid"
+  | "toggleSnap"
   | "help"
   | "settings";
 
@@ -51,6 +52,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   zoomOut: "Afastar",
   toggleAutoFit: "Enquadrar automaticamente",
   toggleGrid: "Mostrar ou esconder a grade",
+  toggleSnap: "Encaixar na grade",
   help: "Como usar",
   settings: "Configurações",
 };
@@ -77,6 +79,7 @@ export const DEFAULT_SHORTCUTS: Record<ActionId, string[]> = {
   zoomOut: ["-"],
   toggleAutoFit: ["F"],
   toggleGrid: ["Shift+G"],
+  toggleSnap: ["Shift+S"],
   help: ["?"],
   settings: ["Ctrl+,"],
 };
@@ -98,7 +101,7 @@ export interface Prefs {
     autoLabel: Record<AutoLabelKind, boolean>;
     /** Points added by clicking the preview join the selection. */
     selectAdded: boolean;
-    /** Points added or moved in the preview land on a grid crossing when near one. */
+    /** Starts the session's Encaixar na grade: points added or moved in the preview land on a grid crossing when near one. */
     snapToGrid: boolean;
     /** Shows the Figura rápida mode in the toolbar. Holding Adicionar pontos opens it either way. */
     quickFigure: boolean;
@@ -223,6 +226,7 @@ export function applyPrefsToSession(prefs: Prefs) {
       pngBackground: prefs.export.background,
       decimals: prefs.behavior.decimals,
       showGrid: prefs.behavior.showGrid,
+      snapToGrid: prefs.behavior.snapToGrid,
       autoFit: prefs.behavior.autoFit,
     },
   });

@@ -31,6 +31,7 @@ import {
   functionLines,
   gridValues,
   pointGuides,
+  xTickShift,
   xTickText,
 } from "./plot";
 import type {
@@ -485,7 +486,10 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           textRect(layers.label, el.id, at, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
         if (el.numbers) {
           const gap = el.size * 0.9;
-          for (const x of xs) text(xTickText(el, x), { x: x * kx, y: x0.y + tick + gap * 0.7 });
+          for (const x of xs) {
+            const s = xTickText(el, x);
+            text(s, { x: x * kx + xTickShift(doc, el, x, s), y: x0.y + tick + gap * 0.7 });
+          }
           for (const y of ys) {
             const s = formatNumber(y);
             text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * ky });

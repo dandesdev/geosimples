@@ -1,4 +1,4 @@
-import { Grid3x3, Scan, ZoomIn, ZoomOut } from "lucide-react";
+import { Grid3x3, Magnet, Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { useFigureStore } from "@/store/figureStore";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
@@ -11,7 +11,7 @@ export interface ZoomControls {
 }
 
 /**
- * Zoom, auto-fit and grid. On wider screens a column over the right edge of
+ * Zoom, auto-fit, grid and snapping. On wider screens a column over the right edge of
  * the preview; on phones, where anything over the small preview covers the
  * figure, a row in the action bar instead.
  */
@@ -23,6 +23,7 @@ export function ZoomBar({
   placement,
 }: ZoomControls & { placement: "overlay" | "toolbar" }) {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
+  const snap = useFigureStore((s) => s.settings.snapToGrid);
   const setSetting = useFigureStore((s) => s.setSetting);
   const coarse = useCoarsePointer();
   return (
@@ -68,6 +69,19 @@ export function ZoomBar({
         onClick={() => setSetting("showGrid", !showGrid)}
       >
         <Grid3x3 />
+      </IconButton>
+      <IconButton
+        label="Encaixar na grade"
+        shortcut="toggleSnap"
+        hint={
+          snap
+            ? "Ligado: pontos perto de um cruzamento da grade vão para ele, e pontas de gráficos para as marcas dos eixos."
+            : "Desligado: pontos e pontas de gráficos ficam onde você soltar."
+        }
+        active={snap}
+        onClick={() => setSetting("snapToGrid", !snap)}
+      >
+        <Magnet />
       </IconButton>
     </div>
   );

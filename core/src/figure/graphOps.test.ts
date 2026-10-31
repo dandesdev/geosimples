@@ -91,6 +91,16 @@ describe("notable points", () => {
     expect(points(settled.doc)).toEqual([]);
   });
 
+  it("keep their names on their roots when the formula gains a root to the left", () => {
+    const doc = markNotable(graph("x^2 - 4x + 3"), ["f1"], "root").doc;
+    const named = (d: FigureDoc) => points(d).map((p) => [p.label?.text, Math.round(p.x * 1e6) / 1e6]);
+    expect(named(doc)).toEqual([["x₁", 1], ["x₂", 3]]);
+    // (x + 2)(x − 1)(x − 3): the new root at −2 stays unmarked instead of taking x₁.
+    const cubic = setExpr(doc, "f1", "x^3 - 2x^2 - 5x + 6");
+    expect(named(cubic)).toEqual([["x₁", 1], ["x₂", 3]]);
+    expect(settleDoc(doc, cubic).notes).toEqual(["f tem 3 raízes agora; só 2 estão marcados."]);
+  });
+
   it("note when a graph gains roots nobody marked", () => {
     const doc = markNotable(graph("x - 1"), ["f1"], "root").doc;
     const settled = settleDoc(doc, setExpr(doc, "f1", "x^3 - x"));

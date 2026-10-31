@@ -60,11 +60,17 @@ function withEnd([a, b]: [number, number], end: 0 | 1, v: number, gap: number): 
   return end === 0 ? [Math.min(v, b - gap), b] : [a, Math.max(v, a + gap)];
 }
 
+/** To hundredths, as Mover places points. */
+const fine = (v: number) => Math.round(v * 100) / 100 || 0;
+
 /**
- * The figure with a handle dragged to `to` (world units), its end on the
- * nearest tick. Axes and grids set this way stop fitting the figure.
+ * The figure with a handle dragged to `to` (world units). Ends of axes, grids
+ * and number lines go to the nearest tick, since their ticks start there. The
+ * ends of a graph or vertical line follow the pointer, and land on a tick
+ * only within `reach` (world units along x and y) of one, when given.
+ * Axes and grids set this way stop fitting the figure.
  */
-export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">, to: Vec): FigureDoc {
+export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">, to: Vec, reach?: Vec): FigureDoc {
   const el = doc.elements.find((e) => e.id === handle.owner);
   if (!el) return doc;
   const along = handle.end[0] === "x" ? to.x : to.y;
@@ -74,6 +80,14 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
   // An end that snaps back where it was changes nothing, so a tap doesn't stop the axes or grid fitting.
   const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
   const axes = firstAxes(doc);
+  /** On the tick when one is in reach, else where the pointer is. */
+  const free = (step: number) => {
+    const tick = snap(along, step);
+    const r = reach && (handle.end[0] === "x" ? reach.x : reach.y);
+    return r !== undefined && Math.abs(tick - along) <= r ? tick : fine(along);
+  };
+  // Ends this close stay apart, the way they read on the paper.
+  const gap = 0.01;
   switch (el.type) {
     case "axes": {
       const step = handle.end[0] === "x" ? axesStepX(el) : axesStepY(el);
@@ -95,13 +109,11 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
       return same(x, el.x) ? doc : replace({ ...el, x });
     }
     case "vline": {
-      const step = axes ? axesStepY(axes) : 1;
-      const range = withEnd(el.range, end, snap(along, step), step);
+      const range = withEnd(el.range, end, free(axes ? axesStepY(axes) : 1), gap);
       return same(range, el.range) ? doc : replace({ ...el, range });
     }
     case "function": {
-      const step = axes ? axesStepX(axes) / 2 : 0.5;
-      const domain = withEnd(el.domain, end, snap(along, step), step);
+      const domain = withEnd(el.domain, end, free(axes ? axesStepX(axes) : 1), gap);
       return same(domain, el.domain) ? doc : replace({ ...el, domain });
     }
     default:

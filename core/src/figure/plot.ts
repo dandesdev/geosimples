@@ -1,5 +1,5 @@
 import { findExtrema, findRoots, parseExpr, sampleFunction, type Pt } from "../plot";
-import { formatNumber } from "./labels";
+import { estimateTextWidth, formatNumber } from "./labels";
 import type { Axes, FigureDoc, FunctionGraph, NotableFeature } from "./types";
 
 /**
@@ -160,6 +160,18 @@ export function piWindow(x: [number, number], xPi: number): [number, number] {
 export function axesOrigin(el: Axes): Pt {
   const clamp = (v: number, [a, b]: [number, number]) => Math.min(Math.max(v, a), b);
   return { x: clamp(0, el.x), y: clamp(0, el.y) };
+}
+
+/**
+ * How far right, in pt, the number under the x tick at `x` moves so a
+ * vertical line through it doesn't cross it: beside the line, as textbooks
+ * write the 2 of an asymptote x = 2. 0 when no line goes below the axis there.
+ */
+export function xTickShift(doc: FigureDoc, axes: Axes, x: number, text: string): number {
+  const o = axesOrigin(axes);
+  const line = doc.elements.find((e) => e.type === "vline" && Math.abs(e.x - x) < 1e-9 && e.range[0] < o.y);
+  if (!line || line.type !== "vline") return 0;
+  return estimateTextWidth(text, axes.size) / 2 + 2 + line.stroke.width / 2;
 }
 
 /** The dashed lines from a point to the axes, in world units; none along an axis it sits on. */

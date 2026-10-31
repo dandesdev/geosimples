@@ -379,7 +379,7 @@ function SettingsBody() {
               label="Encaixar na grade"
               checked={prefs.behavior.snapToGrid}
               onChange={(snapToGrid) => behavior({ snapToGrid })}
-              help="Ao adicionar ou mover pontos na prévia, um ponto perto de um cruzamento da grade vai para o cruzamento."
+              help="Ao adicionar ou mover pontos na prévia, um ponto perto de um cruzamento da grade vai para o cruzamento, e a ponta de um gráfico perto de uma marca do eixo vai para a marca. Também liga e desliga ao lado da prévia, pelo ímã."
             />
             <SwitchField
               label="Selecionar pontos criados na prévia"

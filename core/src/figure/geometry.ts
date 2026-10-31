@@ -680,48 +680,71 @@ export function vanishedPoints(doc: FigureDoc): Point[] {
 }
 
 /**
- * Marks on graphs whose domain or y cut changed, as when the axes' window
- * does, stay where they are (a new expression or line x still carries them by place):
- * each root, turning point and graph crossing
- * takes the entry of the new list at its spot, instead of the same place in
- * a list that now starts elsewhere. One whose spot left the window gets an
- * index past the list, so it goes like any mark whose feature is gone.
+ * Keeps the marks on graphs that changed on the feature they marked, instead
+ * of the same place in a list that may now start elsewhere. When only a
+ * graph's domain or y cut changed, as when the axes' window does, each root,
+ * turning point and graph crossing takes the entry of the new list at its
+ * spot; one whose spot left the window gets an index past the list, so it
+ * goes like any mark whose feature is gone. When the formula or a line's x
+ * changed, the marks of each feature take the nearest new spots, so a new
+ * root on the left doesn't pass x₁ on to it.
  */
 export function keepGraphMarks(before: FigureDoc, after: FigureDoc): FigureDoc {
   const old = new Map(before.elements.map((e) => [e.id, e]));
-  const changed = new Set(
-    after.elements
-      .filter((e) => {
-        const prev = old.get(e.id);
-        if (!prev || prev === e) return false;
-        // A graph with a new expression, or a line moved to a new x, carries its marks by place.
-        if (e.type === "vline") return prev.type === "vline" && prev.x === e.x;
-        return e.type === "function" && prev.type === "function" && prev.expr === e.expr;
-      })
-      .map((e) => e.id),
-  );
-  if (changed.size === 0) return after;
+  const kept = new Set<Id>();
+  const moved = new Set<Id>();
+  for (const e of after.elements) {
+    const prev = old.get(e.id);
+    if (!prev || prev === e) continue;
+    if (e.type === "vline" && prev.type === "vline") (prev.x === e.x ? kept : moved).add(e.id);
+    else if (e.type === "function" && prev.type === "function") (prev.expr === e.expr ? kept : moved).add(e.id);
+  }
+  if (kept.size === 0 && moved.size === 0) return after;
   const pts = pointMap(after);
   const curves = new Map<Id, Curve>();
   for (const el of after.elements) if (isCurve(el)) curves.set(el.id, el);
-  let moved = false;
-  const elements = after.elements.map((el) => {
-    if (el.type !== "point" || !el.construction) return el;
+  /** The new spots of each mark's feature, keyed by the feature, and whether its curves moved. */
+  const marks: { el: Point; key: string; spots: Vec[]; nearest: boolean }[] = [];
+  for (const el of after.elements) {
+    if (el.type !== "point" || !el.construction) continue;
     const c = el.construction;
-    let spots: Vec[] | null = null;
-    if (c.kind === "notable" && changed.has(c.graph)) {
+    if (c.kind === "notable" && (kept.has(c.graph) || moved.has(c.graph))) {
       const g = curves.get(c.graph);
-      if (g?.type === "function") spots = notablePoints(g, c.feature);
-    } else if (c.kind === "intersection" && c.of.some((id) => changed.has(id))) {
+      if (g?.type === "function") marks.push({ el, key: `${c.graph} ${c.feature}`, spots: notablePoints(g, c.feature), nearest: moved.has(c.graph) });
+    } else if (c.kind === "intersection" && c.of.some((id) => kept.has(id) || moved.has(id))) {
       const [a, b] = c.of.map((id) => curves.get(id));
-      if (a && b && !(isPlain(a) && isPlain(b))) spots = graphCrossings(a, b, pts).map((x) => x.point);
+      if (a && b && !(isPlain(a) && isPlain(b))) {
+        const spots = graphCrossings(a, b, pts).map((x) => x.point);
+        marks.push({ el, key: [...c.of].sort().join(" "), spots, nearest: c.of.some((id) => moved.has(id)) });
+      }
     }
-    if (!spots || (c.kind !== "notable" && c.kind !== "intersection")) return el;
-    const found = spots.findIndex((p) => dist(p, el) < 1e-6);
-    const index = found >= 0 ? found : spots.length;
-    if (index === c.index) return el;
-    moved = true;
-    return { ...el, construction: { ...c, index } };
+  }
+  const index = new Map<Id, number>();
+  for (const m of marks) if (!m.nearest) index.set(m.el.id, m.spots.findIndex((p) => dist(p, m.el) < 1e-6));
+  // Each new spot goes to the nearest mark still waiting, closest pairs first.
+  const groups = new Map<string, typeof marks>();
+  for (const m of marks) if (m.nearest) groups.set(m.key, [...(groups.get(m.key) ?? []), m]);
+  for (const group of groups.values()) {
+    const pairs = group.flatMap((m) => m.spots.map((p, i) => ({ m, i, d: dist(p, m.el) }))).sort((a, b) => a.d - b.d);
+    const taken = new Set<number>();
+    for (const { m, i } of pairs) {
+      if (index.has(m.el.id) || taken.has(i)) continue;
+      index.set(m.el.id, i);
+      taken.add(i);
+    }
+  }
+  const byPoint = new Map(marks.map((m) => [m.el.id, m]));
+  let changed = false;
+  const elements = after.elements.map((el): Element => {
+    const m = byPoint.get(el.id);
+    if (!m || el.type !== "point") return el;
+    const c = el.construction;
+    if (!c || (c.kind !== "notable" && c.kind !== "intersection")) return el;
+    const found = index.get(el.id) ?? -1;
+    const next = found >= 0 ? found : m.spots.length;
+    if (next === c.index) return el;
+    changed = true;
+    return { ...el, construction: { ...c, index: next } };
   });
-  return moved ? { ...after, elements } : after;
+  return changed ? { ...after, elements } : after;
 }
