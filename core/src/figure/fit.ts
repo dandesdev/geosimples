@@ -94,7 +94,11 @@ function capped(span: Span, cap: number): Interval | null {
   const above = Math.max(0, span.hi);
   if (below + above <= cap) return [span.lo, span.hi];
   const keptBelow = Math.min(below, Math.max(cap / 2, cap - above));
-  return [Math.max(span.lo, -keptBelow), Math.min(span.hi, cap - keptBelow)];
+  const lo = Math.max(span.lo, -keptBelow);
+  const hi = Math.min(span.hi, cap - keptBelow);
+  if (lo <= hi) return [lo, hi];
+  // All of it lies past the cap on one side: keep its part nearest the origin.
+  return span.lo > 0 ? [span.lo, Math.min(span.hi, span.lo + cap)] : [Math.max(span.lo, span.hi - cap), span.hi];
 }
 
 /** The window and steps that fit everything but the axes themselves, grids and number lines. */
@@ -261,8 +265,10 @@ export function fitFigure(doc: FigureDoc): FigureDoc {
       }),
     );
   }
+  // A grid left without its axes fits the figure instead.
+  const hasAxes = out.elements.some((e) => e.type === "axes");
   for (const el of out.elements) {
-    if (el.type !== "grid" || el.follow !== "figure") continue;
+    if (el.type !== "grid" || !(el.follow === "figure" || (el.follow === "axes" && !hasAxes))) continue;
     const w = fitGridWindow(out, el);
     if (sameInterval(w.x, el.x) && sameInterval(w.y, el.y)) continue;
     out = withElements(

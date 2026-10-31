@@ -70,6 +70,8 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
   const along = handle.end[0] === "x" ? to.x : to.y;
   const end = handle.end[1] === "0" ? 0 : 1;
   const replace = (next: Element) => resolveConstructions(withElements(doc, doc.elements.map((e) => (e.id === el.id ? next : e))));
+  // An end that snaps back where it was changes nothing, so a tap doesn't stop the axes or grid fitting.
+  const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
   const axes = firstAxes(doc);
   switch (el.type) {
     case "axes": {
@@ -77,6 +79,7 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
       const v = snap(along, step);
       const x = handle.end[0] === "x" ? withEnd(el.x, end, v, step) : el.x;
       const y = handle.end[0] === "y" ? withEnd(el.y, end, v, step) : el.y;
+      if (same(x, el.x) && same(y, el.y)) return doc;
       const r = setAxesWindow(doc, el.id, x, y);
       return r.error ? doc : withElements(r.doc, r.doc.elements.map((e) => (e.id === el.id && e.type === "axes" ? { ...e, fit: false } : e)));
     }
@@ -84,17 +87,21 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
       const v = snap(along, el.step);
       const x = handle.end[0] === "x" ? withEnd(el.x, end, v, el.step) : el.x;
       const y = handle.end[0] === "y" ? withEnd(el.y, end, v, el.step) : el.y;
-      return replace({ ...el, x, y, follow: "none" });
+      return same(x, el.x) && same(y, el.y) ? doc : replace({ ...el, x, y, follow: "none" });
     }
-    case "numberline":
-      return replace({ ...el, x: withEnd(el.x, end, snap(along, el.step), el.step) });
+    case "numberline": {
+      const x = withEnd(el.x, end, snap(along, el.step), el.step);
+      return same(x, el.x) ? doc : replace({ ...el, x });
+    }
     case "vline": {
       const step = axes ? axesStepY(axes) : 1;
-      return replace({ ...el, range: withEnd(el.range, end, snap(along, step), step) });
+      const range = withEnd(el.range, end, snap(along, step), step);
+      return same(range, el.range) ? doc : replace({ ...el, range });
     }
     case "function": {
       const step = axes ? axesStepX(axes) / 2 : 0.5;
-      return replace({ ...el, domain: withEnd(el.domain, end, snap(along, step), step) });
+      const domain = withEnd(el.domain, end, snap(along, step), step);
+      return same(domain, el.domain) ? doc : replace({ ...el, domain });
     }
     default:
       return doc;

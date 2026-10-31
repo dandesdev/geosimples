@@ -678,3 +678,41 @@ export function vanishedPoints(doc: FigureDoc): Point[] {
     return constructedPosition(el.construction, pts, segments, circles, graphs) === null;
   });
 }
+
+/**
+ * Marks on graphs whose domain or y cut changed, as when the axes' window
+ * does, stay where they are: each root, turning point and graph crossing
+ * takes the entry of the new list at its spot, instead of the same place in
+ * a list that now starts elsewhere. One whose spot left the window gets an
+ * index past the list, so it goes like any mark whose feature is gone.
+ */
+export function keepGraphMarks(before: FigureDoc, after: FigureDoc): FigureDoc {
+  const old = new Map(before.elements.map((e) => [e.id, e]));
+  const changed = new Set(
+    after.elements.filter((e) => (e.type === "function" || e.type === "vline") && old.get(e.id) !== e).map((e) => e.id),
+  );
+  if (changed.size === 0) return after;
+  const pts = pointMap(after);
+  const curves = new Map<Id, Curve>();
+  for (const el of after.elements) if (isCurve(el)) curves.set(el.id, el);
+  let moved = false;
+  const elements = after.elements.map((el) => {
+    if (el.type !== "point" || !el.construction) return el;
+    const c = el.construction;
+    let spots: Vec[] | null = null;
+    if (c.kind === "notable" && changed.has(c.graph)) {
+      const g = curves.get(c.graph);
+      if (g?.type === "function") spots = notablePoints(g, c.feature);
+    } else if (c.kind === "intersection" && c.of.some((id) => changed.has(id))) {
+      const [a, b] = c.of.map((id) => curves.get(id));
+      if (a && b && !(isPlain(a) && isPlain(b))) spots = graphCrossings(a, b, pts).map((x) => x.point);
+    }
+    if (!spots || (c.kind !== "notable" && c.kind !== "intersection")) return el;
+    const found = spots.findIndex((p) => dist(p, el) < 1e-6);
+    const index = found >= 0 ? found : spots.length;
+    if (index === c.index) return el;
+    moved = true;
+    return { ...el, construction: { ...c, index } };
+  });
+  return moved ? { ...after, elements } : after;
+}

@@ -12,6 +12,9 @@ import {
   fitFigure,
   gridWindow,
   makeCircle,
+  markNotable,
+  setAxesWindow,
+  settleDoc,
   addNumberLine,
   buildScene,
   moveElements,
@@ -62,6 +65,8 @@ describe("axes that fit the figure", () => {
     // An asymptote runs off both ways: an even split.
     expect(fitted(withGraph("1/x"))).toMatchObject({ y: [-12, 12] });
     expect(fitted(withGraph("x/2"))).toMatchObject({ y: [-4, 4] });
+    // A curve far above the origin still shows: the cut keeps its part nearest the origin.
+    expect(fitted(withGraph("x + 100"))).toMatchObject({ y: [-10, 120] });
   });
 
   it("fit graphs and geometry together, and leave hand-set axes alone", () => {
@@ -69,6 +74,20 @@ describe("axes that fit the figure", () => {
     expect(fitted(both)).toMatchObject({ x: [-5, 9] });
     const byHand = { ...both, elements: both.elements.map((e) => (e.type === "axes" ? { ...e, fit: false } : e)) };
     expect(fitFigure(byHand)).toBe(byHand);
+  });
+
+  it("keep marked roots where they are when the window grows or shrinks", () => {
+    const sine = fitFigure(markNotable(withGraph("sen(x)", addAxes(emptyDoc()).doc), ["f1"], "root").doc);
+    const roots = (d: FigureDoc) => d.elements.flatMap((e) => (e.type === "point" && e.construction ? [Math.round(e.x * 1000) / 1000] : []));
+    expect(roots(sine)).toEqual([-3.142, 0, 3.142]);
+    // A point far left widens the window: the roots it brings in are not the ones marked.
+    const wider = fitFigure(addPoints(sine, [{ x: -14, y: 0 }]).doc);
+    expect(axesOf(wider).x[0]).toBeLessThan(-14);
+    expect(roots(wider)).toEqual([-3.142, 0, 3.142]);
+    // A window that leaves -π out drops that mark, and only that one.
+    const narrow = settleDoc(sine, setAxesWindow(sine, "e1", [-1, 5], axesOf(sine).y).doc);
+    expect(narrow.dropped).toEqual(["x₁"]);
+    expect(roots(narrow.doc)).toEqual([0, 3.142]);
   });
 
   it("show the fitted window in the exports", () => {
@@ -88,6 +107,9 @@ describe("printed grids", () => {
     expect(alone.elements[0]).toMatchObject({ follow: "figure" });
     expect(fitFigure(alone).elements[0]).toMatchObject({ x: [-1, 4], y: [-1, 3] });
     // A fixed grid stays where it was set.
+    // Left without its axes, a grid that followed them fits the figure.
+    const orphan = { ...over, elements: over.elements.filter((e) => e.type !== "axes") };
+    expect(fitFigure(orphan).elements[0]).not.toMatchObject({ x: grid.x, y: grid.y });
     const fixed = { ...alone, elements: alone.elements.map((e) => (e.type === "grid" ? { ...e, follow: "none" as const } : e)) };
     expect(fitFigure(fixed)).toBe(fixed);
   });
@@ -106,6 +128,8 @@ describe("Mover", () => {
     expect(axesOf(wider)).toMatchObject({ x: [-5, 7], fit: false });
     // The graph drawn over the window follows it.
     expect(wider.elements.find((e) => e.type === "function")).toMatchObject({ domain: [-5, 7] });
+    // A press that snaps back to the same tick changes nothing, so the axes keep fitting.
+    expect(dragHandle(doc, { owner: "e1", end: "x1" }, { x: 5.2, y: 0.1 })).toBe(doc);
     // An end can't pass the other one.
     expect(axesOf(dragHandle(doc, { owner: "e1", end: "x0" }, { x: 9, y: 0 })).x).toEqual([4, 5]);
   });

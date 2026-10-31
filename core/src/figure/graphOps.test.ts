@@ -258,10 +258,10 @@ describe("turning shapes into functions", () => {
 });
 
 describe("review fixes", () => {
-  it("move notable points right away when the axes window changes the graph's domain", () => {
+  it("keep notable points on their roots when the axes window changes the graph's domain", () => {
     const doc = markNotable(graph("sen(x)"), ["f1"], "root").doc;
     const wider = setAxesWindow(doc, "e1", [-7, 7], [-5, 5]).doc;
-    expect(points(wider).map((p) => Math.round(p.x * 1e4) / 1e4)).toEqual([-6.2832, -3.1416, 0]);
+    expect(points(wider).map((p) => Math.round(p.x * 1e4) / 1e4)).toEqual([-3.1416, 0, 3.1416]);
   });
 
   it("keep a vertex as its own point where a root also is", () => {

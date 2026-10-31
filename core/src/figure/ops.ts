@@ -5,6 +5,7 @@ import {
   circumcircle,
   constructionParents,
   distanceToLine,
+  keepGraphMarks,
   loopFromSegments,
   pointMap,
   resolveConstructions,
@@ -753,7 +754,7 @@ export function addText(doc: FigureDoc, at: { x: number; y: number }, text: stri
 
 export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
-    if (el.type === "text" || el.type === "axes") return el;
+    if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return el;
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
       const next = { ...el };
@@ -1154,5 +1155,5 @@ export function setAxesWindow(doc: FigureDoc, id: Id, x: [number, number], y: [n
       range: sameInterval(el.range, axes.y) ? y : el.range,
     };
   });
-  return ok(resolveConstructions(withElements(doc, elements)));
+  return ok(resolveConstructions(keepGraphMarks(doc, withElements(doc, elements))));
 }

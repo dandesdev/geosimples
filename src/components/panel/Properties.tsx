@@ -673,7 +673,8 @@ function GridProperties({ el, update, multi, doc }: EditorProps<Grid>) {
     <Section title="Malha">
       <Choice
         label="Acompanha"
-        value={el.follow}
+        // Without axes, a grid that followed them fits the figure.
+        value={el.follow === "axes" && !hasAxes ? "figure" : el.follow}
         options={hasAxes ? GRID_FOLLOW : GRID_FOLLOW.filter((o) => o.value !== "axes")}
         // Fixed where it is now, so choosing Fixa doesn't make it jump.
         onChange={(follow) => update((g) => ({ ...g, follow, ...(follow === "none" ? { x: w.x, y: w.y } : {}) }), "follow")}

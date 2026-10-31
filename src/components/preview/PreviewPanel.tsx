@@ -82,7 +82,7 @@ type Gesture =
   /** A finger left a pinch: the rest are ignored until all are up, so nothing gets selected by accident. */
   | { kind: "spent" }
   /** Mover dragging an end of axes, a grid, a number line, a vertical line or a graph. */
-  | { kind: "handle"; owner: Id; end: HandleEnd; base: FigureDoc; moved: boolean };
+  | { kind: "handle"; owner: Id; end: HandleEnd; base: FigureDoc; moved: boolean; x: number; y: number; slop: number };
 
 /** Elements Mover drags: points, texts, shapes by their points, vertical lines and number lines. */
 function movables(doc: FigureDoc): Set<Id> {
@@ -318,7 +318,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       const [id, end] = handle.getAttribute("data-handle")!.split(":") as [Id, HandleEnd];
       store.beginTransient();
       setFrozen(vb);
-      gesture.current = { kind: "handle", owner: id, end, base: store.doc, moved: false };
+      gesture.current = { kind: "handle", owner: id, end, base: store.doc, moved: false, x: e.clientX, y: e.clientY, slop };
       return;
     }
     const movable = movables(store.doc);
@@ -371,6 +371,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       }
       useFigureStore.getState().setTransient(moveElements(g.base, g.ids, { x: dx, y: dy }));
     } else if (g.kind === "handle") {
+      // A tap jitters: it selects, and only a real drag moves the end.
+      if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < g.slop) return;
       g.moved = true;
       const p = toUser(svg, e.clientX, e.clientY);
       useFigureStore.getState().setTransient(dragHandle(g.base, g, { x: p.x / ppu.x, y: -p.y / ppu.y }));
