@@ -6,19 +6,25 @@ import {
   addPointOnGraph,
   addTangentAt,
   addPoints,
+  addSpot,
   addVerticalLine,
   applyInput,
   buildScene,
   construct,
   connectPoints,
   deleteElements,
+  dragHandle,
+  elementHandles,
   emptyDoc,
   extensionEnds,
+  figureSpots,
+  fitFigure,
   functionLines,
   linearExpr,
   makeCircle,
   makePolygon,
   markNotable,
+  moveElements,
   moveNumberLine,
   movePoints,
   normalizeDoc,
@@ -26,6 +32,7 @@ import {
   pointMap,
   resizeTangent,
   setAxesWindow,
+  setTangentFill,
   settleDoc,
   tangentOf,
   toFunctions,
@@ -35,6 +42,7 @@ import {
   type Extension,
   type FigureDoc,
   type FunctionGraph,
+  type Axes,
   type Point,
   type Segment,
   type VerticalLine,
@@ -50,6 +58,7 @@ const at = (doc: FigureDoc) => points(doc).map((p) => [p.x, p.y].map((v) => Math
 const setExpr = (doc: FigureDoc, id: string, expr: string) =>
   updateElements(doc, [id], (e) => ({ ...e, expr }) as FunctionGraph);
 const byId = (doc: FigureDoc, id: string) => doc.elements.find((e) => e.id === id) as Element;
+const axesOf = (doc: FigureDoc) => doc.elements.find((e): e is Axes => e.type === "axes")!;
 
 describe("roots and turning points", () => {
   it("find sign changes and touching roots, but not asymptotes", () => {
@@ -136,7 +145,7 @@ describe("tangents", () => {
     expect(tangentOf(slid, segmentOf(slid))!.slope).toBeCloseTo(-2, 4);
     // Longer, still centered on its point.
     const longer = resizeTangent(doc, segmentOf(doc).id, 6).doc;
-    expect(tangentOf(longer, segmentOf(longer))!.length).toBe(6);
+    expect(tangentOf(longer, segmentOf(longer))!.length).toBeCloseTo(6, 9);
     expect(construct(doc, placed.created, "tangent").error).toMatch(/já existe/);
     expect(normalizeDoc(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
     // Deleting its point takes the tangent too.
@@ -151,6 +160,93 @@ describe("tangents", () => {
     expect(ends(flat)).toEqual([[-2, -1], [2, -1]]);
     expect(addTangentAt(graph("abs(x)"), "f1", 0).error).toMatch(/bico/);
     expect(construct(graph("x^2"), ["f1"], "tangent").error).toMatch(/Selecione um ponto sobre um gráfico/);
+  });
+
+  const tangentDoc = () => {
+    const placed = addPointOnGraph(graph("x^2"), "f1", 1);
+    return { doc: construct(placed.doc, placed.created, "tangent").doc, point: placed.created[0] };
+  };
+
+  it("fill the axes' window when asked, without making it grow, and keep their length when they stop", () => {
+    const { doc: start } = tangentDoc();
+    const doc = fitFigure(start);
+    const before = axesOf(doc);
+    // As the editor commits it: the window fits what is left, and the ends follow it.
+    const filled = fitFigure(setTangentFill(doc, segmentOf(doc).id, true).doc);
+    expect(tangentOf(filled, segmentOf(filled))!.fill).toBe(true);
+    const { x, y } = axesOf(filled);
+    // Its ends no longer need room: the window can only shrink.
+    expect(y[0]).toBeGreaterThanOrEqual(before.y[0]);
+    expect(y[1]).toBeLessThanOrEqual(before.y[1]);
+    expect(fitFigure(filled)).toBe(filled);
+    // y = 2x - 1 from the bottom of the window to its top, or its side, whichever comes first.
+    const [lo, hi] = ends(filled);
+    expect(lo[1] === y[0] || lo[0] === x[0]).toBe(true);
+    expect(hi[1] === y[1] || hi[0] === x[1]).toBe(true);
+    // A wider window takes it along.
+    const wider = setAxesWindow(filled, axesOf(filled).id, [x[0] - 4, x[1] + 4], [y[0] - 4, y[1] + 4]).doc;
+    expect(ends(wider)[1][1]).toBeGreaterThan(hi[1]);
+    const kept = setTangentFill(filled, segmentOf(filled).id, false).doc;
+    expect(tangentOf(kept, segmentOf(kept))).toMatchObject({ fill: false });
+    expect(tangentOf(kept, segmentOf(kept))!.length).toBeCloseTo(tangentOf(filled, segmentOf(filled))!.length, 1);
+    expect(normalizeDoc(JSON.parse(JSON.stringify(filled)))).toEqual(filled);
+    expect(setTangentFill(start, "nope", true).error).toMatch(/Selecione uma reta tangente/);
+  });
+
+  it("drag by their ends along the line, each on its side, and slide along the curve when dragged whole", () => {
+    const { doc, point } = tangentDoc();
+    const s = segmentOf(doc);
+    const handles = elementHandles(doc, s);
+    expect(handles.map((h) => h.end)).toEqual(["x0", "x1"]);
+    // Off the line at (4, 5): the end goes to the line's point nearest it, (3.2, 5.4).
+    const far = dragHandle(doc, { owner: s.id, end: "x1" }, { x: 4, y: 5 });
+    expect(ends(far)[1][0]).toBeCloseTo(3.2, 2);
+    expect(ends(far)[1][1]).toBeCloseTo(5.4, 2);
+    expect(ends(far)[0]).toEqual(ends(doc)[0]);
+    // Past the point it stops a hair short of it, on its own side.
+    const back = dragHandle(doc, { owner: s.id, end: "x1" }, { x: -3, y: -7 });
+    expect(tangentOf(back, segmentOf(back))!.length).toBeCloseTo(2.01, 2);
+    // With a reach, an end near a tick of x lands on it.
+    const snapped = dragHandle(doc, { owner: s.id, end: "x1" }, { x: 2.05, y: 3.1 }, { x: 0.2, y: 0.2 });
+    expect(ends(snapped)[1]).toEqual([2, 3]);
+    // Dragged whole, its point slides along the curve and it turns with it.
+    const slid = moveElements(doc, [s.id], { x: 1, y: 3 });
+    expect(byId(slid, point)).toMatchObject({ x: 2 });
+    expect(tangentOf(slid, segmentOf(slid))!.slope).toBeCloseTo(4, 3);
+  });
+});
+
+describe("spots", () => {
+  const roles = (doc: FigureDoc) => figureSpots(doc).map((s) => [s.role, ...[s.at.x, s.at.y].map((v) => Math.round(v * 1e6) / 1e6)]);
+
+  it("are the turning points, roots and y crossing nobody marked, once each", () => {
+    // The vertex is also the y crossing: it shows once, as the minimum.
+    expect(roles(graph("x^2 - 1"))).toEqual([["min", 0, -1], ["root", -1, 0], ["root", 1, 0]]);
+    const sin = graph("sin(x)");
+    const turns = (doc: FigureDoc) => roles(doc).filter(([r]) => r === "max" || r === "min").map(([r]) => r);
+    expect(turns(setAxesWindow(sin, axesOf(sin).id, [-4, 4], [-2, 2]).doc)).toEqual(["min", "max"]);
+    const marked = markNotable(graph("x^2 - 1"), ["f1"], "root").doc;
+    expect(roles(marked)).toEqual([["min", 0, -1]]);
+  });
+
+  it("are where curves cross, and become points that follow them", () => {
+    const doc = applyInput(emptyDoc(), parseInput("A=(0;0)--B=(4;4) C=(0;4)--D=(4;0)")).doc;
+    const spots = figureSpots(doc);
+    expect(roles(doc)).toEqual([["intersection", 2, 2]]);
+    const added = addSpot(doc, spots[0]);
+    const p = byId(added.doc, added.created[0]) as Point;
+    expect(p.construction).toMatchObject({ kind: "intersection", index: 0 });
+    expect(figureSpots(added.doc)).toEqual([]);
+    expect(addSpot(added.doc, spots[0]).error).toMatch(/Já há um ponto/);
+    // A point moved along, the crossing follows.
+    const moved = movePoints(added.doc, [{ id: points(added.doc)[1].id, x: 4, y: 8 }]);
+    expect(byId(moved, p.id)).not.toMatchObject({ x: 2, y: 2 });
+  });
+
+  it("name a vertex V when added", () => {
+    const doc = graph("x^2 - 1");
+    const added = addSpot(doc, figureSpots(doc)[0]);
+    expect(byId(added.doc, added.created[0])).toMatchObject({ x: 0, y: -1, label: { text: "V" }, construction: { kind: "notable", feature: "extremum" } });
   });
 });
 

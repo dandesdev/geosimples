@@ -97,3 +97,19 @@ export async function clickAlong(page: Page, owner: string, fraction: number) {
   }, fraction);
   await page.mouse.click(at.x, at.y);
 }
+
+/** Where on screen an element's curve is lowest, read from its hit path: a parabola's vertex. */
+export async function lowestAlong(page: Page, owner: string) {
+  return page.locator(`[data-owner="${owner}"] path`).last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const m = path.getScreenCTM()!;
+    const total = path.getTotalLength();
+    let best = { x: 0, y: -Infinity };
+    for (let i = 0; i <= 2000; i++) {
+      const p = path.getPointAtLength((total * i) / 2000);
+      const at = { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+      if (at.y > best.y) best = at;
+    }
+    return best;
+  });
+}

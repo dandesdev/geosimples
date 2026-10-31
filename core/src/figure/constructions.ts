@@ -11,7 +11,7 @@ import {
   projectOntoLine,
 } from "./geometry";
 import { nextPointNames, withText } from "./labels";
-import { notablePoints, tangentDirection } from "./plot";
+import { functionValue, notablePoints, tangentDirection } from "./plot";
 import {
   addPointOnGraph,
   angleExists,
@@ -557,10 +557,14 @@ export interface Tangent {
   graph: Id;
   /** The point it touches the graph at. */
   point: Id;
+  /** Its ends: the one behind the point (left, or below where it stands upright), then the one ahead. */
+  ends: [Id, Id];
   /** Length in world units. */
   length: number;
   /** Its slope, f'(x) at the point, or null where it stands upright. */
   slope: number | null;
+  /** Both ends reach the edges of the axes' window. */
+  fill: boolean;
 }
 
 /** The tangent a segment is, or null for other segments. */
@@ -575,7 +579,24 @@ export function tangentOf(doc: FigureDoc, el: Element): Tangent | null {
   const p = pts.get(ca.point);
   const dir = graph && p ? tangentDirection(graph.expr, p.x) : null;
   const slope = dir && dir.x > 1e-12 ? dir.y / dir.x : null;
-  return { graph: ca.graph, point: ca.point, length: Math.abs(ca.along) + Math.abs(cb.along), slope };
+  const a = pts.get(el.a)!;
+  const b = pts.get(el.b)!;
+  return {
+    graph: ca.graph,
+    point: ca.point,
+    ends: ca.along < 0 ? [el.a, el.b] : [el.b, el.a],
+    length: dist(a, b),
+    slope,
+    fill: !!ca.fill && !!cb.fill,
+  };
+}
+
+/** A tangent end with its distance from the point set, no longer filling the window. */
+function tangentEndAt(p: Point, along: number): Point {
+  if (p.construction?.kind !== "tangent") return p;
+  const c = { ...p.construction, along };
+  delete c.fill;
+  return { ...p, construction: c };
 }
 
 /** Sets the length of a tangent, half on each side of its point. */
@@ -583,9 +604,34 @@ export function resizeTangent(doc: FigureDoc, id: Id, length: number): OpResult 
   const el = doc.elements.find((e) => e.id === id);
   if (!el || el.type !== "segment" || !tangentOf(doc, el)) return fail(doc, "Selecione uma reta tangente.");
   if (!(length > 0)) return fail(doc, "O comprimento precisa ser maior que zero.");
-  const next = updateElements(doc, [el.a, el.b], (p) => {
+  const next = updateElements(doc, [el.a, el.b], (p) =>
+    p.type === "point" && p.construction?.kind === "tangent" ? tangentEndAt(p, (Math.sign(p.construction.along) * length) / 2) : p,
+  );
+  return { doc: next, created: [] };
+}
+
+/** Sets where one end of a tangent is: `along` world units from its point, on the end's side. */
+export function placeTangentEnd(doc: FigureDoc, end: Id, along: number): FigureDoc {
+  return updateElements(doc, [end], (p) => (p.type === "point" ? tangentEndAt(p, along) : p));
+}
+
+/**
+ * Makes a tangent reach across the axes' window, without making it grow, or
+ * stop doing so and keep the length it has.
+ */
+export function setTangentFill(doc: FigureDoc, id: Id, on: boolean): OpResult {
+  const el = doc.elements.find((e) => e.id === id);
+  const tangent = el ? tangentOf(doc, el) : null;
+  if (!el || el.type !== "segment" || !tangent) return fail(doc, "Selecione uma reta tangente.");
+  if (on && !doc.elements.some((e) => e.type === "axes")) return fail(doc, "A reta tangente só preenche a janela dos eixos.");
+  const pts = pointMap(doc);
+  const touch = pts.get(tangent.point);
+  if (!touch) return fail(doc, "Selecione uma reta tangente.");
+  const next = updateElements(doc, tangent.ends, (p) => {
     if (p.type !== "point" || p.construction?.kind !== "tangent") return p;
-    return { ...p, construction: { ...p.construction, along: (Math.sign(p.construction.along) * length) / 2 } };
+    const side = Math.sign(p.construction.along) || 1;
+    if (!on) return tangentEndAt(p, side * (Math.round(dist(touch, p) * 100) / 100 || 0.01));
+    return { ...p, construction: { ...p.construction, fill: true } };
   });
   return { doc: next, created: [] };
 }
@@ -813,6 +859,83 @@ export function markNotable(doc: FigureDoc, selection: Id[], feature: NotableFea
   }
   if (found === 0) return fail(doc, NONE_FOUND[feature]);
   return d.result(ALREADY[feature]);
+}
+
+/** What a spot is, as the preview names it. */
+export type SpotRole = "intersection" | "max" | "min" | "root" | "yAxis";
+
+/**
+ * A point the figure could have but doesn't yet: where two curves cross, or
+ * a graph's root, turning point or y crossing. The preview shows one near
+ * the pointer and adds it on request with `addSpot`.
+ */
+export interface Spot {
+  at: Vec;
+  role: SpotRole;
+  construction: Extract<PointConstruction, { kind: "intersection" | "notable" }>;
+  /** The name a notable point gets, as Raízes and Máximos e mínimos give it. */
+  label?: string;
+}
+
+/** Most curves compared for spots: each pair is solved, so a crowded figure stops at some. */
+const MAX_SPOT_CURVES = 40;
+
+/** Whether a turning point of the graph at x is a maximum (the curve is below it on both sides). */
+function turnAt(g: FunctionGraph, at: Vec): "max" | "min" {
+  const h = Math.max((g.domain[1] - g.domain[0]) * 1e-4, 1e-6);
+  const around = [at.x - h, at.x + h].map((x) => functionValue(g.expr, x)).filter((y): y is number => y !== null);
+  return around.length > 0 && around.every((y) => y <= at.y) ? "max" : "min";
+}
+
+/**
+ * The crossings of the figure's curves and the notable points of its graphs
+ * that no point of the figure marks yet. Crossings come only where both
+ * curves are drawn, and notable points only where the curve shows.
+ */
+export function figureSpots(doc: FigureDoc): Spot[] {
+  const pts = pointMap(doc);
+  const taken = [...pts.values()];
+  const out: Spot[] = [];
+  const free = (at: Vec) =>
+    Number.isFinite(at.x) && Number.isFinite(at.y) && ![...taken, ...out.map((s) => s.at)].some((p) => dist(p, at) < 1e-6);
+  const curves = doc.elements.filter(isCurve).slice(0, MAX_SPOT_CURVES);
+  for (let i = 0; i < curves.length; i++) {
+    for (let j = i + 1; j < curves.length; j++) {
+      for (const x of curveCrossings(curves[i], curves[j], pts)) {
+        if (!x.inside || !free(x.point)) continue;
+        out.push({ at: x.point, role: "intersection", construction: { kind: "intersection", of: [curves[i].id, curves[j].id], index: x.index } });
+      }
+    }
+  }
+  for (const g of curves) {
+    if (g.type !== "function") continue;
+    for (const feature of ["extremum", "root", "yAxis"] as const) {
+      const at = notablePoints(g, feature);
+      at.forEach((p, index) => {
+        if (!free(p)) return;
+        const role = feature === "extremum" ? turnAt(g, p) : feature;
+        out.push({ at: p, role, construction: { kind: "notable", graph: g.id, feature, index }, label: notableName(feature, index, at.length) });
+      });
+    }
+  }
+  return out;
+}
+
+/** Adds the point a spot shows, following what it marks like the point Interseção or Raízes would add. */
+export function addSpot(doc: FigureDoc, spot: Spot, opts: OpOptions = {}): OpResult {
+  const parents = constructionParents(spot.construction);
+  if (!parents.every((id) => doc.elements.some((e) => e.id === id))) return fail(doc, "Esse ponto não existe mais.");
+  if (doc.elements.some((e) => e.type === "point" && dist(e, spot.at) < 1e-6)) return fail(doc, "Já há um ponto aí.");
+  const d = draft(doc, opts);
+  const id = d.point(spot.at, spot.construction, false, spot.label);
+  if (spot.construction.kind === "intersection") {
+    // As Interseção does: a segment moved off the crossing still reaches it, dashed.
+    for (const c of spot.construction.of) {
+      const curve = doc.elements.find((e) => e.id === c);
+      if (curve?.type === "segment") d.extension([curve.a, curve.b], id);
+    }
+  }
+  return d.result("Já há um ponto aí.");
 }
 
 /** Makes constructed points free: they stay where they are and stop following their parents. */

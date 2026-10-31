@@ -15,7 +15,9 @@ import {
   fillShapes,
   addPointOnGraph,
   addTangentAt,
+  addSpot,
   resizeTangent,
+  setTangentFill,
   pointMap,
   pointOnSelectedGraph,
   toggleGuides,
@@ -38,6 +40,7 @@ import {
   type Id,
   type AutoLabelJob,
   type OpResult,
+  type Spot,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { emitCommand } from "@/lib/commands";
@@ -109,6 +112,12 @@ export const actions = {
     if (result.error) toast.error(result.error);
     else store.commit(result.doc, `${id}:tangent-length`);
   },
+
+  /** Makes a tangent reach across the axes' window, or keep the length it has now. */
+  fillTangent: (id: Id, on: boolean) => perform((doc) => setTangentFill(doc, id, on), "keep"),
+
+  /** The crossing, root or turning point the preview showed under the pointer, as a point that follows it. */
+  addSpot: (spot: Spot) => perform((doc) => addSpot(doc, spot, opOptions())),
 
   /** Roots, turning points or the y crossing of the selected graphs, as points that follow them. */
   markNotable: (feature: NotableFeature) => perform((doc, sel) => markNotable(doc, sel, feature, opOptions())),

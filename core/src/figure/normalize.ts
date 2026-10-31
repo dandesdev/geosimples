@@ -457,7 +457,10 @@ function pointConstruction(
       const graph = x.graph;
       const along = coord(x.along);
       if (typeof graph !== "string" || types.get(graph) !== "function" || !isPoint(x.point) || along === null) return undefined;
-      return { kind: "tangent", graph, point: x.point, along: num(along, -1000, 1000, 2) };
+      const at = num(along, -1000, 1000, 2);
+      return x.fill === true
+        ? { kind: "tangent", graph, point: x.point, along: at, fill: true }
+        : { kind: "tangent", graph, point: x.point, along: at };
     }
   }
   return undefined;

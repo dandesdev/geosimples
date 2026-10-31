@@ -2,6 +2,7 @@ import { findRoots } from "../plot";
 import { functionValue, graphFn, notablePoints, tangentDirection } from "./plot";
 import type {
   Angle,
+  Axes,
   Circle,
   Element,
   Extension,
@@ -290,6 +291,7 @@ export function resolveConstructions(doc: FigureDoc): FigureDoc {
     else if (el.type === "segment") segments.set(el.id, el);
     else if (el.type === "function" || el.type === "vline") graphs.set(el.id, el);
   }
+  const frame = frameOf(doc);
   const replacePoint = (p: Point) => {
     const i = elements.findIndex((e) => e.id === p.id);
     if (i >= 0) elements[i] = p;
@@ -313,7 +315,7 @@ export function resolveConstructions(doc: FigureDoc): FigureDoc {
           moved = true;
         }
       } else if (el.type === "point" && el.construction) {
-        const at = constructedPosition(el.construction, pts, segments, circles, graphs);
+        const at = constructedPosition(el.construction, pts, segments, circles, graphs, frame);
         if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
         if (Math.abs(at.x - el.x) < 1e-12 && Math.abs(at.y - el.y) < 1e-12) continue;
         const next = { ...el, x: at.x, y: at.y };
@@ -571,6 +573,28 @@ export function crossings(first: Segment | Circle, second: Segment | Circle, pts
   });
 }
 
+/** The window of the figure's axes, which tangents that fill it reach across. */
+export type Frame = Pick<Axes, "x" | "y">;
+
+export function frameOf(doc: FigureDoc): Frame | undefined {
+  return doc.elements.find((e): e is Axes => e.type === "axes");
+}
+
+/**
+ * How far from p along d the box goes: the largest t with p + t·d inside it.
+ * Null when p is outside the box.
+ */
+export function reachInBox(p: Vec, d: Vec, box: Frame): number | null {
+  const eps = 1e-9;
+  if (p.x < box.x[0] - eps || p.x > box.x[1] + eps || p.y < box.y[0] - eps || p.y > box.y[1] + eps) return null;
+  let t = Infinity;
+  if (d.x > eps) t = Math.min(t, (box.x[1] - p.x) / d.x);
+  if (d.x < -eps) t = Math.min(t, (box.x[0] - p.x) / d.x);
+  if (d.y > eps) t = Math.min(t, (box.y[1] - p.y) / d.y);
+  if (d.y < -eps) t = Math.min(t, (box.y[0] - p.y) / d.y);
+  return Number.isFinite(t) ? Math.max(t, 0) : null;
+}
+
 /** Where a constructed point goes now, or null to leave it where it is. */
 export function constructedPosition(
   c: PointConstruction,
@@ -578,6 +602,7 @@ export function constructedPosition(
   segments: Map<Id, Segment>,
   circles: Map<Id, Circle>,
   graphs: Map<Id, FunctionGraph | VerticalLine> = new Map(),
+  frame?: Frame,
 ): Vec | null {
   switch (c.kind) {
     case "midpoint": {
@@ -634,7 +659,10 @@ export function constructedPosition(
       const graph = graphs.get(c.graph);
       const p = pts.get(c.point);
       const dir = p && graph?.type === "function" ? tangentDirection(graph.expr, p.x) : null;
-      return p && dir ? add(p, scale(dir, c.along)) : null;
+      if (!p || !dir) return null;
+      const side = c.along < 0 ? -1 : 1;
+      const edge = c.fill && frame ? reachInBox(p, scale(dir, side), frame) : null;
+      return add(p, scale(dir, edge === null ? c.along : side * edge));
     }
   }
 }
@@ -683,7 +711,7 @@ export function vanishedPoints(doc: FigureDoc): Point[] {
   return doc.elements.filter((el): el is Point => {
     if (el.type !== "point" || !el.construction || !VANISHING.has(el.construction.kind)) return false;
     if (!constructionParents(el.construction).every((id) => byId.has(id))) return false;
-    return constructedPosition(el.construction, pts, segments, circles, graphs) === null;
+    return constructedPosition(el.construction, pts, segments, circles, graphs, frameOf(doc)) === null;
   });
 }
 

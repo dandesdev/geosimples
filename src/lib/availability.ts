@@ -4,6 +4,7 @@ import {
   addGrid,
   addPointOnGraph,
   addTangentAt,
+  addSpot,
   construct,
   connectPoints,
   fitFigure,
@@ -21,6 +22,7 @@ import {
   type FigureDoc,
   type Id,
   type OpResult,
+  type Spot,
 } from "@geosimples/core/figure";
 import { describeSelection } from "@/lib/names";
 import { useFigureStore, type ActionPreview } from "@/store/figureStore";
@@ -131,6 +133,13 @@ export function useGraphSpotActions(spot: { graph: Id; x: number } | null): { po
       tangent: check(doc, addTangentAt(doc, spot.graph, spot.x, opts), null),
     };
   }, [doc, prefs, spot]);
+}
+
+/** Adding the point a spot shows, previewed like the other actions. */
+export function useSpotAction(spot: Spot | null): Availability | null {
+  const doc = useFigureStore((s) => s.doc);
+  const prefs = useActivePrefs();
+  return useMemo(() => (spot ? check(doc, addSpot(doc, spot, prefs && opOptions()), null) : null), [doc, prefs, spot]);
 }
 
 /** Props that show an action's result while its control is hovered or focused. */

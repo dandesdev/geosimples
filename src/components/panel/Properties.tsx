@@ -210,19 +210,28 @@ function TangentFields({ el, tangent, doc }: { el: Segment; tangent: Tangent; do
   return (
     <Section title="Reta tangente">
       <Hint>
-        Tangente a {nameOf(doc, tangent.graph)} em {nameOf(doc, tangent.point)}. Arraste o ponto no modo Mover e ela acompanha a curva.
+        Tangente a {nameOf(doc, tangent.graph)} em {nameOf(doc, tangent.point)}. No modo Mover, arraste a reta ou o ponto e ela
+        acompanha a curva; arraste as pontas para mudar o comprimento.
       </Hint>
       <Readout label="Equação" value={equation} />
       {tangent.slope !== null && <Readout label="Inclinação" value={n(tangent.slope)} />}
-      <Field label="Comprimento">
-        <NumberInput
-          ariaLabel="Comprimento da tangente"
-          value={tangent.length}
-          min={0.01}
-          max={200}
-          onChange={(length) => actions.resizeTangent(el.id, length)}
-        />
-      </Field>
+      <SwitchField
+        label="Preencher a janela"
+        checked={tangent.fill}
+        onChange={(on) => actions.fillTangent(el.id, on)}
+        help="A reta vai de uma borda à outra da janela dos eixos, sem aumentá-la, e acompanha a janela quando ela muda."
+      />
+      {!tangent.fill && (
+        <Field label="Comprimento">
+          <NumberInput
+            ariaLabel="Comprimento da tangente"
+            value={Math.round(tangent.length * 100) / 100}
+            min={0.01}
+            max={200}
+            onChange={(length) => actions.resizeTangent(el.id, length)}
+          />
+        </Field>
+      )}
     </Section>
   );
 }

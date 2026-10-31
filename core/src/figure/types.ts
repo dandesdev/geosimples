@@ -110,9 +110,11 @@ export type PointConstruction =
   /**
    * An end of the tangent to a graph at `point`, a point on it: `along`
    * world units from it in the direction of the curve there (negative goes
-   * left). It goes when the graph has no tangent there, as at a corner.
+   * left). With `fill` it reaches the edge of the axes' window on that side
+   * instead, without making the window grow. It goes when the graph has no
+   * tangent there, as at a corner.
    */
-  | { kind: "tangent"; graph: Id; point: Id; along: number };
+  | { kind: "tangent"; graph: Id; point: Id; along: number; fill?: boolean };
 
 export type NotableFeature = "root" | "extremum" | "yAxis";
 

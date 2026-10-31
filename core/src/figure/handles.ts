@@ -1,12 +1,13 @@
+import { placeTangentEnd, tangentOf } from "./constructions";
 import { keepGraphMarks, pointMap, resolveConstructions } from "./geometry";
 import { moveNumberLine, movePoints, setAxesWindow, withElements } from "./ops";
-import { axesOrigin, axesStepX, axesStepY, functionValue, nearestOnGraph } from "./plot";
+import { axesOrigin, axesStepX, axesStepY, functionValue, nearestOnGraph, tangentDirection } from "./plot";
 import type { Axes, Element, FigureDoc, FunctionGraph, Id } from "./types";
-import type { Vec } from "./vec";
+import { sub, type Vec } from "./vec";
 
 /**
  * What Mover drags: whole shapes by their points, and the ends of axes,
- * grids, number lines, vertical lines and graphs by their handles.
+ * grids, number lines, vertical lines, graphs and tangents by their handles.
  */
 
 /** An end of a window or line: its start or end along x or y. */
@@ -46,6 +47,13 @@ export function elementHandles(doc: FigureDoc, el: Element): Handle[] {
         return { x, y: y === null ? 0 : Math.min(Math.max(y, el.range[0]), el.range[1]) };
       };
       return [h("x0", at(el.domain[0])), h("x1", at(el.domain[1]))];
+    }
+    case "segment": {
+      // A tangent's ends slide along it; other segments move by their points.
+      const tangent = tangentOf(doc, el);
+      const pts = pointMap(doc);
+      const ends = tangent?.ends.map((id) => pts.get(id));
+      return ends?.[0] && ends[1] ? [h("x0", ends[0]), h("x1", ends[1])] : [];
     }
     default:
       return [];
@@ -136,18 +144,65 @@ export function dragHandle(doc: FigureDoc, handle: Pick<Handle, "owner" | "end">
       const domain = withEnd(el.domain, end, near ? tick : fine(at), gap);
       return same(domain, el.domain) ? doc : replace({ ...el, domain });
     }
+    case "segment":
+      return dragTangentEnd(doc, el, end, to, reach);
     default:
       return doc;
   }
 }
 
-/** Points a drag on the element moves: a shape moves by its points, so what is built on them follows. */
-export function draggedPoints(el: Element): Id[] {
+/**
+ * A tangent's end dragged to `to`: it slides along the line to the spot
+ * nearest the pointer on paper, staying on its side of the point. With
+ * `reach`, it lands where the line crosses a tick of x or y in reach.
+ */
+function dragTangentEnd(doc: FigureDoc, el: Element, end: 0 | 1, to: Vec, reach?: Vec): FigureDoc {
+  const tangent = tangentOf(doc, el);
+  const pts = pointMap(doc);
+  const p = tangent && pts.get(tangent.point);
+  const graph = tangent && doc.elements.find((e): e is FunctionGraph => e.id === tangent.graph && e.type === "function");
+  const dir = p && graph ? tangentDirection(graph.expr, p.x) : null;
+  if (!tangent || !p || !dir) return doc;
+  const axes = firstAxes(doc);
+  const [ux, uy] = axes?.unit ?? [1, 1];
+  // Nearest on paper, where a unit of y may be longer than one of x.
+  const w = { x: dir.x * ux * ux, y: dir.y * uy * uy };
+  const off = sub(to, p);
+  let t = (w.x * off.x + w.y * off.y) / (w.x * dir.x + w.y * dir.y);
+  let snapped = false;
+  if (reach) {
+    const onPaper = (s: number) => Math.hypot((p.x + s * dir.x - to.x) / reach.x, (p.y + s * dir.y - to.y) / reach.y);
+    const ticks: number[] = [];
+    if (Math.abs(dir.x) > 1e-9) ticks.push((snap(p.x + t * dir.x, axes ? axesStepX(axes) : 1) - p.x) / dir.x);
+    if (Math.abs(dir.y) > 1e-9) ticks.push((snap(p.y + t * dir.y, axes ? axesStepY(axes) : 1) - p.y) / dir.y);
+    const best = ticks.filter((s) => onPaper(s) <= 1).sort((a, b) => onPaper(a) - onPaper(b))[0];
+    if (best !== undefined) {
+      t = best;
+      snapped = true;
+    }
+  }
+  // Each end stays on its side, a hundredth from the point at least. On a tick it stays exactly there.
+  const at = snapped ? t : fine(t);
+  const along = end === 0 ? Math.min(at, -0.01) : Math.max(at, 0.01);
+  const id = tangent.ends[end];
+  const c = pts.get(id)?.construction;
+  if (c?.kind === "tangent" && !c.fill && Math.abs(c.along - along) < 1e-12) return doc;
+  return placeTangentEnd(doc, id, along);
+}
+
+/**
+ * Points a drag on the element moves: a shape moves by its points, so what
+ * is built on them follows. A tangent moves by the point it touches, which
+ * slides along the graph.
+ */
+export function draggedPoints(el: Element, doc?: FigureDoc): Id[] {
   switch (el.type) {
     case "point":
       return [el.id];
-    case "segment":
-      return [el.a, el.b];
+    case "segment": {
+      const tangent = doc && tangentOf(doc, el);
+      return tangent ? [tangent.point] : [el.a, el.b];
+    }
     case "polygon":
       return el.vertices;
     case "circle": {
@@ -185,7 +240,7 @@ export function moveElements(doc: FigureDoc, ids: Id[], by: Vec): FigureDoc {
     else if (el.type === "vline") {
       working = withElements(working, working.elements.map((e) => (e.id === id && e.type === "vline" ? { ...e, x: r2(el.x + by.x) } : e)));
     } else if (el.type === "numberline") working = moveNumberLine(working, id, r2(el.y + by.y));
-    else for (const p of draggedPoints(el)) points.add(p);
+    else for (const p of draggedPoints(el, doc)) points.add(p);
   }
   for (const id of points) {
     const p = pts.get(id);

@@ -1,4 +1,12 @@
-import { formatNumber, type Element, type ElementType, type FigureDoc, type Id, type PointConstruction } from "@geosimples/core/figure";
+import {
+  formatNumber,
+  type Element,
+  type ElementType,
+  type FigureDoc,
+  type Id,
+  type PointConstruction,
+  type SpotRole,
+} from "@geosimples/core/figure";
 
 export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title: string }> = {
   point: { one: "ponto", many: "pontos", title: "Ponto" },
@@ -13,6 +21,15 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   numberline: { one: "reta numérica", many: "retas numéricas", title: "Reta numérica" },
   axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
   grid: { one: "malha", many: "malhas", title: "Malha quadriculada" },
+};
+
+/** What the preview calls a point it could add under the pointer, and the menu item that adds it. */
+export const SPOT_NAMES: Record<SpotRole, { name: string; add: string }> = {
+  intersection: { name: "Interseção", add: "Inserir ponto de interseção" },
+  max: { name: "Máximo", add: "Inserir ponto de máximo" },
+  min: { name: "Mínimo", add: "Inserir ponto de mínimo" },
+  root: { name: "Raiz", add: "Inserir raiz" },
+  yAxis: { name: "Corte no eixo y", add: "Inserir corte no eixo y" },
 };
 
 /** "2 pontos, 1 segmento", or null for an empty selection. */

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { boxSelectAll, clickAlong, counts, leaveInput, pointInput, savedFigure, toolbarButton } from "./helpers";
+import { boxSelectAll, clickAlong, counts, leaveInput, lowestAlong, pointInput, savedFigure, toolbarButton } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -623,4 +623,23 @@ test("in Mover, a point on a graph slides along the curve, and a steep end leave
   await page.mouse.move(end.x + end.width / 2 - 0.1 * unit, end.y + end.height / 2 + 0.59 * unit, { steps: 8 });
   await page.mouse.up();
   await expect.poll(async () => ((await saved(page, "f1")) as { domain: number[] } | null)?.domain[1]).toBeCloseTo(2.9, 1);
+});
+
+test("in Ponto, a turning point shows as a ghost near the pointer, and a click adds it", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=x^2-1");
+  await input.press("Enter");
+  await leaveInput(page);
+  await page.keyboard.press("P");
+  const vertex = await lowestAlong(page, "f1");
+  // A few pixels off: the ghost is there to be aimed at, not hit exactly.
+  await page.mouse.move(vertex.x + 3, vertex.y - 3);
+  await expect(page.getByTestId("spot-ghost")).toContainText("Mínimo (0; -1)");
+  await page.mouse.click(vertex.x + 3, vertex.y - 3);
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1, point: 1 });
+  const p = (await savedFigure(page))!.elements.find((e) => e.type === "point") as unknown as Record<string, unknown>;
+  expect(p).toMatchObject({ x: 0, y: -1, label: { text: "V" }, construction: { kind: "notable", feature: "extremum" } });
+  // Marked, it no longer shows.
+  await page.mouse.move(vertex.x + 3, vertex.y - 4);
+  await expect(page.getByTestId("spot-ghost")).toHaveCount(0);
 });
