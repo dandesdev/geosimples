@@ -6,6 +6,7 @@ import {
   dragHandle,
   draggedPoints,
   elementHandles,
+  figureSpots,
   formatNumber,
   isDraggable,
   moveElements,
@@ -23,6 +24,7 @@ import {
   type Paper,
   type ParsedInput,
   type Prim,
+  type Spot,
   type Vec,
 } from "@geosimples/core/figure";
 import { actions } from "@/lib/actions";
@@ -39,6 +41,7 @@ import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
 import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camera";
 import { useCoarsePointer, useRoomyPreview } from "@/lib/useMediaQuery";
+import { SPOT_NAMES } from "@/lib/names";
 
 const PRIMARY = "#10b981";
 
@@ -50,6 +53,9 @@ const EMPTY_WORLD = { minX: -1, minY: -1, maxX: 6, maxY: 4 };
 /** Hit target sizes in screen px: a finger needs more room than a mouse. */
 const HIT_FINE = { point: 7, stroke: 14 };
 const HIT_COARSE = { point: 16, stroke: 28 };
+/** How near a crossing or turning point (screen px) the pointer must come for it to show. */
+const SPOT_REACH_FINE = 10;
+const SPOT_REACH_COARSE = 18;
 
 /** A helper color of the preview as it shows on its paper. */
 function onPaper(color: string, paper: Paper): string {
@@ -99,9 +105,13 @@ function figureHandles(doc: FigureDoc, selection: Id[]): Handle[] {
   );
 }
 
-/** The cursor over a handle, or while it's dragged: a graph's end slides along its curve, the rest along an axis. */
+/**
+ * The cursor over a handle, or while it's dragged: the ends of a graph or a
+ * tangent slide along it, the rest along an axis.
+ */
 function handleCursor(doc: FigureDoc, owner: Id, end: HandleEnd, dragging = false): string {
-  if (doc.elements.some((e) => e.id === owner && e.type === "function")) return dragging ? "cursor-grabbing" : "cursor-grab";
+  const along = doc.elements.some((e) => e.id === owner && (e.type === "function" || e.type === "segment"));
+  if (along) return dragging ? "cursor-grabbing" : "cursor-grab";
   return end[0] === "x" ? "cursor-ew-resize" : "cursor-ns-resize";
 }
 
@@ -168,6 +178,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const [menuAt, setMenuAt] = useState<Vec | null>(null);
   /** The graph right-clicked and the x there, for the menu's "Ponto sobre o gráfico". */
   const [menuGraphAt, setMenuGraphAt] = useState<GraphSpot | null>(null);
+  /** The crossing or notable point right-clicked near, for the menu's "Inserir ponto de ...". */
+  const [menuSpot, setMenuSpot] = useState<Spot | null>(null);
+  /** The crossing or notable point under the mouse, shown as a ghost until it is added. */
+  const [hoverSpot, setHoverSpot] = useState<Spot | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -196,6 +210,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     [scene.box, scene.kx, scene.ky, ghost, graphGhost, k],
   );
   const vb = frozen ?? (autoFit ? fitted : (view ?? fitted));
+  // Ghosts show where they can be added: Ponto adds them on a click, and the pro layout's menu has them.
+  const spotsShown = mode === "add" || (pro && (mode === "select" || mode === "move"));
+  /** Crossings and notable points nobody marked yet. None while something is dragged: the figure changes every frame. */
+  const spots = useMemo(() => (spotsShown && !frozen ? figureSpots(doc) : []), [doc, frozen, spotsShown]);
   const unitsPerPx = Math.max(vb.w / Math.max(size.w, 1), vb.h / Math.max(size.h, 1));
   const vbRef = useRef(vb);
   useEffect(() => {
@@ -261,6 +279,22 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     return crossingNear(at) ?? { x: Math.round(at.x * 10) / 10 || 0, y: Math.round(at.y * 10) / 10 || 0 };
   };
 
+  /** The crossing or notable point nearest the pointer, if one is in reach. */
+  const spotNear = (clientX: number, clientY: number): Spot | null => {
+    if (spots.length === 0) return null;
+    const p = toUser(svgRef.current!, clientX, clientY);
+    let best: Spot | null = null;
+    let bestD = (coarse ? SPOT_REACH_COARSE : SPOT_REACH_FINE) * unitsPerPx;
+    for (const s of spots) {
+      const d = Math.hypot(s.at.x * ppu.x - p.x, -s.at.y * ppu.y - p.y);
+      if (d <= bestD) {
+        best = s;
+        bestD = d;
+      }
+    }
+    return best;
+  };
+
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
 
@@ -273,6 +307,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const store = useFigureStore.getState();
     const graph = owner && store.doc.elements.some((el) => el.id === owner && el.type === "function") ? owner : null;
     setMenuGraphAt(graph ? { graph, x: pointAt(e.clientX, e.clientY).x } : null);
+    setMenuSpot(onFigure ? spotNear(e.clientX, e.clientY) : null);
     if (owner && !store.selection.includes(owner)) store.pick(owner, false);
   };
 
@@ -365,6 +400,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const g = gesture.current;
     const svg = svgRef.current!;
     if (placing && e.pointerType === "mouse") setAddAt(g.kind === "none" ? pointAt(e.clientX, e.clientY) : null);
+    if (e.pointerType === "mouse") setHoverSpot(g.kind === "none" ? spotNear(e.clientX, e.clientY) : null);
     if (g.kind === "pinch") {
       const a = pointers.current.get(g.ids[0]);
       const b = pointers.current.get(g.ids[1]);
@@ -377,7 +413,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       g.moved = true;
       // The point under the pointer, or the first of the shape held, lands on a crossing in reach; the rest keeps its offsets.
       const owner = g.base.elements.find((el) => el.id === g.owner);
-      const held = owner && pointMap(g.base).get(draggedPoints(owner)[0]);
+      const held = owner && pointMap(g.base).get(draggedPoints(owner, g.base)[0]);
       const crossing = held && crossingNear({ x: held.x + dx, y: held.y + dy });
       if (held && crossing) {
         dx = crossing.x - held.x;
@@ -439,7 +475,13 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       // Keep the view still, so the next point lands where the next click is.
       if (autoFit) placeCamera(vb);
       const graph = g.owner && store.doc.elements.some((e) => e.id === g.owner && e.type === "function") ? g.owner : null;
+      const spot = mode === "add" ? spotNear(g.x, g.y) : null;
       if (mode === "figure") actions.quickFigureAt(point ?? pointAt(g.x, g.y));
+      // A click on a crossing or turning point shown under the pointer adds it, so it follows what it marks.
+      else if (spot) {
+        actions.addSpot(spot);
+        setHoverSpot(null);
+      }
       // A click on a curve puts the point on it, so it follows the graph.
       else if (graph) actions.addPointOnGraphAt(graph, pointAt(g.x, g.y).x);
       else actions.addPointAt(pointAt(g.x, g.y));
@@ -488,7 +530,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
         )}
       >
         {!pro && <ActionBar layout={roomy ? "row" : "strip"} zoom={roomy ? null : zoom} />}
-        <PreviewMenu enabled={pro} at={menuAt} graphAt={menuGraphAt} zoom={zoom}>
+        <PreviewMenu enabled={pro} at={menuAt} graphAt={menuGraphAt} spot={menuSpot} zoom={zoom}>
           <div ref={containerRef} className="relative min-h-0 flex-1" onContextMenu={pro ? onContextMenu : undefined}>
             <svg
               ref={svgRef}
@@ -508,7 +550,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
-              onPointerLeave={() => setAddAt(null)}
+              onPointerLeave={() => {
+                setAddAt(null);
+                setHoverSpot(null);
+              }}
               // Stops the browser's autoscroll from starting on a middle click.
               onMouseDown={(e) => e.button === 1 && e.preventDefault()}
               onAuxClick={(e) => e.preventDefault()}
@@ -530,7 +575,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               />
               {ghost && <DraftGhost parsed={ghost} ppu={ppu} px={unitsPerPx} paper={paper} />}
               {graphGhost && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: graphGhost.markup }} />}
-              {placing && addAt && (
+              {hoverSpot && spots.includes(hoverSpot) && <SpotGhost spot={hoverSpot} ppu={ppu} px={unitsPerPx} paper={paper} />}
+              {placing && addAt && !(mode === "add" && hoverSpot) && (
                 <AddMarker at={addAt} ppu={ppu} px={unitsPerPx} joins={mode === "figure" ? quickEnds(doc, quickFigure.points) : []} />
               )}
               {box && (
@@ -591,6 +637,21 @@ function AddMarker({ at, ppu, px, joins }: { at: Vec; ppu: PerUnit; px: number; 
       <circle cx={cx} cy={cy} r={4 * px} fill="none" stroke={PRIMARY} strokeWidth={1.5 * px} />
       <text x={cx + 8 * px} y={cy - 8 * px} fontSize={11 * px} fill={PRIMARY} fontFamily="ui-sans-serif, system-ui">
         ({formatNumber(at.x, 1)}; {formatNumber(at.y, 1)})
+      </text>
+    </g>
+  );
+}
+
+/** A crossing or notable point the figure could have, under the pointer: a hollow dot with what it is. */
+function SpotGhost({ spot, ppu, px, paper }: { spot: Spot; ppu: PerUnit; px: number; paper: Paper }) {
+  const cx = spot.at.x * ppu.x;
+  const cy = -spot.at.y * ppu.y;
+  return (
+    <g pointerEvents="none" data-testid="spot-ghost">
+      <circle cx={cx} cy={cy} r={7 * px} fill={PRIMARY} fillOpacity={0.12} stroke={PRIMARY} strokeWidth={px} strokeDasharray={`${2 * px} ${2 * px}`} />
+      <circle cx={cx} cy={cy} r={3.5 * px} fill={paperColor(paper)} stroke={PRIMARY} strokeWidth={1.5 * px} />
+      <text x={cx + 10 * px} y={cy - 10 * px} fontSize={11 * px} fill={PRIMARY} fontFamily="ui-sans-serif, system-ui">
+        {SPOT_NAMES[spot.role].name} ({formatNumber(spot.at.x, 2)}; {formatNumber(spot.at.y, 2)})
       </text>
     </g>
   );

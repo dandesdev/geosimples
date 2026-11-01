@@ -156,6 +156,8 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
       case "point":
       case "text":
         if (skip.has(el.id)) break;
+        // A tangent's end that fills the window sits on its edge: counting it would push the window out.
+        if (el.type === "point" && el.construction?.kind === "tangent" && el.construction.fill) break;
         // A point on a graph that follows the axes is inside its window already: room around it would stretch the curve.
         if (!onFollowing.has(el.id)) xs.add(el.x);
         ys.add(el.y);

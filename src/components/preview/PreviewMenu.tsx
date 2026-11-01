@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Keyboard, Plus, Scan, Trash2, ZoomIn, ZoomOut } from "lucide-react";
-import { formatNumber, type Id, type Vec } from "@geosimples/core/figure";
+import { formatNumber, type Id, type Spot, type SpotRole, type Vec } from "@geosimples/core/figure";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -21,6 +21,7 @@ import {
   ConstructionsIcon,
   ExtremumIcon,
   GraphPointIcon,
+  IntersectionIcon,
   GuidesIcon,
   PolygonIcon,
   RootsIcon,
@@ -30,7 +31,15 @@ import {
 } from "@/components/icons";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
 import { actions } from "@/lib/actions";
-import { CONSTRUCTION_KINDS, previewProps, useAvailability, useGraphSpotActions, type Availability } from "@/lib/availability";
+import {
+  CONSTRUCTION_KINDS,
+  previewProps,
+  useAvailability,
+  useGraphSpotActions,
+  useSpotAction,
+  type Availability,
+} from "@/lib/availability";
+import { SPOT_NAMES } from "@/lib/names";
 import { emitCommand } from "@/lib/commands";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { runAction } from "@/lib/useShortcuts";
@@ -44,6 +53,14 @@ export interface GraphSpot {
   graph: Id;
   x: number;
 }
+
+const SPOT_ICONS: Record<SpotRole, () => ReactNode> = {
+  intersection: () => <IntersectionIcon />,
+  max: () => <ExtremumIcon />,
+  min: () => <ExtremumIcon />,
+  root: () => <RootsIcon />,
+  yAxis: () => <YInterceptIcon />,
+};
 
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
@@ -96,6 +113,7 @@ export function PreviewMenu({
   enabled,
   at,
   graphAt,
+  spot,
   zoom,
   children,
 }: {
@@ -104,6 +122,8 @@ export function PreviewMenu({
   at: Vec | null;
   /** The graph clicked, if one was, so "Ponto sobre o gráfico" puts the point where the click was. */
   graphAt: GraphSpot | null;
+  /** A crossing or notable point near the click, not yet in the figure, for "Inserir ponto de ...". */
+  spot: Spot | null;
   zoom: ZoomControls | null;
   children: ReactNode;
 }) {
@@ -115,21 +135,43 @@ export function PreviewMenu({
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-72" collisionPadding={8}>
-        <MenuBody at={at} graphAt={graphAt} zoom={zoom} />
+        <MenuBody at={at} graphAt={graphAt} spot={spot} zoom={zoom} />
       </ContextMenuContent>
     </ContextMenu>
   );
 }
 
-function MenuBody({ at, graphAt, zoom }: { at: Vec | null; graphAt: GraphSpot | null; zoom: ZoomControls | null }) {
+function MenuBody({
+  at,
+  graphAt,
+  spot,
+  zoom,
+}: {
+  at: Vec | null;
+  graphAt: GraphSpot | null;
+  spot: Spot | null;
+  zoom: ZoomControls | null;
+}) {
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const snap = useFigureStore((s) => s.settings.snapToGrid);
   const store = useFigureStore.getState;
+  const addSpot = useSpotAction(spot);
 
   return (
     <>
+      {spot && addSpot?.reason === null && (
+        <>
+          <ActionItem
+            icon={SPOT_ICONS[spot.role]()}
+            title={SPOT_NAMES[spot.role].add}
+            availability={addSpot}
+            onSelect={() => actions.addSpot(spot)}
+          />
+          <ContextMenuSeparator />
+        </>
+      )}
       {at && (
         <ContextMenuItem onSelect={() => actions.addPointAt(at)}>
           <Plus />

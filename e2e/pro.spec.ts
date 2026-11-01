@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { counts, leaveInput, pointInput, savedFigure, TRIANGLE } from "./helpers";
+import { counts, leaveInput, lowestAlong, pointInput, savedFigure, TRIANGLE } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -136,6 +136,68 @@ test("pro layout: Reta tangente from a right click on a curve adds the point and
   await page.mouse.click(on.x, on.y);
   await expect(page.getByText(/^Reta tangente/).first()).toBeVisible();
   await expect(page.getByText(/^y = /)).toBeVisible();
+});
+
+test("pro layout: a right click near a turning point offers to add it", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("/");
+  await pointInput(page).fill("y=x^2-1");
+  await pointInput(page).press("Enter");
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1 });
+  await pointInput(page).press("Escape");
+  const vertex = await lowestAlong(page, "f1");
+  await page.mouse.move(vertex.x, vertex.y - 4);
+  await expect(page.getByTestId("spot-ghost")).toContainText("Mínimo");
+  await page.mouse.click(vertex.x, vertex.y - 4, { button: "right" });
+  await page.getByRole("menuitem", { name: "Inserir ponto de mínimo" }).click();
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1, point: 1 });
+  const p = (await savedFigure(page))!.elements.find((e) => e.type === "point") as unknown as Record<string, unknown>;
+  expect(p).toMatchObject({ x: 0, y: -1, construction: { kind: "notable", feature: "extremum" } });
+});
+
+test("pro layout: a tangent's ends drag along it in Mover, and it can fill the axes' window", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("/");
+  await pointInput(page).fill("y=x^2");
+  await pointInput(page).press("Enter");
+  await expect.poll(() => counts(page)).toMatchObject({ function: 1 });
+  await pointInput(page).press("Escape");
+  const spot = await page.locator('[data-owner="f1"] path').last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() * 0.6);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.click(spot.x, spot.y, { button: "right" });
+  await page.getByRole("menuitem", { name: "Reta tangente" }).click();
+  await expect.poll(() => counts(page)).toMatchObject({ point: 3, segment: 1 });
+  type End = { id: string; construction: { kind: string; along: number; fill?: boolean } };
+  const ends = async () =>
+    ((await savedFigure(page))!.elements as unknown as End[]).filter((e) => e.construction?.kind === "tangent");
+  const segment = ((await savedFigure(page))!.elements.find((e) => e.type === "segment") as { id: string }).id;
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("M");
+  const on = await page.locator(`[data-owner="${segment}"] path`).last().evaluate((el) => {
+    const path = el as SVGPathElement;
+    const p = path.getPointAtLength(path.getTotalLength() * 0.15);
+    const m = path.getScreenCTM()!;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  await page.mouse.click(on.x, on.y);
+  await expect(page.getByText(/^Reta tangente/).first()).toBeVisible();
+  // Its far end, pulled on along the line, makes that side longer; the other stays.
+  const h0 = (await page.locator(`[data-handle="${segment}:x0"]`).boundingBox())!;
+  const h1 = (await page.locator(`[data-handle="${segment}:x1"]`).boundingBox())!;
+  const [x0, y0, x1, y1] = [h0.x + h0.width / 2, h0.y + h0.height / 2, h1.x + h1.width / 2, h1.y + h1.height / 2];
+  await page.mouse.move(x1, y1);
+  await page.mouse.down();
+  await page.mouse.move(x1 + (x1 - x0) * 0.25, y1 + (y1 - y0) * 0.25, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => Math.max(...(await ends()).map((e) => e.construction.along))).toBeGreaterThan(2.3);
+  expect(Math.min(...(await ends()).map((e) => e.construction.along))).toBe(-2);
+  // Filling the window: both ends go to its edges and follow it.
+  await page.getByRole("switch", { name: "Preencher a janela" }).click();
+  await expect.poll(async () => (await ends()).map((e) => e.construction.fill)).toEqual([true, true]);
 });
 
 test("pro layout: / brings the point input without moving the preview", async ({ page }) => {
