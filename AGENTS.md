@@ -18,14 +18,16 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 
 ## Repository Layout
 
-The editor sits at the root, and the engine is its one npm workspace, `core`. The services plan is in `.ai/SERVICES.md`.
+The editor sits at the root. The npm workspaces are the engine, `core`, and the MCP server, `mcp`. The services plan is in `.ai/SERVICES.md` and the MCP plan in `.ai/MCP.md`.
 
 - `src/`: the Vite + React editor
 - `core/` (`@geosimples/core`): framework-free figure model and geometry
   - `@geosimples/core/figure`: FigureDoc, ops, parser, labels, scene, SVG and TikZ export (used by the editor)
   - `@geosimples/core/geo`: older solvers from the canvas-tool editor, kept for later constructions
-- Root scripts: `npm run build`, `npm test` (vitest for core and the editor), `npm run typecheck`, `npm run lint`
-- Deploy: Vercel, configured in `vercel.json`
+  - `@geosimples/core/recipe`: recipes, the step lists agents write, compiled through the ops into a FigureDoc (zod schema, compiler, the guide agents read)
+- `mcp/` (`@geosimples/mcp`): the MCP server, a stateless Cloudflare Worker with `draw_figure`, `render_doc` and `get_reference`. See `mcp/README.md`.
+- Root scripts: `npm run build`, `npm test` (vitest for core, mcp and the editor), `npm run typecheck`, `npm run lint`
+- Deploy: the editor on Vercel, configured in `vercel.json` (its install skips the `mcp` workspace); the MCP server with `npm run deploy -w mcp`
 
 Rules for `core`: no React, no DOM, relative imports only (no `@/`). Its tsconfig has no DOM lib, so browser globals are a type error there.
 
