@@ -31,8 +31,8 @@ const ABOUT = `GeoSimples MCP ${SERVER_VERSION}
 Draws school geometry figures and function graphs as SVG or TikZ.
 MCP endpoint: /mcp (streamable HTTP, no sign-in).
 
-Claude: Settings > Connectors > Add custom connector, URL https://mcp.dandes.dev/mcp
-Claude Code: claude mcp add --transport http geosimples https://mcp.dandes.dev/mcp
+Claude: Settings > Connectors > Add custom connector, URL https://geosimples.mcp.dandes.dev/mcp
+Claude Code: claude mcp add --transport http geosimples https://geosimples.mcp.dandes.dev/mcp
 
 Editor: https://geosimples.vercel.app
 `;

@@ -6,7 +6,7 @@
   "upload_source_maps": true,
   // Keep the *.workers.dev address for testing; the public one is the custom domain.
   "workers_dev": true,
-  "routes": [{ "pattern": "mcp.dandes.dev", "custom_domain": true }],
+  "routes": [{ "pattern": "geosimples.mcp.dandes.dev", "custom_domain": true }],
   "vars": {
     "SITE_URL": "https://geosimples.vercel.app/"
   },
