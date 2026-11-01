@@ -35,6 +35,11 @@ import {
   type QuickFigure,
   removeLabels,
   clearLabels,
+  estimateTextWidth,
+  makeAltitude,
+  pathLines,
+  unclutterLabels,
+  updateElements,
   toSvg,
   toTikz,
   darkColor,
@@ -865,5 +870,113 @@ describe("dark paper", () => {
     expect(dark).not.toContain('stroke="#000000"');
     expect(dark).toContain(`stroke="${darkColor("#000000")}"`);
     expect(dark).toContain(`fill="${DARK_PAPER}"`);
+  });
+});
+
+describe("toTikz standalone", () => {
+  it("wraps the picture in a document with its preamble", () => {
+    const doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
+    const tex = toTikz(doc, { standalone: true });
+    expect(tex.startsWith("\\documentclass[border=2pt]{standalone}\n")).toBe(true);
+    expect(tex).toContain("\\usepackage{tikz}\n\\begin{document}\n");
+    expect(tex).toContain(toTikz(doc).split("\n").filter((l) => !l.startsWith("% Preâmbulo")).join("\n"));
+    expect(tex).not.toContain("% Preâmbulo");
+    expect(tex.endsWith("\\end{document}\n")).toBe(true);
+  });
+
+  it("loads patterns.meta only when a fill needs it", () => {
+    const doc = makePolygon(triangle(), ["p1", "p2", "p3"]).doc;
+    const hatched: FigureDoc = {
+      ...doc,
+      elements: doc.elements.map((e) => (e.type === "polygon" ? { ...e, fill: { color: "#808080", opacity: 1, pattern: "hatch", angle: 45 } } : e)),
+    };
+    expect(toTikz(doc, { standalone: true })).not.toContain("patterns.meta");
+    expect(toTikz(hatched, { standalone: true })).toContain("\\usetikzlibrary{patterns.meta}");
+  });
+});
+
+describe("figure locale", () => {
+  it("writes numbers with a comma in pt-BR and a point in English", () => {
+    expect(formatNumber(2.5)).toBe("2,5");
+    expect(formatNumber(2.5, 2, "en")).toBe("2.5");
+    expect(formatNumber(-0.004, 2, "en")).toBe("0");
+  });
+
+  it("labels coordinates and live measures in the doc's language", () => {
+    const pt = addPoints(emptyDoc(), pts("0;0 1,5;2")).doc;
+    const en: FigureDoc = { ...pt, locale: "en" };
+    const coords = (doc: FigureDoc) =>
+      autoLabel(doc, "point", "coordinates", null).doc.elements.map((e) => (e.type === "point" ? e.label?.text : ""));
+    expect(coords(pt)).toEqual(["(0; 0)", "(1,5; 2)"]);
+    expect(coords(en)).toEqual(["(0, 0)", "(1.5, 2)"]);
+
+    const [a, b] = ids(en, "point");
+    const joined = connectPoints(en, [a, b], false).doc;
+    const measured = autoLabel(joined, "segment", "length", null).doc;
+    const segment = measured.elements.find((e) => e.type === "segment")!;
+    expect(labelText(measured, segment)).toBe("2.5");
+    expect(labelText({ ...measured, locale: undefined }, segment)).toBe("2,5");
+    expect(toSvg(measured)).toContain(">2.5<");
+  });
+
+  it("keeps an English locale through normalizing and drops anything else", () => {
+    expect(normalizeDoc({ ...emptyDoc(), locale: "en" }).locale).toBe("en");
+    expect(normalizeDoc({ ...emptyDoc(), locale: "fr" }).locale).toBeUndefined();
+    expect("locale" in normalizeDoc(emptyDoc())).toBe(false);
+  });
+});
+
+describe("unclutterLabels", () => {
+  /** The 3-4-5 triangle with its right angle at p1 labeled 90°, and the altitude from p1 through that label. */
+  function crowded(): FigureDoc {
+    let doc = triangle();
+    const [a, b, c] = ids(doc, "point");
+    doc = connectPoints(doc, [a, b, c], true).doc;
+    doc = makeAngles(doc, [b, a, c]).doc;
+    doc = autoLabel(doc, "angle", "measure", null).doc;
+    const hypotenuse = doc.elements.find(
+      (e) => e.type === "segment" && [e.a, e.b].includes(b) && [e.a, e.b].includes(c),
+    )!;
+    return makeAltitude(doc, [a, hypotenuse.id]).doc;
+  }
+  const angleOf = (doc: FigureDoc) => doc.elements.find((e) => e.type === "angle")!;
+
+  it("moves a label off a line drawn through it", () => {
+    const doc = crowded();
+    expect(angleOf(doc).label?.angle).toBeNull();
+    const after = unclutterLabels(doc);
+    const label = angleOf(after).label!;
+    expect(label.angle).not.toBeNull();
+    expect(labelText(after, angleOf(after))).toBe("90°");
+
+    // The altitude leaves p1 (at the paper origin) toward the hypotenuse, at (3; 4)/5 in world terms.
+    const text = buildScene(after).prims.find((p) => p.kind === "text" && p.owner === angleOf(after).id)!;
+    if (text.kind !== "text") throw new Error("not text");
+    const gap = Math.abs(text.x * (-4 / 5) - text.y * (3 / 5));
+    expect(gap).toBeGreaterThan(estimateTextWidth("90°", label.size) / 2);
+  });
+
+  it("leaves clear labels automatic, and fixed or unlisted labels alone", () => {
+    const doc = autoLabel(crowded(), "point", "latin", null).doc;
+    const after = unclutterLabels(doc);
+    for (const p of after.elements.filter((e) => e.type === "point" && e.label)) {
+      expect(p.type === "point" && p.label?.angle).toBeNull();
+    }
+    expect(unclutterLabels(doc, [])).toBe(doc);
+    const fixed = updateElements(doc, [angleOf(doc).id], (e) =>
+      e.type === "angle" && e.label ? { ...e, label: { ...e.label, angle: 45 } } : e,
+    );
+    expect(unclutterLabels(fixed, [angleOf(doc).id])).toBe(fixed);
+  });
+
+  it("reads arcs in scene paths as chords on the circle", () => {
+    const lines = pathLines("M10 0A10 10 0 0 1 -10 0Z");
+    const ends = lines.slice(0, -1).map(([, , x, y]) => Math.hypot(x, y));
+    for (const r of ends) expect(r).toBeCloseTo(10, 6);
+    const arcLength = lines.slice(0, -1).reduce((s, [x0, y0, x1, y1]) => s + Math.hypot(x1 - x0, y1 - y0), 0);
+    expect(arcLength).toBeGreaterThan(31);
+    expect(arcLength).toBeLessThan(Math.PI * 10);
+    // The arc runs through positive y (down on paper), as sweep 1 says.
+    expect(lines.some(([, , , y]) => y > 9)).toBe(true);
   });
 });

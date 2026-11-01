@@ -1,5 +1,6 @@
 import { findExtrema, findRoots, parseExpr, sampleFunction, type Pt } from "../plot";
 import { estimateTextWidth, formatNumber } from "./labels";
+import type { Locale } from "./messages";
 import type { Axes, FigureDoc, FunctionGraph, NotableFeature } from "./types";
 
 /**
@@ -138,8 +139,8 @@ export function piText(v: number): string | null {
 }
 
 /** The number under an x tick of the axes. */
-export function xTickText(el: Axes, x: number): string {
-  return (el.xPi ? piText(x) : null) ?? formatNumber(x);
+export function xTickText(el: Axes, x: number, locale: Locale = "pt-BR"): string {
+  return (el.xPi ? piText(x) : null) ?? formatNumber(x, 2, locale);
 }
 
 /**

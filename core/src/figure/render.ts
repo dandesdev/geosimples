@@ -487,11 +487,11 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         if (el.numbers) {
           const gap = el.size * 0.9;
           for (const x of xs) {
-            const s = xTickText(el, x);
+            const s = xTickText(el, x, doc.locale);
             text(s, { x: x * kx + xTickShift(doc, el, x, s), y: x0.y + tick + gap * 0.7 });
           }
           for (const y of ys) {
-            const s = formatNumber(y);
+            const s = formatNumber(y, 2, doc.locale);
             text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * ky });
           }
         }
@@ -541,7 +541,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         box.add(b.x, b.y, half);
         if (el.numbers) {
           for (const x of xs) {
-            const s = formatNumber(x);
+            const s = formatNumber(x, 2, doc.locale);
             textRect(layers.label, el.id, { x: x * kx, y: a.y + tick + el.size * 0.9 }, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
           }
         }

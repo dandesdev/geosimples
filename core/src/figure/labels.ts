@@ -1,4 +1,5 @@
 import { DEFAULT_LABEL } from "./defaults";
+import type { Locale } from "./messages";
 import { figureUnits, functionLines } from "./plot";
 import { angleArc, centroid, pointMap, signedArea2 } from "./geometry";
 import type {
@@ -14,13 +15,14 @@ import type {
 } from "./types";
 import { add, dist, len, mid, perp, polar, scale, sub, unit, type Vec } from "./vec";
 
-/** Formats a number the Brazilian way: decimal comma, no trailing zeros. */
-export function formatNumber(n: number, decimals = 2): string {
+/** Formats a number with no trailing zeros, with the decimal comma (pt-BR) or point (en). */
+export function formatNumber(n: number, decimals = 2, locale: Locale = "pt-BR"): string {
   const factor = 10 ** decimals;
   const rounded = Math.round(n * factor) / factor;
   const text = (Object.is(rounded, -0) ? 0 : rounded).toFixed(decimals);
   // Only zeros after the decimal point go: 90 with no decimals stays 90.
-  return (text.includes(".") ? text.replace(/\.?0+$/, "") : text).replace(".", ",");
+  const trimmed = text.includes(".") ? text.replace(/\.?0+$/, "") : text;
+  return locale === "en" ? trimmed : trimmed.replace(".", ",");
 }
 
 const LATIN = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -52,6 +54,7 @@ export function labelFor(
   decimals = 2,
 ): string | null {
   const pts = pointMap(doc);
+  const locale = doc.locale ?? "pt-BR";
   switch (scheme) {
     case "latin":
       return sequenceName(index, LATIN);
@@ -63,13 +66,13 @@ export function labelFor(
       return `P${index + 1}`;
     case "coordinates":
       return el.type === "point"
-        ? `(${formatNumber(el.x, decimals)}; ${formatNumber(el.y, decimals)})`
+        ? `(${formatNumber(el.x, decimals, locale)}${locale === "en" ? "," : ";"} ${formatNumber(el.y, decimals, locale)})`
         : null;
     case "length": {
       if (el.type !== "segment") return null;
       const a = pts.get(el.a);
       const b = pts.get(el.b);
-      return a && b ? formatNumber(dist(a, b), decimals) : null;
+      return a && b ? formatNumber(dist(a, b), decimals, locale) : null;
     }
     case "measure": {
       if (el.type !== "angle") return null;
@@ -77,13 +80,13 @@ export function labelFor(
       const v = pts.get(el.vertex);
       const b = pts.get(el.b);
       const arc = a && v && b ? angleArc(a, v, b, el.reflex) : null;
-      return arc ? `${formatNumber(arc.measure, Math.min(decimals, 1))}°` : null;
+      return arc ? `${formatNumber(arc.measure, Math.min(decimals, 1), locale)}°` : null;
     }
     case "radius":
     case "area":
     case "perimeter": {
       const value = measureValue(doc, el, scheme);
-      return value === null ? null : formatNumber(value, decimals);
+      return value === null ? null : formatNumber(value, decimals, locale);
     }
   }
 }
@@ -144,7 +147,7 @@ export function measureValue(doc: FigureDoc, el: Element, kind: MeasureKind): nu
 export function measureNumber(doc: FigureDoc, el: Element, m: LabelMeasure): string | null {
   const value = measureValue(doc, el, m.kind);
   if (value === null) return null;
-  return formatNumber(value, m.decimals) + (m.kind === "angle" ? "°" : "");
+  return formatNumber(value, m.decimals, doc.locale) + (m.kind === "angle" ? "°" : "");
 }
 
 /** A new live measure label setting, with the given measure or the element's usual one. */

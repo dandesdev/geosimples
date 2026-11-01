@@ -9,6 +9,8 @@
  * look even if the defaults change later.
  */
 
+import type { Locale } from "./messages";
+
 export type Id = string;
 
 /** "#rrggbb", or "ink" for the text color (black when printed). */
@@ -367,6 +369,11 @@ export type ElementType = Element["type"];
 export interface FigureDoc {
   kind: "geo";
   version: 1;
+  /**
+   * Language of the figure's text: "en" writes numbers with a decimal point
+   * and coordinates as (x, y). Absent means pt-BR, with the decimal comma.
+   */
+  locale?: Locale;
   elements: Element[];
 }
 

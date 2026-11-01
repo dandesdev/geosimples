@@ -368,7 +368,9 @@ export function normalizeDoc(input: unknown): FigureDoc {
     const grid: Grid = { id: `m${n}`, type: "grid", x: [...DEFAULT_PLOT_WINDOW.x], y: [...DEFAULT_PLOT_WINDOW.y], step: 1, follow: "axes", stroke: { ...AXES_GRID } };
     out.unshift(grid);
   }
-  return { kind: "geo", version: 1, elements: withPointConstructions(out, pointRaws) };
+  const doc: FigureDoc = { kind: "geo", version: 1, elements: withPointConstructions(out, pointRaws) };
+  if (input.locale === "en") doc.locale = "en";
+  return doc;
 }
 
 /**
