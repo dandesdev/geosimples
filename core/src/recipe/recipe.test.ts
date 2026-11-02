@@ -18,9 +18,9 @@ import {
   type Point,
 } from "../figure";
 import { LineIndex, textBox } from "../figure/lines";
-import { compileRecipe, GUIDE, GUIDE_TOPIC_NAMES, guideText, recipeSchema, type Recipe } from "./index";
+import { compileRecipe, GUIDE, GUIDE_TOPIC_NAMES, guideText, recipeSchema, type Recipe, type RecipeInput } from "./index";
 
-function compiled(recipe: Recipe, base?: FigureDoc) {
+function compiled(recipe: RecipeInput, base?: FigureDoc) {
   const result = compileRecipe(recipe, { base });
   expect(result.errors).toEqual([]);
   return result;
@@ -92,7 +92,8 @@ describe("compileRecipe: the Pythagorean triangle", () => {
       .filter((a) => a.label)
       .map((a) => labelText(doc, a))
       .sort();
-    expect(shown).toEqual(["37°", "53°", "90°"]);
+    // 37° and 53° are rounded, so they show as approximations.
+    expect(shown).toEqual(["90°", "≈ 37°", "≈ 53°"]);
   });
 
   it("renders the same figure every time", () => {
@@ -155,6 +156,26 @@ describe("compileRecipe: language and label placement", () => {
   });
 });
 
+describe("compileRecipe: exact values", () => {
+  it("reads π and roots written as text, as agents should write them", () => {
+    const { doc } = compiled({
+      v: 1,
+      steps: [
+        { do: "function", expr: "sen(x)", domain: ["0", "2π"] },
+        { do: "points", points: [{ name: "A", at: ["sqrt(2)", "-π/2"] }] },
+      ],
+    });
+    expect(ofType(doc, "function")[0].domain[1]).toBeCloseTo(2 * Math.PI, 12);
+    near(byName(doc, "A"), Math.SQRT2, -Math.PI / 2);
+  });
+
+  it("rejects text that isn't a number", () => {
+    const result = compileRecipe({ v: 1, steps: [{ do: "function", expr: "x", domain: [0, "x + 1"] }] });
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result.errors)).toContain("2π");
+  });
+});
+
 describe("compileRecipe: axis numbers", () => {
   const axesTicksY = (a: Axes) => axisTicks(a.y, axesStepY(a), axesOrigin(a).y);
   /** Where TikZ writes an axis number: its shift in pt from the tick at (x, y). */
@@ -169,6 +190,8 @@ describe("compileRecipe: axis numbers", () => {
       steps: [
         { do: "function", expr: "x^2 - 4x + 3", as: "f" },
         { do: "notable", graph: "f", feature: "root" },
+        // A tall window, so the left arm crosses the y axis's 4.
+        { do: "axes", x: [-2, 5], y: [-2, 11] },
       ],
     });
     const tikz = toTikz(doc);
@@ -182,7 +205,7 @@ describe("compileRecipe: axis numbers", () => {
   });
 
   it("writes the numbers where the SVG does", () => {
-    const { doc } = compiled({ v: 1, steps: [{ do: "function", expr: "x^2 - 4x + 3" }] });
+    const { doc } = compiled({ v: 1, steps: [{ do: "function", expr: "x^2 - 4x + 3" }, { do: "axes", x: [-2, 5], y: [-2, 11] }] });
     const axes = ofType(doc, "axes")[0];
     const spots = buildScene(doc).numberSpots.get(axes.id)!;
     const four = axesTicksY(axes).indexOf(4);
@@ -448,7 +471,7 @@ describe("compileRecipe: labels and base figures", () => {
     const ab = ofType(doc, "segment").find((s) => s.label);
     expect(ab && labelText(doc, ab)).toBe("4 cm");
     const poly = ofType(doc, "polygon")[0];
-    expect(labelText(doc, poly)).toBe(`S = ${(4 * Math.sqrt(3)).toFixed(2).replace(".", ",")}`);
+    expect(labelText(doc, poly)).toBe(`S ≈ ${(4 * Math.sqrt(3)).toFixed(2).replace(".", ",")}`);
   });
 
   it("builds on a figure from the editor, by its point names", () => {

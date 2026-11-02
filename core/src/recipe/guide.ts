@@ -1,4 +1,4 @@
-import type { Recipe } from "./schema";
+import type { RecipeInput } from "./schema";
 
 /**
  * The recipe guide an agent reads through the MCP's get_reference tool. The
@@ -9,7 +9,7 @@ import type { Recipe } from "./schema";
 export interface GuideExample {
   /** What a teacher might ask, in their words. */
   request: string;
-  recipe: Recipe;
+  recipe: RecipeInput;
 }
 
 export interface GuideTopic {
@@ -26,7 +26,7 @@ export const GUIDE: Record<GuideTopicName, GuideTopic> = {
     title: "How recipes work",
     text: `A recipe is { "v": 1, "locale"?: "en", "defaults"?: {...}, "steps": [...] }. Steps run in order; each one does what a button in the GeoSimples editor does, so constructions keep their usual marks (an altitude comes with its foot and right-angle mark).
 
-Units: coordinates and lengths are in cm at scale 1, y up. Line widths, point sizes, arc radii and font sizes are in pt. Angles in degrees, counterclockwise from +x.
+Units: coordinates and lengths are in cm at scale 1, y up. Line widths, point sizes, arc radii and font sizes are in pt. Angles in degrees, counterclockwise from +x. Write exact values as text, never rounded: "2π", "-π/2", "sqrt(2)", "3sqrt(3)/2" wherever a number goes. Measures the figure rounds show with ≈ (≈ 2,24), and exact ones without it (2,4).
 
 Names: give points names ("A") and refer to them by name. A segment is [A, B], an angle [A, V, B] with the vertex in the middle. Anything else gets an "as" name. Triangles and polygons are named after their points ("ABC") unless "as" is given. A name is also the label shown on a point.
 
@@ -150,7 +150,7 @@ The step's "style", "label" and "as" apply to the line it draws (the height, the
     title: "Graphs, axes and number lines",
     text: `"function" draws y = expr (like "x^2 - 4", "2sen(x)", "sqrt(x)", "1/x"); it adds axes when there are none, and is named f, g, h… unless "name" is given. "domain" limits x and "range" cuts y; "ends" puts closed or open dots at the ends.
 
-Axes fit the figure by themselves. An "axes" step changes names, numbers, step, unit (cm per unit on x and y) or xPi (ticks in multiples of π); giving "x" or "y" fixes the window. "grid" adds a printed square grid. "vline" draws x = a, dashed like an asymptote.
+Axes fit the figure by themselves: a window centered on the graph's symmetry when it has one (a parabola's axis, a hyperbola's center), 4:3 or square, with y scaled for a flat or steep curve. Give "domain" only when the teacher asks for one. An "axes" step changes names, numbers, step, unit (cm per unit on x and y) or xPi (ticks in multiples of π); giving "x" or "y" fixes the window. "grid" adds a printed square grid. "vline" draws x = a, dashed like an asymptote.
 
 On a graph: "pointOnGraph" at x, "notable" for roots (x₁, x₂…), turning points (V) or the y-axis crossing, "tangent" at a point on the graph ("fill": true spans the window), "guides" for the dashed lines from a point to the axes.
 
@@ -175,7 +175,7 @@ On a graph: "pointOnGraph" at x, "notable" for roots (x₁, x₂…), turning po
         recipe: {
           v: 1,
           steps: [
-            { do: "function", expr: "sen(x)", domain: [-6.2832, 6.2832] },
+            { do: "function", expr: "sen(x)", domain: ["-2π", "2π"] },
             { do: "axes", xPi: 0.5, x: [-7, 7], y: [-1.5, 1.5] },
           ],
         },

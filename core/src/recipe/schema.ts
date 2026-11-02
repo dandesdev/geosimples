@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIMITS } from "../figure";
+import { graphFn, LIMITS } from "../figure";
 
 /**
  * Recipe v1: a figure described as steps, the way an agent writes it. The
@@ -10,8 +10,31 @@ import { LIMITS } from "../figure";
  * conversation, and the longer guide is in guide.ts.
  */
 
-const coord = z.number().min(-LIMITS.coordinate).max(LIMITS.coordinate).meta({ id: "coord" });
-const positive = z.number().positive().max(LIMITS.coordinate).meta({ id: "positive" });
+/** The value of a constant expression like "2π" or "sqrt(2)", or null when it isn't one. */
+function constantValue(text: string): number | null {
+  const fn = graphFn(text);
+  if (!fn) return null;
+  const v = fn(0);
+  // An expression in x isn't a constant.
+  return Number.isFinite(v) && fn(1.2345) === v ? v : null;
+}
+
+/**
+ * A number, or an exact value written as an expression ("2π", "-π/2",
+ * "sqrt(2)"), so agents keep π and roots instead of rounding them.
+ */
+const exact = z.union([z.number(), z.string().min(1).max(40)]).transform((v, ctx) => {
+  if (typeof v === "number") return v;
+  const n = constantValue(v);
+  if (n === null) {
+    ctx.addIssue({ code: "custom", message: `"${v}" is not a number. Write a number, or an exact value like "2π", "-π/2" or "sqrt(2)".` });
+    return z.NEVER;
+  }
+  return n;
+});
+const EXACT = 'A number, or an exact value like "2π", "-π/2", "sqrt(2)"';
+const coord = exact.pipe(z.number().min(-LIMITS.coordinate).max(LIMITS.coordinate)).meta({ id: "coord", description: EXACT });
+const positive = exact.pipe(z.number().positive().max(LIMITS.coordinate)).meta({ id: "positive", description: EXACT });
 const name = z.string().min(1).max(32).meta({ id: "name", description: "Name, also shown as the label" });
 const ref = z.string().min(1).max(32).meta({ id: "ref" });
 const pair = z.tuple([ref, ref]).meta({ id: "pair" });
@@ -310,6 +333,8 @@ export const recipeSchema = z.strictObject({
 });
 
 export type Recipe = z.infer<typeof recipeSchema>;
+/** A recipe as written, before exact values like "2π" become numbers. */
+export type RecipeInput = z.input<typeof recipeSchema>;
 export type RecipeStep = Recipe["steps"][number];
 export type StepOf<K extends RecipeStep["do"]> = Extract<RecipeStep, { do: K }>;
 export type StylePatch = z.infer<typeof styleSchema>;
