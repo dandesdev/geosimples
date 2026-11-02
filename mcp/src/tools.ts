@@ -98,22 +98,40 @@ async function readFigure(value: unknown, fallbackName: string): Promise<{ doc: 
   return parsed.ok ? { doc: parsed.file.doc, name: parsed.file.name } : { error: "The share link is incomplete or damaged." };
 }
 
+/** A figure's SVG, TikZ and editor link, each built once, when first wanted: the outputs and the preview share them. */
+interface Made {
+  svg(): string;
+  tikz(): string;
+  link(): Promise<string>;
+}
+
+function made(doc: FigureDoc, name: string, scale: number | undefined, site: string): Made {
+  let svg: string | undefined;
+  let tikz: string | undefined;
+  let link: Promise<string> | undefined;
+  return {
+    svg: () => (svg ??= toSvg(doc, { scale, background: "#ffffff" })),
+    tikz: () => (tikz ??= toTikz(doc, { scale })),
+    link: () => (link ??= encodeShareToken({ name, doc }).then((token) => shareUrl(site, token))),
+  };
+}
+
 /** The requested outputs of a figure, one text block each. */
-async function outputs(doc: FigureDoc, wanted: readonly Output[], name: string, scale: number | undefined, site: string): Promise<Text[]> {
+async function outputs(figure: Made, doc: FigureDoc, wanted: readonly Output[], scale: number | undefined): Promise<Text[]> {
   const blocks: Text[] = [];
   for (const kind of new Set(wanted)) {
     switch (kind) {
       case "svg":
-        blocks.push(text(toSvg(doc, { scale, background: "#ffffff" })));
+        blocks.push(text(figure.svg()));
         break;
       case "tikz":
-        blocks.push(text(toTikz(doc, { scale })));
+        blocks.push(text(figure.tikz()));
         break;
       case "tex":
         blocks.push(text(toTikz(doc, { scale, standalone: true })));
         break;
       case "link":
-        blocks.push(text(`[Abrir no GeoSimples](${shareUrl(site, await encodeShareToken({ name, doc }))})`));
+        blocks.push(text(`[Abrir no GeoSimples](${await figure.link()})`));
         break;
       case "doc":
         blocks.push(text(JSON.stringify(doc)));
@@ -126,14 +144,9 @@ async function outputs(doc: FigureDoc, wanted: readonly Output[], name: string, 
 const DEFAULT_OUTPUT: Output[] = ["svg", "link"];
 
 /** The figure for the preview hosts show: SVG, TikZ and the editor link, whatever outputs were asked for. */
-async function viewMeta(doc: FigureDoc, name: string, scale: number | undefined, site: string): Promise<Record<string, unknown>> {
-  const figure: ViewFigure = {
-    name,
-    svg: toSvg(doc, { scale, background: "#ffffff" }),
-    tikz: toTikz(doc, { scale }),
-    link: shareUrl(site, await encodeShareToken({ name, doc })),
-  };
-  return { [FIGURE_META]: figure };
+async function viewMeta(figure: Made, name: string): Promise<Record<string, unknown>> {
+  const view: ViewFigure = { name, svg: figure.svg(), tikz: figure.tikz(), link: await figure.link() };
+  return { [FIGURE_META]: view };
 }
 
 export async function drawFigure(args: z.infer<typeof drawFigureInput>, site = DEFAULT_SITE): Promise<ToolResult> {
@@ -157,9 +170,10 @@ export async function drawFigure(args: z.infer<typeof drawFigureInput>, site = D
   }
   const summary = [`Figure built with ${result.doc.elements.length} elements.`];
   if (result.warnings.length > 0) summary.push(`Warnings:\n${result.warnings.map(issueLine).join("\n")}`);
+  const figure = made(result.doc, name, args.scale, site);
   return {
-    content: [text(summary.join("\n")), ...(await outputs(result.doc, args.output ?? DEFAULT_OUTPUT, name, args.scale, site))],
-    _meta: await viewMeta(result.doc, name, args.scale, site),
+    content: [text(summary.join("\n")), ...(await outputs(figure, result.doc, args.output ?? DEFAULT_OUTPUT, args.scale))],
+    _meta: await viewMeta(figure, name),
   };
 }
 
@@ -167,9 +181,10 @@ export async function renderDoc(args: z.infer<typeof renderDocInput>, site = DEF
   const read = await readFigure(args.doc, args.name?.trim() || "Figura");
   if ("error" in read) return { isError: true, content: [text(`doc: ${read.error}`)] };
   const name = args.name?.trim() || read.name;
+  const figure = made(read.doc, name, args.scale, site);
   return {
-    content: await outputs(read.doc, args.output ?? DEFAULT_OUTPUT, name, args.scale, site),
-    _meta: await viewMeta(read.doc, name, args.scale, site),
+    content: await outputs(figure, read.doc, args.output ?? DEFAULT_OUTPUT, args.scale),
+    _meta: await viewMeta(figure, name),
   };
 }
 
