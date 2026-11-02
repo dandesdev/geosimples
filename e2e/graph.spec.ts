@@ -661,6 +661,8 @@ test("a sine gets its own y scale in a 4:3 window, and a scale typed by hand sta
   await page.getByRole("textbox", { name: "Centímetros por unidade em y" }).fill("1");
   await expect.poll(async () => (await axes())?.unit).toEqual([1, 1]);
   expect((await axes())?.fitUnit).toBeUndefined();
+  // The scale is the teacher's now, so the switch that lets the fit pick it is gone.
+  await expect(page.getByRole("switch", { name: "Bloquear reescala com figuras geométricas" })).toHaveCount(0);
 });
 
 test("a number line's interval keeps a sine's y scale; a segment blocks it until the switch lets it through", async ({ page }) => {

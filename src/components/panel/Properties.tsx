@@ -680,7 +680,8 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
         <Field label="1 em y mede">
           <NumberInput ariaLabel="Centímetros por unidade em y" value={unit[1]} min={0.05} max={20} suffix="cm" onChange={(y) => setUnit([unit[0], y])} />
         </Field>
-        {el.fit && (
+        {/* Only when the fit picks the y scale: a scale typed by hand stays anyway. */}
+        {el.fit && (!el.unit || el.fitUnit) && (
           <SwitchField
             label="Bloquear reescala com figuras geométricas"
             checked={!el.scaleShapes}

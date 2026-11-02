@@ -195,7 +195,7 @@ export type AxesFit = Pick<Axes, "x" | "y" | "step" | "yStep"> & { unitY: number
 
 /**
  * Shapes that a stretched y would bend: circles into ellipses, angles out of
- * true. An interval's stroke on a number line (both ends in `skip`) lies flat, so it can't bend.
+ * true. A segment along a number line (both ends in `skip`), like an interval, lies flat and can't bend.
  */
 function hasShapes(doc: FigureDoc, skip: Set<Id>): boolean {
   return doc.elements.some(
