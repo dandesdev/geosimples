@@ -25,6 +25,22 @@ export function formatNumber(n: number, decimals = 2, locale: Locale = "pt-BR"):
   return locale === "en" ? trimmed : trimmed.replace(".", ",");
 }
 
+/**
+ * A measured number as a label shows it: "≈ 2,24" when rounding changed it,
+ * as textbooks mark approximations, and "2,4" when it is exact.
+ */
+export function shownNumber(n: number, decimals = 2, locale: Locale = "pt-BR"): string {
+  const factor = 10 ** decimals;
+  const exact = Math.abs(n - Math.round(n * factor) / factor) <= 1e-9 * Math.max(1, Math.abs(n));
+  return (exact ? "" : "≈ ") + formatNumber(n, decimals, locale);
+}
+
+/** A prefix like "h = " takes the ≈ of an approximate number: "h ≈ 2,24", not "h = ≈ 2,24". */
+function withApprox(prefix: string, number: string): [string, string] {
+  if (!number.startsWith("≈ ") || !/=\s*$/.test(prefix)) return [prefix, number];
+  return [prefix.replace(/=\s*$/, "≈ "), number.slice(2)];
+}
+
 const LATIN = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const GREEK = "αβγδεζηθικλμνξοπρστυφχψω";
 
@@ -72,7 +88,7 @@ export function labelFor(
       if (el.type !== "segment") return null;
       const a = pts.get(el.a);
       const b = pts.get(el.b);
-      return a && b ? formatNumber(dist(a, b), decimals, locale) : null;
+      return a && b ? shownNumber(dist(a, b), decimals, locale) : null;
     }
     case "measure": {
       if (el.type !== "angle") return null;
@@ -80,13 +96,13 @@ export function labelFor(
       const v = pts.get(el.vertex);
       const b = pts.get(el.b);
       const arc = a && v && b ? angleArc(a, v, b, el.reflex) : null;
-      return arc ? `${formatNumber(arc.measure, Math.min(decimals, 1), locale)}°` : null;
+      return arc ? `${shownNumber(arc.measure, Math.min(decimals, 1), locale)}°` : null;
     }
     case "radius":
     case "area":
     case "perimeter": {
       const value = measureValue(doc, el, scheme);
-      return value === null ? null : formatNumber(value, decimals, locale);
+      return value === null ? null : shownNumber(value, decimals, locale);
     }
   }
 }
@@ -143,11 +159,11 @@ export function measureValue(doc: FigureDoc, el: Element, kind: MeasureKind): nu
   }
 }
 
-/** The number of a measure as shown: "5,3" or "60°". */
+/** The number of a measure as shown: "5,3", "60°", or "≈ 2,24" when rounded. */
 export function measureNumber(doc: FigureDoc, el: Element, m: LabelMeasure): string | null {
   const value = measureValue(doc, el, m.kind);
   if (value === null) return null;
-  return formatNumber(value, m.decimals, doc.locale) + (m.kind === "angle" ? "°" : "");
+  return shownNumber(value, m.decimals, doc.locale) + (m.kind === "angle" ? "°" : "");
 }
 
 /** A new live measure label setting, with the given measure or the element's usual one. */
@@ -162,7 +178,9 @@ export function labelText(doc: FigureDoc, el: Element): string {
   const m = el.label.measure;
   if (!m) return el.label.text;
   const value = measureNumber(doc, el, m);
-  return value === null ? "" : m.prefix + value + m.suffix;
+  if (value === null) return "";
+  const [prefix, number] = withApprox(m.prefix, value);
+  return prefix + number + m.suffix;
 }
 
 /** Next free point name: A, B, …, Z, AA, … skipping names already in use. */
@@ -347,9 +365,10 @@ export function labelToLatex(text: string, font: LabelFont = "serif"): string {
 }
 
 /** Runs of a live measure label: the prefix as typed, the number, then the unit upright. */
-export function measureRuns(m: LabelMeasure, number: string, font: LabelFont = "serif"): LabelRun[] {
+export function measureRuns(m: LabelMeasure, shown: string, font: LabelFont = "serif"): LabelRun[] {
   const runs: LabelRun[] = [];
-  const parts = [...labelRuns(m.prefix, font), ...labelRuns(number, font), { text: m.suffix, italic: false }];
+  const [prefix, number] = withApprox(m.prefix, shown);
+  const parts = [...labelRuns(prefix, font), ...labelRuns(number, font), { text: m.suffix, italic: false }];
   for (const r of parts) {
     const last = runs[runs.length - 1];
     if (r.text === "") continue;
@@ -363,12 +382,13 @@ export function measureRuns(m: LabelMeasure, number: string, font: LabelFont = "
  * LaTeX of a live measure label. The number is always math; a prefix like
  * "x = " joins it when it is math too, and units like " cm" stay upright.
  */
-export function measureToLatex(m: LabelMeasure, number: string, font: LabelFont = "serif"): string {
-  if (font === "sans") return labelToLatex(m.prefix + number + m.suffix, font);
+export function measureToLatex(m: LabelMeasure, shown: string, font: LabelFont = "serif"): string {
+  const [prefix, number] = withApprox(m.prefix, shown);
+  if (font === "sans") return labelToLatex(prefix + number + m.suffix, font);
   const value = mathLatex(number);
   const unit = m.suffix === "" ? "" : `\\textrm{${textLatex(m.suffix)}}`;
-  if (labelMode(m.prefix) === "text") return `${textLatex(m.prefix)}$${value}${unit}$`;
-  return `$${mathLatex(m.prefix)}${value}${unit}$`;
+  if (labelMode(prefix) === "text") return `${textLatex(prefix)}$${value}${unit}$`;
+  return `$${mathLatex(prefix)}${value}${unit}$`;
 }
 
 /** Reads a run of subscript or superscript digits starting at i. */

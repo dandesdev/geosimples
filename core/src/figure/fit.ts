@@ -14,9 +14,6 @@ type Interval = [number, number];
 /** Most ticks along one axis before the step grows: past it the numbers crowd. */
 const MAX_TICKS = 12;
 
-/** A graph's curve may make the axes at most this many times taller than wide on paper; past it the curve is cut. */
-const MAX_TALL = 1.5;
-
 /** Narrowest x window, in units, a graph gets: enough to show the shape around what it marks. */
 const MIN_GRAPH_WIDTH = 6;
 
@@ -94,36 +91,12 @@ function sampleValues(graph: FunctionGraph, [a, b]: Interval): number[] {
 }
 
 /**
- * Cuts the y extent of curves to `cap` units, keeping the origin: the side
- * nearer it whole when it fits, and an even split when both run long.
+ * What a reader looks for on a graph, within the usual window: its roots,
+ * turning points and crossing with the y axis.
  */
-function capped(span: Span, cap: number): Interval | null {
-  if (span.empty) return null;
-  const below = Math.max(0, -span.lo);
-  const above = Math.max(0, span.hi);
-  if (below + above <= cap) return [span.lo, span.hi];
-  const keptBelow = Math.min(below, Math.max(cap / 2, cap - above));
-  const lo = Math.max(span.lo, -keptBelow);
-  const hi = Math.min(span.hi, cap - keptBelow);
-  if (lo <= hi) return [lo, hi];
-  // All of it lies past the cap on one side: keep its part nearest the origin.
-  return span.lo > 0 ? [span.lo, Math.min(span.hi, span.lo + cap)] : [Math.max(span.lo, span.hi - cap), span.hi];
-}
-
-/**
- * The x of what a reader looks for on a graph, within the usual window: its
- * roots, turning points and crossing with the y axis.
- */
-function featureXs(g: FunctionGraph): number[] {
+function features(g: FunctionGraph): { x: number; y: number }[] {
   const look = { expr: g.expr, domain: DEFAULT_PLOT_WINDOW.x, range: FEATURE_RANGE };
-  return (["root", "extremum", "yAxis"] as const).flatMap((f) => notablePoints(look, f).map((p) => p.x));
-}
-
-/** `w` widened to `width`, about its middle, with ends on ticks. */
-function atLeast(w: Interval, width: number, step: number): Interval {
-  if (w[1] - w[0] >= width) return w;
-  const mid = (w[0] + w[1]) / 2;
-  return [tidy(Math.floor((mid - width / 2) / step + ON_TICK) * step), tidy(Math.ceil((mid + width / 2) / step - ON_TICK) * step)];
+  return (["root", "extremum", "yAxis"] as const).flatMap((f) => notablePoints(look, f));
 }
 
 /** Points that sit on a graph drawn over the axes' x: on it, at its roots or turning points, or where it crosses something. */
@@ -142,16 +115,110 @@ function pointsOnFollowing(doc: FigureDoc, axes: Axes): Set<Id> {
   return out;
 }
 
-/** The window and steps that fit everything but the axes themselves, grids and number lines. */
-export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" | "step" | "yStep"> {
+/** Where a graph jumps across a vertical asymptote in the usual window. */
+function asymptoteXs(fn: (x: number) => number): number[] {
+  const [a, b] = DEFAULT_PLOT_WINDOW.x;
+  const n = 400;
+  const out: number[] = [];
+  let prev = fn(a);
+  for (let i = 1; i <= n; i++) {
+    const x = a + ((b - a) * i) / n;
+    const y = fn(x);
+    const flip = Number.isFinite(prev) && Number.isFinite(y) && Math.sign(prev) !== Math.sign(y) && Math.min(Math.abs(prev), Math.abs(y)) > 5;
+    if (flip || Number.isFinite(prev) !== Number.isFinite(y)) out.push(x - (b - a) / n / 2);
+    prev = y;
+  }
+  return out;
+}
+
+/** A found root or turning point lands a hair off a round number: put it back on. */
+const settle = (v: number) => {
+  const r = Math.round(v * 8) / 8;
+  return Math.abs(v - r) < 0.02 ? r : v;
+};
+
+/**
+ * The center the graphs are symmetric about, when they are: a mirror line
+ * x = c, like a parabola's axis (y null), or a center point (c, y), like a
+ * hyperbola's. The window is laid out around it, so both sides match.
+ */
+function symmetryCenter(graphs: FunctionGraph[]): { x: number; y: number | null } | null {
+  const fns = graphs.map((g) => graphFn(g.expr)).filter((f): f is (x: number) => number => f !== null);
+  if (fns.length === 0) return null;
+  const candidates = [0];
+  for (const g of graphs) for (const f of features(g)) candidates.push(settle(f.x));
+  for (const fn of fns) for (const x of asymptoteXs(fn)) candidates.push(settle(x));
+  const ts = Array.from({ length: 40 }, (_, i) => 0.1 + i * 0.1);
+  // A line is symmetric about each of its points, which says nothing: only its x center counts.
+  const straight = fns.every((fn) => [-2, -1, 1, 2].every((t) => Math.abs(fn(t) - fn(0) - t * (fn(1) - fn(0))) < 1e-9 * (1 + Math.abs(fn(t)))));
+  const close = (a: number, b: number) => Math.abs(a - b) <= 1e-6 * (1 + Math.abs(a) + Math.abs(b));
+  for (const c of [...new Set(candidates)].sort((a, b) => Math.abs(a) - Math.abs(b))) {
+    let mirror = true;
+    let point = true;
+    let k: number | null = null;
+    let seen = 0;
+    for (const fn of fns) {
+      for (const t of ts) {
+        const l = fn(c - t);
+        const r = fn(c + t);
+        if (!Number.isFinite(l) && !Number.isFinite(r)) continue;
+        if (!Number.isFinite(l) || !Number.isFinite(r)) {
+          mirror = point = false;
+          break;
+        }
+        seen++;
+        if (!close(l, r)) mirror = false;
+        const mid = (l + r) / 2;
+        if (k === null) k = mid;
+        else if (!close(k, mid)) point = false;
+      }
+    }
+    if (seen < 10) continue;
+    if (mirror) return { x: c, y: null };
+    if (point && k !== null) return { x: c, y: straight ? null : k };
+  }
+  return null;
+}
+
+/** The window's shape on paper, width over height: 4:3, or a square for what stands taller. */
+const WIDE = 4 / 3;
+/** Share of a curve, by height, that decides how tall the window is: the far arms past it are cut. */
+const CORE = 0.7;
+/** Content under this share of a 4:3 window's height stretches y; over this many widths, y shrinks. */
+const FLAT = 1 / 3;
+const STEEP = 2;
+/** Scales y may take, in cm per unit, when the fit sets it. */
+const Y_SCALES = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 3, 4, 5, 10];
+
+/** The fitted window. `unitY` is the y scale the fit picked, or null when y keeps the scale it has. */
+export type AxesFit = Pick<Axes, "x" | "y" | "step" | "yStep"> & { unitY: number | null };
+
+/** Shapes that a stretched y would bend: circles into ellipses, angles out of true. */
+function hasShapes(doc: FigureDoc): boolean {
+  return doc.elements.some((e) => e.type === "circle" || e.type === "polygon" || e.type === "angle" || e.type === "segment");
+}
+
+/**
+ * The window and steps that fit everything but the axes themselves, grids and
+ * number lines.
+ *
+ * x takes the geometry with a tick of room. A graph drawn over the axes' x
+ * gets a window centered on its symmetry (a parabola's axis, a hyperbola's
+ * center), or else on what it shows, reaching its roots, turning points and y
+ * crossing; so both sides of it match. Then the window takes a common shape,
+ * 4:3, or a square for taller content. A curve that runs past it is cut where
+ * the most of it shows. One that would sit flat (a sine, a bell curve) or
+ * shoot past (x³) gets its own y scale, when nothing in the figure would bend.
+ */
+export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
   const skip = onNumberLines(doc);
-  const pts = pointMap(doc);
   const xs = new Span();
   const ys = new Span();
+  const pts = pointMap(doc);
   /** Graphs drawn over the axes' x: their x is whatever the axes show, so they only count in y. */
   const following: FunctionGraph[] = [];
-  /** y values of curves, which may run off to infinity: they are capped, the rest is not. */
-  const curves = new Span();
+  /** Graphs over a domain of their own, which counts like geometry. */
+  const own: FunctionGraph[] = [];
   const onFollowing = pointsOnFollowing(doc, axes);
 
   for (const el of doc.elements) {
@@ -181,62 +248,148 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): Pick<Axes, "x" | "y" 
           ys.add(el.range[1]);
         }
         break;
-      case "function": {
-        if (sameInterval(el.domain, axes.x)) {
-          following.push(el);
-          break;
+      case "function":
+        if (sameInterval(el.domain, axes.x)) following.push(el);
+        else {
+          own.push(el);
+          xs.add(el.domain[0]);
+          xs.add(el.domain[1]);
         }
-        xs.add(el.domain[0]);
-        xs.add(el.domain[1]);
-        addCurve(curves, el, el.domain, axes);
         break;
-      }
     }
   }
 
-  // x: the figure with a tick of room, at least a tick past the origin, and for graphs
-  // their roots, turning points and y crossing, over at least MIN_GRAPH_WIDTH.
+  // x: the geometry with a tick of room, and graphs over the axes' x laid out about their center.
   const pi = axes.xPi;
-  const cm = { x: axes.unit?.[0] ?? 1, y: axes.unit?.[1] ?? 1 };
-  const geoX: Interval = xs.empty ? [0, 0] : [Math.min(xs.lo, 0), Math.max(xs.hi, 0)];
-  const features = new Span();
-  features.add(0);
-  for (const g of following) for (const fx of featureXs(g)) features.add(fx);
-  const graphX: Interval = [features.lo, features.hi];
-  const span = Math.max(geoX[1] - geoX[0], following.length > 0 ? Math.max(graphX[1] - graphX[0], MIN_GRAPH_WIDTH) : 0);
-  const step = pi ? axes.step : niceStep(span, cm.x);
-  const stepX = pi ? pi * Math.PI : step;
-  let x: Interval = xs.empty && following.length === 0 ? [...DEFAULT_PLOT_WINDOW.x] : withRoom(geoX, stepX);
+  const scaleX = axes.unit?.[0] ?? 1;
+  const geoX: Interval | null = xs.empty ? null : [Math.min(xs.lo, 0), Math.max(xs.hi, 0)];
+  const center = following.length > 0 ? symmetryCenter(following) : null;
+  const marks = following.flatMap(features);
+  let x: Interval;
+  let step: number;
   if (following.length > 0) {
-    const g = atLeast(withRoom(graphX, stepX), MIN_GRAPH_WIDTH, stepX);
-    // Geometry gets its tick of room only where it passes the graphs' window: inside it, room would stretch the curves.
-    x = xs.empty ? g : [geoX[0] < g[0] ? x[0] : g[0], geoX[1] > g[1] ? x[1] : g[1]];
+    const fx = [0, ...marks.map((m) => m.x)];
+    const span = Math.max(...fx) - Math.min(...fx);
+    step = pi ? axes.step : niceStep(Math.max(span, MIN_GRAPH_WIDTH), scaleX);
+    const stepX = pi ? pi * Math.PI : step;
+    // With no symmetry, the middle of what it shows, on a tick.
+    const c = center?.x ?? Math.round((Math.min(...fx) + Math.max(...fx)) / 2 / stepX) * stepX;
+    const reach = Math.max(...fx.map((v) => Math.abs(v - c)));
+    const half = Math.max(Math.ceil((reach + stepX) / stepX - ON_TICK), Math.ceil(MIN_GRAPH_WIDTH / 2 / stepX - ON_TICK)) * stepX;
+    x = [tidy(c - half), tidy(c + half)];
+    // Geometry past the graphs' window gets its tick of room, on its side only.
+    if (geoX) {
+      const room = withRoom(geoX, stepX);
+      x = [geoX[0] < x[0] ? room[0] : x[0], geoX[1] > x[1] ? room[1] : x[1]];
+    }
+  } else {
+    step = pi ? axes.step : niceStep(geoX ? geoX[1] - geoX[0] : 0, scaleX);
+    x = geoX ? withRoom(geoX, pi ? pi * Math.PI : step) : [...DEFAULT_PLOT_WINDOW.x];
   }
   if (pi) x = piWindow(x, pi);
+  if (!geoX && following.length === 0 && ys.empty) return { x, y: [...DEFAULT_PLOT_WINDOW.y], step, yStep: undefined, unitY: null };
 
-  for (const g of following) addCurve(curves, g, x, axes);
-  // Tall on paper: a y axis at a smaller scale lets a steep curve show more.
-  const cut = capped(curves, (MAX_TALL * (x[1] - x[0]) * cm.x) / cm.y);
-  if (cut) {
-    ys.add(cut[0]);
-    ys.add(cut[1]);
+  // y: what must show (the x axis, geometry, turning points, a center of symmetry), then the curves.
+  const must = new Span();
+  must.add(0);
+  if (!ys.empty) {
+    must.add(ys.lo);
+    must.add(ys.hi);
   }
-  if (ys.empty && following.length === 0 && xs.empty) {
-    return { x, y: [...DEFAULT_PLOT_WINDOW.y], step, yStep: undefined };
+  for (const m of marks) if (m.x >= x[0] && m.x <= x[1]) must.add(m.y);
+  if (center && center.y !== null) must.add(center.y);
+  const samples: number[] = [];
+  for (const g of following) samples.push(...curveValues(g, x, axes));
+  for (const g of own) samples.push(...curveValues(g, g.domain, axes));
+  samples.sort((a, b) => a - b);
+  const core = new Span();
+  core.add(must.lo);
+  core.add(must.hi);
+  if (samples.length > 0) {
+    core.add(samples[Math.floor(((1 - CORE) / 2) * (samples.length - 1))]);
+    core.add(samples[Math.ceil(((1 + CORE) / 2) * (samples.length - 1))]);
   }
-  const geoY: Interval = ys.empty ? [0, 0] : [Math.min(ys.lo, 0), Math.max(ys.hi, 0)];
-  const yStep = niceStep(geoY[1] - geoY[0], cm.y);
-  const y = withRoom(geoY, yStep);
-  return { x, y, step, yStep: yStep === step ? undefined : yStep };
+
+  // The y scale: the axes' own, or one the fit picks when a curve would sit flat or shoot past.
+  const width = (x[1] - x[0]) * scaleX;
+  const canScale = (!axes.unit || !!axes.fitUnit) && !hasShapes(doc) && samples.length > 0;
+  const coreH = Math.max(core.hi - core.lo, 1e-9);
+  let scaleY = canScale ? 1 : (axes.unit?.[1] ?? 1);
+  if (canScale && coreH < (width / WIDE) * FLAT) {
+    // The most stretch that still fits 4:3 with a tick of room on each side.
+    scaleY = Math.max(1, ...Y_SCALES.filter((s) => s * (coreH + 2 * niceStep(coreH, s)) <= width / WIDE));
+  } else if (canScale && coreH > width * STEEP) {
+    scaleY = Math.max(Y_SCALES[0], ...Y_SCALES.filter((s) => s < 1 && s * coreH <= width * 0.9));
+  }
+
+  const roughStep = niceStep(coreH, scaleY);
+  const need: Interval = [must.lo - roughStep, must.hi + roughStep];
+  const content: Interval = [Math.min(core.lo - roughStep / 2, need[0]), Math.max(core.hi + roughStep / 2, need[1])];
+
+  /** y for a window this wide on paper: 4:3 when the content fits it with room, a square otherwise. */
+  const place = (width: number): { y: Interval; yStep: number } => {
+    // A curve with a center (a hyperbola's) needs as much room on each side of it.
+    const c = center?.y ?? null;
+    const box: Interval = c === null ? content : [Math.min(content[0], 2 * c - content[1]), Math.max(content[1], 2 * c - content[0])];
+    const tall = (box[1] - box[0]) * scaleY > width / WIDE;
+    const height = (tall ? width : width / WIDE) / scaleY;
+    // Same scale on both axes: y counts like x, unless that crowds it.
+    const yStep = !pi && scaleY === scaleX && height / step <= MAX_TICKS ? step : niceStep(height, scaleY);
+    let y: Interval;
+    if (box[1] - box[0] <= height) {
+      // Room to spare: centered on the curve's center when it has one, or on the content.
+      if (c !== null) y = [c - height / 2, c + height / 2];
+      else {
+        // Centered, with the ends on ticks when they can be: of the two ticks, the one that shows more of the curves.
+        const lo = (content[0] + content[1]) / 2 - height / 2;
+        // Half a tick of room is enough once the ends sit on ticks.
+        const shows = (t: number) => t <= must.lo - roughStep / 2 + 1e-9 && t + height >= must.hi + roughStep / 2 - 1e-9;
+        const shown = (t: number) => samples.filter((v) => v >= t && v <= t + height).length;
+        const near = [Math.ceil(lo / yStep - ON_TICK) * yStep, Math.floor(lo / yStep + ON_TICK) * yStep].filter(shows);
+        const t = near.length > 0 ? near.reduce((a, b) => (shown(b) > shown(a) ? b : a)) : lo;
+        y = [t, t + height];
+      }
+    } else if (need[1] - need[0] >= height) {
+      // What must show doesn't fit the shape: it shows anyway.
+      y = need;
+    } else {
+      // A curve taller than the window: the cut that keeps the most of it, with what must show.
+      const lowest = need[1] - height;
+      const target = center?.y ?? (need[0] + need[1]) / 2;
+      let best = { lo: lowest, count: -1, off: Infinity };
+      for (let i = 0; i <= 60; i++) {
+        const lo = lowest + ((need[0] - lowest) * i) / 60;
+        const count = samples.filter((v) => v >= lo && v <= lo + height).length;
+        const off = Math.abs(lo + height / 2 - target);
+        if (count > best.count || (count === best.count && off < best.off)) best = { lo, count, off };
+      }
+      // The bottom on the tick next to the best cut that shows the most, when one still shows what must.
+      const shown = (lo: number) => samples.filter((v) => v >= lo && v <= lo + height).length;
+      const ticks = [Math.ceil(best.lo / yStep - ON_TICK) * yStep, Math.floor(best.lo / yStep + ON_TICK) * yStep].filter(
+        (t) => t >= lowest - 1e-9 && t <= need[0] + 1e-9,
+      );
+      const lo = ticks.length > 0 ? ticks.reduce((a, b) => (shown(b) > shown(a) ? b : a)) : best.lo;
+      y = [lo, lo + height];
+    }
+    return { y, yStep };
+  };
+
+  let { y, yStep } = place(width);
+  // What must show stood taller than a square: x widens evenly, out to ticks, and y takes the new width.
+  const over = ((y[1] - y[0]) * scaleY - width) / scaleX / 2;
+  if (over > 1e-9) {
+    const stepX = pi ? pi * Math.PI : step;
+    const pad = Math.ceil(over / stepX - ON_TICK) * stepX;
+    x = [tidy(x[0] - pad), tidy(x[1] + pad)];
+    ({ y, yStep } = place((x[1] - x[0]) * scaleX));
+  }
+  return { x, y: [tidy(y[0]), tidy(y[1])], step, yStep: yStep === step ? undefined : yStep, unitY: canScale ? scaleY : null };
 }
 
-/** Adds a graph's y over [a, b], inside its own y cut when it has one. */
-function addCurve(span: Span, g: FunctionGraph, over: Interval, axes: Axes) {
+/** A graph's y over [a, b], inside its own y cut when it has one. */
+function curveValues(g: FunctionGraph, over: Interval, axes: Axes): number[] {
   const own = !sameInterval(g.range, axes.y);
-  for (const v of sampleValues(g, over)) {
-    if (own && (v < g.range[0] || v > g.range[1])) continue;
-    span.add(v);
-  }
+  return sampleValues(g, over).filter((v) => !own || (v >= g.range[0] && v <= g.range[1]));
 }
 
 /** Everything drawn but grids, for a grid that follows the figure. */
@@ -296,6 +449,13 @@ export function gridWindow(doc: FigureDoc, grid: Grid): { x: Interval; y: Interv
   return { x: grid.x, y: grid.y, stepX: grid.step, stepY: grid.step };
 }
 
+/** The scale fitted axes take: the y the fit picked, with x as it was. Undefined is the plain 1 and 1. */
+function fittedUnit(axes: Axes, unitY: number | null): [number, number] | undefined {
+  if (unitY === null) return axes.unit;
+  const x = axes.unit?.[0] ?? 1;
+  return x === 1 && unitY === 1 ? undefined : [x, unitY];
+}
+
 /**
  * Fits the axes and grids that follow the figure, after any edit. Graphs over
  * the axes' window follow it, as when the window is typed. The same figure
@@ -307,7 +467,9 @@ export function fitFigure(doc: FigureDoc): FigureDoc {
     if (el.type !== "axes" || !el.fit) continue;
     const axes = out.elements.find((e): e is Axes => e.id === el.id)!;
     const w = fitAxesWindow(out, axes);
-    if (sameInterval(w.x, axes.x) && sameInterval(w.y, axes.y) && w.step === axes.step && w.yStep === axes.yStep) continue;
+    const unit = fittedUnit(axes, w.unitY);
+    const sameUnit = unit === undefined ? !axes.unit : !!axes.unit && axes.unit[0] === unit[0] && axes.unit[1] === unit[1];
+    if (sameInterval(w.x, axes.x) && sameInterval(w.y, axes.y) && w.step === axes.step && w.yStep === axes.yStep && sameUnit) continue;
     const windowed = sameInterval(w.x, axes.x) && sameInterval(w.y, axes.y) ? out : setAxesWindow(out, axes.id, w.x, w.y).doc;
     out = withElements(
       windowed,
@@ -316,6 +478,12 @@ export function fitFigure(doc: FigureDoc): FigureDoc {
         const next: Axes = { ...e, step: w.step };
         if (w.yStep === undefined) delete next.yStep;
         else next.yStep = w.yStep;
+        if (w.unitY !== null) {
+          if (unit) next.unit = unit;
+          else delete next.unit;
+          if (unit && unit[1] !== 1) next.fitUnit = true;
+          else delete next.fitUnit;
+        }
         return next;
       }),
     );

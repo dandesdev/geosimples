@@ -692,7 +692,7 @@ describe("live measure labels", () => {
     expect(measure("a1", { kind: "angle", decimals: 0, prefix: "", suffix: "" })).toBe("90°");
     expect(measure("c1", { kind: "radius", decimals: 2, prefix: "r = ", suffix: "" })).toBe("r = 3");
     doc = movePoints(doc, [{ id: "p3", x: 0, y: 1.234 }]);
-    expect(labelText(doc, doc.elements.find((e) => e.id === "c1")!)).toBe("r = 1,23");
+    expect(labelText(doc, doc.elements.find((e) => e.id === "c1")!)).toBe("r ≈ 1,23");
   });
 
   it("writes the value at export time in TikZ, with upright units", () => {
