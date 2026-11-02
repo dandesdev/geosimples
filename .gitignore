@@ -39,3 +39,6 @@ core/fixtures/out/
 test-results/
 playwright-report/
 blob-report/
+
+# Wrangler local state and builds
+.wrangler/

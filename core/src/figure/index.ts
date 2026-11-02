@@ -17,3 +17,5 @@ export * from "./plot";
 export * from "./graphOps";
 export * from "./fit";
 export * from "./handles";
+export * from "./messages";
+export * from "./placement";

@@ -32,6 +32,8 @@ import { polar, type Vec } from "./vec";
 export interface TikzOptions {
   /** cm per world unit. Default 1. */
   scale?: number;
+  /** A whole .tex file that compiles on its own, instead of the tikzpicture to paste. Default false. */
+  standalone?: boolean;
 }
 
 /** Rounds to 3 decimals and drops trailing zeros. */
@@ -273,11 +275,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         if (el.numbers) {
           const gap = el.size * 0.9;
           for (const x of xs) {
-            const s = xTickText(el, x);
+            const s = xTickText(el, x, doc.locale);
             sections.label.push(node(s, at({ x, y: o.y }), { x: xTickShift(doc, el, x, s), y: -(tick + gap * 0.7) }));
           }
           for (const y of ys) {
-            const s = formatNumber(y);
+            const s = formatNumber(y, 2, doc.locale);
             sections.label.push(node(s, at({ x: o.x, y }), { x: -(tick + 2 + estimateTextWidth(s, el.size) / 2), y: 0 }));
           }
         }
@@ -311,7 +313,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         if (el.numbers) {
           for (const x of xs) {
             sections.label.push(
-              `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(at({ x, y: el.y }), { x: 0, y: -(tick + el.size * 0.9) })} {${labelToLatex(formatNumber(x), "serif")}};`,
+              `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(at({ x, y: el.y }), { x: 0, y: -(tick + el.size * 0.9) })} {${labelToLatex(formatNumber(x, 2, doc.locale), "serif")}};`,
             );
           }
         }
@@ -341,7 +343,18 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   const order = ["coords", "grid", "axes", "guide", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
   lines.push("\\end{tikzpicture}");
-  return lines.join("\n") + "\n";
+  if (!options.standalone) return lines.join("\n") + "\n";
+  return [
+    "\\documentclass[border=2pt]{standalone}",
+    "\\usepackage[T1]{fontenc}",
+    "\\usepackage{tikz}",
+    ...(usesPatterns ? ["\\usetikzlibrary{patterns.meta}"] : []),
+    "\\begin{document}",
+    // The preamble comment is for pasting into a document; this file already has it.
+    ...lines.filter((l) => !l.startsWith("% Preâmbulo")),
+    "\\end{document}",
+    "",
+  ].join("\n");
 }
 
 function textOptions(c: string, size: number, font: LabelFont, color: (c: string) => string): string[] {
