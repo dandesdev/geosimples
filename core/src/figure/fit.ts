@@ -193,9 +193,18 @@ const Y_SCALES = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 3, 4, 5, 10];
 /** The fitted window. `unitY` is the y scale the fit picked, or null when y keeps the scale it has. */
 export type AxesFit = Pick<Axes, "x" | "y" | "step" | "yStep"> & { unitY: number | null };
 
-/** Shapes that a stretched y would bend: circles into ellipses, angles out of true. */
-function hasShapes(doc: FigureDoc): boolean {
-  return doc.elements.some((e) => e.type === "circle" || e.type === "polygon" || e.type === "angle" || e.type === "segment");
+/**
+ * Shapes that a stretched y would bend: circles into ellipses, angles out of
+ * true. An interval's stroke on a number line (both ends in `skip`) lies flat, so it can't bend.
+ */
+function hasShapes(doc: FigureDoc, skip: Set<Id>): boolean {
+  return doc.elements.some(
+    (e) =>
+      e.type === "circle" ||
+      e.type === "polygon" ||
+      e.type === "angle" ||
+      (e.type === "segment" && !(skip.has(e.a) && skip.has(e.b))),
+  );
 }
 
 /**
@@ -320,9 +329,9 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
 
   // The y scale: the axes' own, or one the fit picks when a curve would sit flat or shoot past.
   const width = (x[1] - x[0]) * scaleX;
-  // The fit owns y when no scale was set by hand; it stretches y only when nothing would bend.
+  // The fit owns y when no scale was set by hand. It stretches y only when nothing would bend, unless the axes allow it.
   const ownsY = !axes.unit || !!axes.fitUnit;
-  const canScale = ownsY && !hasShapes(doc) && samples.length > 0;
+  const canScale = ownsY && (!!axes.scaleShapes || !hasShapes(doc, skip)) && samples.length > 0;
   const coreH = Math.max(core.hi - core.lo, 1e-9);
   let scaleY = ownsY ? 1 : (axes.unit?.[1] ?? 1);
   if (canScale && coreH < (width / WIDE) * FLAT) {

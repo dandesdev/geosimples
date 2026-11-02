@@ -3,6 +3,8 @@ import {
   addAxes,
   addFunction,
   addGrid,
+  addInterval,
+  normalizeDoc,
   addVerticalLine,
   construct,
   addPoints,
@@ -105,6 +107,30 @@ describe("axes that fit the figure", () => {
     const emptied = fitFigure(deleteElements(fitFigure(withGraph("sen(x)")), ["f1"]).doc);
     expect(axesOf(emptied).unit).toBeUndefined();
     expect(axesOf(emptied).fitUnit).toBeUndefined();
+  });
+
+  it("keep the y scale next to a number line's intervals, and with shapes in when the axes allow it", () => {
+    // The sign of sen(x) on a number line below: the interval is a segment, but it lies flat and can't bend.
+    const signed = addInterval(addNumberLine(withGraph("sen(x)")).doc, 0, 3, [false, false]).doc;
+    expect(signed.elements.some((e) => e.type === "segment")).toBe(true);
+    expect(axesOf(fitFigure(signed))).toMatchObject({ unit: [1, 3], fitUnit: true });
+    // A segment that isn't on the number line still blocks it.
+    const added = addPoints(signed, [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+    expect(axesOf(fitFigure(connectPoints(added.doc, added.created, false).doc)).unit).toBeUndefined();
+    // Turning the block off lets y stretch with a circle in, which then draws as an ellipse.
+    const circled = makeCircle(addPoints(withGraph("sen(x)"), [{ x: 0, y: 0 }]).doc, ["p1"], "radius").doc;
+    const allowed = updateElements(circled, [axesOf(circled).id], (e) => (e.type === "axes" ? { ...e, scaleShapes: true } : e));
+    expect(axesOf(fitFigure(allowed))).toMatchObject({ unit: [1, 3], fitUnit: true });
+    // Turning it back on gives the stretch back.
+    const blocked = updateElements(fitFigure(allowed), [axesOf(circled).id], (e) => {
+      if (e.type !== "axes") return e;
+      const rest: Axes = { ...e };
+      delete rest.scaleShapes;
+      return rest;
+    });
+    expect(axesOf(fitFigure(blocked)).unit).toBeUndefined();
+    // Saved figures keep the choice.
+    expect(axesOf(normalizeDoc(JSON.parse(JSON.stringify(allowed)))).scaleShapes).toBe(true);
   });
 
   it("don't stretch a graph for a point on it, its roots or its crossings", () => {

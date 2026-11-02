@@ -305,6 +305,7 @@ export function normalizeDoc(input: unknown): FigureDoc {
             ? { unit: [num(r.unit[0], 0.05, 20, 1), num(r.unit[1], 0.05, 20, 1)] as [number, number] }
             : {}),
           ...(r.fitUnit === true && Array.isArray(r.unit) ? { fitUnit: true } : {}),
+          ...(r.scaleShapes === true ? { scaleShapes: true } : {}),
         };
         if (r.grid === true) axesGrid = true;
         out.push(a);
