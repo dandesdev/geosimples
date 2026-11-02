@@ -220,6 +220,8 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
   /** Graphs over a domain of their own, which counts like geometry. */
   const own: FunctionGraph[] = [];
   const onFollowing = pointsOnFollowing(doc, axes);
+  /** y of points on those graphs: inside the window, but with no room of their own, which would stretch it. */
+  const onCurve = new Span();
 
   for (const el of doc.elements) {
     switch (el.type) {
@@ -229,8 +231,11 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
         // A tangent's end that fills the window sits on its edge: counting it would push the window out.
         if (el.type === "point" && el.construction?.kind === "tangent" && el.construction.fill) break;
         // A point on a graph that follows the axes is inside its window already: room around it would stretch the curve.
-        if (!onFollowing.has(el.id)) xs.add(el.x);
-        ys.add(el.y);
+        if (onFollowing.has(el.id)) onCurve.add(el.y);
+        else {
+          xs.add(el.x);
+          ys.add(el.y);
+        }
         break;
       case "circle": {
         const c = pts.get(el.center);
@@ -312,9 +317,11 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
 
   // The y scale: the axes' own, or one the fit picks when a curve would sit flat or shoot past.
   const width = (x[1] - x[0]) * scaleX;
-  const canScale = (!axes.unit || !!axes.fitUnit) && !hasShapes(doc) && samples.length > 0;
+  // The fit owns y when no scale was set by hand; it stretches y only when nothing would bend.
+  const ownsY = !axes.unit || !!axes.fitUnit;
+  const canScale = ownsY && !hasShapes(doc) && samples.length > 0;
   const coreH = Math.max(core.hi - core.lo, 1e-9);
-  let scaleY = canScale ? 1 : (axes.unit?.[1] ?? 1);
+  let scaleY = ownsY ? 1 : (axes.unit?.[1] ?? 1);
   if (canScale && coreH < (width / WIDE) * FLAT) {
     // The most stretch that still fits 4:3 with a tick of room on each side.
     scaleY = Math.max(1, ...Y_SCALES.filter((s) => s * (coreH + 2 * niceStep(coreH, s)) <= width / WIDE));
@@ -323,7 +330,7 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
   }
 
   const roughStep = niceStep(coreH, scaleY);
-  const need: Interval = [must.lo - roughStep, must.hi + roughStep];
+  const need: Interval = [Math.min(must.lo - roughStep, onCurve.lo), Math.max(must.hi + roughStep, onCurve.hi)];
   const content: Interval = [Math.min(core.lo - roughStep / 2, need[0]), Math.max(core.hi + roughStep / 2, need[1])];
 
   /** y for a window this wide on paper: 4:3 when the content fits it with room, a square otherwise. */
@@ -343,7 +350,8 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
         // Centered, with the ends on ticks when they can be: of the two ticks, the one that shows more of the curves.
         const lo = (content[0] + content[1]) / 2 - height / 2;
         // Half a tick of room is enough once the ends sit on ticks.
-        const shows = (t: number) => t <= must.lo - roughStep / 2 + 1e-9 && t + height >= must.hi + roughStep / 2 - 1e-9;
+        const shows = (t: number) =>
+          t <= Math.min(must.lo - roughStep / 2, onCurve.lo) + 1e-9 && t + height >= Math.max(must.hi + roughStep / 2, onCurve.hi) - 1e-9;
         const shown = (t: number) => samples.filter((v) => v >= t && v <= t + height).length;
         const near = [Math.ceil(lo / yStep - ON_TICK) * yStep, Math.floor(lo / yStep + ON_TICK) * yStep].filter(shows);
         const t = near.length > 0 ? near.reduce((a, b) => (shown(b) > shown(a) ? b : a)) : lo;
@@ -383,7 +391,7 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
     x = [tidy(x[0] - pad), tidy(x[1] + pad)];
     ({ y, yStep } = place((x[1] - x[0]) * scaleX));
   }
-  return { x, y: [tidy(y[0]), tidy(y[1])], step, yStep: yStep === step ? undefined : yStep, unitY: canScale ? scaleY : null };
+  return { x, y: [tidy(y[0]), tidy(y[1])], step, yStep: yStep === step ? undefined : yStep, unitY: ownsY ? scaleY : null };
 }
 
 /** A graph's y over [a, b], inside its own y cut when it has one. */

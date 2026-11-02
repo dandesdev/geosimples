@@ -92,6 +92,14 @@ describe("axes that fit the figure", () => {
     const byHand = fitFigure({ ...withGraph("sen(x)"), elements: withGraph("sen(x)").elements.map((e) => (e.type === "axes" ? { ...e, unit: [1, 2] as [number, number] } : e)) });
     expect(axesOf(byHand)).toMatchObject({ unit: [1, 2] });
     expect(axesOf(byHand).fitUnit).toBeUndefined();
+    // 1 and 1 set by hand stays too, even with the window fitting.
+    const plain = fitFigure({ ...withGraph("sen(x)"), elements: withGraph("sen(x)").elements.map((e) => (e.type === "axes" ? { ...e, unit: [1, 1] as [number, number] } : e)) });
+    expect(axesOf(plain).unit).toEqual([1, 1]);
+    // A shape drawn after the fit stretched y takes the stretch away, so the shape isn't bent.
+    const added = addPoints(fitFigure(withGraph("sen(x)")), [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+    const withSegment = fitFigure(connectPoints(added.doc, added.created, false).doc);
+    expect(axesOf(withSegment).unit).toBeUndefined();
+    expect(axesOf(withSegment).fitUnit).toBeUndefined();
   });
 
   it("don't stretch a graph for a point on it, its roots or its crossings", () => {

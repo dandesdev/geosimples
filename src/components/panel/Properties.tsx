@@ -607,10 +607,9 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
   const setUnit = (next: [number, number]) =>
     update((a) => {
       // A scale set by hand is the teacher's: the fit stops picking y.
-      const rest = { ...a };
+      // Even 1 and 1 stays written: a fitting window would otherwise pick its own y again.
+      const rest = { ...a, unit: next };
       delete rest.fitUnit;
-      if (next[0] !== 1 || next[1] !== 1) return { ...rest, unit: next };
-      delete rest.unit;
       return rest;
     }, "unit");
   const distorted = doc.elements.some((e) => e.type === "circle" || e.type === "angle" || e.type === "polygon");

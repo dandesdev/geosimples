@@ -162,11 +162,12 @@ describe("compileRecipe: exact values", () => {
       v: 1,
       steps: [
         { do: "function", expr: "sen(x)", domain: ["0", "2π"] },
-        { do: "points", points: [{ name: "A", at: ["sqrt(2)", "-π/2"] }] },
+        { do: "points", points: [{ name: "A", at: ["sqrt(2)", "-π/2"] }, { name: "B", from: "A", length: "sqrt(2)", angle: 45 }] },
       ],
     });
     expect(ofType(doc, "function")[0].domain[1]).toBeCloseTo(2 * Math.PI, 12);
     near(byName(doc, "A"), Math.SQRT2, -Math.PI / 2);
+    near(byName(doc, "B"), Math.SQRT2 + 1, -Math.PI / 2 + 1);
   });
 
   it("rejects text that isn't a number", () => {

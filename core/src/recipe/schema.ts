@@ -122,7 +122,7 @@ const pointSpec = z.union([
   z.strictObject({
     name: name.optional(),
     from: ref,
-    length: z.number().min(0).max(LIMITS.coordinate),
+    length: exact.pipe(z.number().min(0).max(LIMITS.coordinate)),
     angle: z.number().describe("Direction, degrees counterclockwise from +x"),
   }),
 ]);
