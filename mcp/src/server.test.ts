@@ -2,6 +2,7 @@ import { decodeShareToken, shareTokenFromHash } from "@geosimples/core/figure";
 import { GUIDE } from "@geosimples/core/recipe";
 import { describe, expect, it } from "vitest";
 import { handle, type Env } from "./index";
+import { FIGURE_META, VIEW_URI } from "./view";
 
 const VERSION = "2025-06-18";
 
@@ -146,5 +147,35 @@ describe("the Worker around it", () => {
       await handle(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "draw_figure", arguments: { recipe: PYTHAGOREAN, output: ["link"] } } }), env),
     );
     expect(r.result.content[1].text).toContain("https://geo.dandes.dev/#figura=");
+  });
+});
+
+describe("figure preview (MCP App)", () => {
+  it("links the drawing tools to a ui:// view that hosts can read", async () => {
+    const { tools } = (await rpc("tools/list", {})).result;
+    const byName = Object.fromEntries(tools.map((t: { name: string }) => [t.name, t]));
+    expect(byName.draw_figure._meta).toEqual({ ui: { resourceUri: VIEW_URI } });
+    expect(byName.render_doc._meta).toEqual({ ui: { resourceUri: VIEW_URI } });
+    expect(byName.get_reference._meta).toBeUndefined();
+    const listed = (await rpc("resources/list", {})).result.resources;
+    expect(listed).toContainEqual(expect.objectContaining({ uri: VIEW_URI, mimeType: "text/html;profile=mcp-app" }));
+    const [content] = (await rpc("resources/read", { uri: VIEW_URI })).result.contents;
+    expect(content).toMatchObject({ uri: VIEW_URI, mimeType: "text/html;profile=mcp-app" });
+    expect(content.text).toContain('"ui/initialize"');
+    expect(content.text).toContain("Copiar TikZ");
+  });
+
+  it("hands the view the figure whatever outputs the agent asked for, and nothing on an error", async () => {
+    const result = await call("draw_figure", { recipe: PYTHAGOREAN, output: ["link"], name: "Pitágoras" });
+    const figure = result._meta[FIGURE_META];
+    expect(figure.name).toBe("Pitágoras");
+    expect(figure.svg).toMatch(/^<svg /);
+    expect(figure.tikz).toContain(String.raw`\begin{tikzpicture}`);
+    expect(figure.link).toMatch(/^https:\/\/geosimples\.vercel\.app\/#figura=/);
+    // What the model reads stays as asked: no SVG it didn't want.
+    expect(texts(result).some((t) => t.startsWith("<svg"))).toBe(false);
+    const failed = await call("draw_figure", { recipe: { v: 1, steps: [{ do: "segment", points: ["A", "Z"] }] } });
+    expect(failed.isError).toBe(true);
+    expect(failed._meta?.[FIGURE_META]).toBeUndefined();
   });
 });

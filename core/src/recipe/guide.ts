@@ -32,7 +32,7 @@ Names: give points names ("A") and refer to them by name. A segment is [A, B], a
 
 Targets ("label" and "style" steps) are always a list: ["A", "B"] are the points A and B; [["A", "B"]] is the segment AB; [["A", "C", "B"]] the angle at C; {"sidesOf": "ABC"}, {"anglesOf": "ABC"}, {"all": "segment"}.
 
-Style is partial: give only what changes. "style" and "label" on a step apply to what that step makes. On a polygon, line fields (color, width, dash) go to its sides and "fill" to its inside. New polygons start with a light gray fill; set "defaults": {"polygonFilled": false} for outlines only.
+Style is partial: give only what changes. "style" and "label" on a step apply to what that step makes. On a polygon, line fields (color, width, dash) go to its sides and "fill" to its inside. Polygons are outlines: fill one only when the teacher asks, with "fill" on its step or style, or in "defaults" for all of them. Draw nothing else the teacher didn't ask for: no extra labels, measures, colors or marks.
 
 Language: GeoSimples is Brazilian, so figures default to the decimal comma (2,4) and coordinates as (1; 2). When the teacher writes in English, add "locale": "en" to the recipe for 2.4 and (1, 2). Write labels and texts in the teacher's language. Expressions take either sin or sen, tan or tg, and a decimal point or comma.
 
@@ -73,7 +73,6 @@ Shapes that need math: "triangle" from three sides [|P0P1|, |P1P2|, |P2P0|], or 
         request: "Hexágono regular de lado 2 sem preenchimento, com um lado vermelho.",
         recipe: {
           v: 1,
-          defaults: { polygonFilled: false },
           steps: [
             { do: "regularPolygon", points: ["A", "B", "C", "D", "E", "F"], side: 2 },
             { do: "style", targets: [["A", "B"]], style: { color: "red", width: 1.6 } },
@@ -137,7 +136,6 @@ The step's "style", "label" and "as" apply to the line it draws (the height, the
         request: "Circunferência circunscrita a um triângulo, com o centro O.",
         recipe: {
           v: 1,
-          defaults: { polygonFilled: false },
           steps: [
             { do: "triangle", points: ["A", "B", "C"], sides: [5, 6, 4] },
             { do: "circle", circumscribed: ["A", "B", "C"], centerName: "O" },

@@ -18,6 +18,7 @@ import {
   type RecipeIssue,
 } from "@geosimples/core/recipe";
 import { z } from "zod";
+import { FIGURE_META, type ViewFigure } from "./view";
 
 /** Where "Abrir no GeoSimples" links point. */
 export const DEFAULT_SITE = "https://geosimples.vercel.app/";
@@ -73,6 +74,7 @@ export interface ToolResult {
   [key: string]: unknown;
   content: Text[];
   isError?: boolean;
+  _meta?: Record<string, unknown>;
 }
 
 const text = (t: string): Text => ({ type: "text", text: t });
@@ -123,6 +125,17 @@ async function outputs(doc: FigureDoc, wanted: readonly Output[], name: string, 
 
 const DEFAULT_OUTPUT: Output[] = ["svg", "link"];
 
+/** The figure for the preview hosts show: SVG, TikZ and the editor link, whatever outputs were asked for. */
+async function viewMeta(doc: FigureDoc, name: string, scale: number | undefined, site: string): Promise<Record<string, unknown>> {
+  const figure: ViewFigure = {
+    name,
+    svg: toSvg(doc, { scale, background: "#ffffff" }),
+    tikz: toTikz(doc, { scale }),
+    link: shareUrl(site, await encodeShareToken({ name, doc })),
+  };
+  return { [FIGURE_META]: figure };
+}
+
 export async function drawFigure(args: z.infer<typeof drawFigureInput>, site = DEFAULT_SITE): Promise<ToolResult> {
   const name = args.name?.trim() || "Figura";
   let base: FigureDoc | undefined;
@@ -146,6 +159,7 @@ export async function drawFigure(args: z.infer<typeof drawFigureInput>, site = D
   if (result.warnings.length > 0) summary.push(`Warnings:\n${result.warnings.map(issueLine).join("\n")}`);
   return {
     content: [text(summary.join("\n")), ...(await outputs(result.doc, args.output ?? DEFAULT_OUTPUT, name, args.scale, site))],
+    _meta: await viewMeta(result.doc, name, args.scale, site),
   };
 }
 
@@ -153,7 +167,10 @@ export async function renderDoc(args: z.infer<typeof renderDocInput>, site = DEF
   const read = await readFigure(args.doc, args.name?.trim() || "Figura");
   if ("error" in read) return { isError: true, content: [text(`doc: ${read.error}`)] };
   const name = args.name?.trim() || read.name;
-  return { content: await outputs(read.doc, args.output ?? DEFAULT_OUTPUT, name, args.scale, site) };
+  return {
+    content: await outputs(read.doc, args.output ?? DEFAULT_OUTPUT, name, args.scale, site),
+    _meta: await viewMeta(read.doc, name, args.scale, site),
+  };
 }
 
 export function reference(args: { topic?: GuideTopicName }): ToolResult {

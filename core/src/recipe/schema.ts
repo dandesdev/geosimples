@@ -316,7 +316,7 @@ export const recipeSchema = z.strictObject({
       stroke: styleSchema.pick({ color: true, width: true, dash: true, opacity: true }).optional(),
       point: styleSchema.pick({ color: true, shape: true, size: true }).optional(),
       fill: fillSpec.optional().describe("Fill for new polygons and filled circles"),
-      polygonFilled: z.boolean().optional().describe("New polygons start filled; default true"),
+      polygonFilled: z.boolean().optional().describe("New polygons start filled; default false, or true when defaults has a fill"),
       angle: styleSchema.pick({ radius: true, arcs: true, rightMark: true }).optional(),
       label: z
         .strictObject({
