@@ -680,6 +680,22 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
         <Field label="1 em y mede">
           <NumberInput ariaLabel="Centímetros por unidade em y" value={unit[1]} min={0.05} max={20} suffix="cm" onChange={(y) => setUnit([unit[0], y])} />
         </Field>
+        {/* Only when the fit picks the y scale: a scale typed by hand stays anyway. */}
+        {el.fit && (!el.unit || el.fitUnit) && (
+          <SwitchField
+            label="Bloquear reescala com figuras geométricas"
+            checked={!el.scaleShapes}
+            onChange={(block) =>
+              update((a) => {
+                const rest: Axes = { ...a };
+                if (block) delete rest.scaleShapes;
+                else rest.scaleShapes = true;
+                return rest;
+              }, "scale-shapes")
+            }
+            help="Com circunferências, polígonos, ângulos ou segmentos na figura, o ajuste não estica nem encolhe o y para um gráfico achatado ou íngreme, para não deformá-los. Os intervalos na reta numérica não contam. Desligado, o ajuste escolhe a escala do y mesmo assim."
+          />
+        )}
         {unit[0] !== unit[1] && distorted ? (
           <Hint>Com escalas diferentes, circunferências viram elipses e ângulos ficam deformados na figura.</Hint>
         ) : (

@@ -299,6 +299,12 @@ export interface Axes {
    */
   fitUnit?: boolean;
   /**
+   * The fit may pick its own y scale even with circles, polygons, angles or
+   * segments in the figure, which it then bends. Absent, they block it.
+   * Intervals on a number line never block it.
+   */
+  scaleShapes?: boolean;
+  /**
    * The window follows the rest of the figure: everything fits with a tick of
    * room, and the steps keep the numbers apart. Setting the window or the
    * steps by hand turns it off.

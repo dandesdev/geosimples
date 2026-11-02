@@ -661,4 +661,39 @@ test("a sine gets its own y scale in a 4:3 window, and a scale typed by hand sta
   await page.getByRole("textbox", { name: "Centímetros por unidade em y" }).fill("1");
   await expect.poll(async () => (await axes())?.unit).toEqual([1, 1]);
   expect((await axes())?.fitUnit).toBeUndefined();
+  // The scale is the teacher's now, so the switch that lets the fit pick it is gone.
+  await expect(page.getByRole("switch", { name: "Bloquear reescala com figuras geométricas" })).toHaveCount(0);
+});
+
+test("a number line's interval keeps a sine's y scale; a segment blocks it until the switch lets it through", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("y=sen(x)");
+  await input.press("Enter");
+  type SavedAxes = { unit?: number[]; fitUnit?: boolean; scaleShapes?: boolean };
+  const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as SavedAxes | undefined;
+  await expect.poll(async () => (await axes())?.fitUnit).toBe(true);
+  const stretched = (await axes())!.unit;
+
+  await toolbarButton(page, "Gráficos").click();
+  await page.getByRole("menuitem", { name: /Reta numérica/ }).click();
+  await page.keyboard.type("0; 3]");
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toMatchObject({ numberline: 1, segment: 1 });
+  expect((await axes())?.unit).toEqual(stretched);
+
+  await input.fill("A=(0;0)--B=(1;1)");
+  await input.press("Enter");
+  await expect.poll(() => counts(page)).toMatchObject({ segment: 2 });
+  await expect.poll(async () => (await axes())?.unit).toBeUndefined();
+
+  await leaveInput(page);
+  await clickAlong(page, "e1", 0.25);
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  const block = page.getByRole("switch", { name: "Bloquear reescala com figuras geométricas" });
+  await expect(block).toBeChecked();
+  await block.click();
+  await expect.poll(async () => (await axes())?.unit).toEqual(stretched);
+  expect(await axes()).toMatchObject({ fitUnit: true, scaleShapes: true });
+  await block.click();
+  await expect.poll(async () => (await axes())?.unit).toBeUndefined();
 });
