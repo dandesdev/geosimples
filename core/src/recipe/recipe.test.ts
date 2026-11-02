@@ -176,6 +176,15 @@ describe("compileRecipe: exact values", () => {
   });
 });
 
+describe("compileRecipe: fills", () => {
+  it("draws polygons as outlines unless a fill is asked for", () => {
+    const triangle: RecipeInput["steps"][number] & { do: "triangle" } = { do: "triangle", points: ["A", "B", "C"], sides: [5, 4, 3] };
+    expect(ofType(compiled({ v: 1, steps: [triangle] }).doc, "polygon")[0].fill).toBeNull();
+    expect(ofType(compiled({ v: 1, steps: [{ ...triangle, style: { fill: true } }] }).doc, "polygon")[0].fill).not.toBeNull();
+    expect(ofType(compiled({ v: 1, defaults: { fill: { color: "blue" } }, steps: [triangle] }).doc, "polygon")[0].fill).not.toBeNull();
+  });
+});
+
 describe("compileRecipe: axis numbers", () => {
   const axesTicksY = (a: Axes) => axisTicks(a.y, axesStepY(a), axesOrigin(a).y);
   /** Where TikZ writes an axis number: its shift in pt from the tick at (x, y). */
