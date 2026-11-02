@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
   addPoints,
+  axesOrigin,
+  axesStepY,
+  axisTicks,
+  buildScene,
   emptyDoc,
   labelText,
   makePolygon,
+  pathLines,
   pointMap,
   toSvg,
+  toTikz,
+  type Axes,
   type Element,
   type FigureDoc,
   type Point,
 } from "../figure";
+import { LineIndex, textBox } from "../figure/lines";
 import { compileRecipe, GUIDE, GUIDE_TOPIC_NAMES, guideText, recipeSchema, type Recipe } from "./index";
 
 function compiled(recipe: Recipe, base?: FigureDoc) {
@@ -126,6 +134,78 @@ describe("compileRecipe: language and label placement", () => {
     const right = ofType(doc, "angle").find((a) => a.label && labelText(doc, a) === "90°")!;
     expect(right.label!.angle).toBe(300);
     expect(byName(doc, "A").label!.angle).toBeNull();
+  });
+
+  it("moves a wide point label, like coordinates, clear of the line through the point", () => {
+    const { doc } = compiled({
+      v: 1,
+      steps: [
+        { do: "function", expr: "2x + 1", as: "f" },
+        { do: "pointOnGraph", graph: "f", x: 1, name: "P" },
+        { do: "guides", points: ["P"] },
+        { do: "label", targets: ["P"], scheme: "coordinates" },
+      ],
+    });
+    const scene = buildScene(doc);
+    const label = scene.prims.find((p) => p.kind === "text" && p.text === "(1; 3)")!;
+    const graph = ofType(doc, "function")[0];
+    const lines = new LineIndex();
+    for (const p of scene.prims) if (p.kind === "path" && p.owner === graph.id) for (const l of pathLines(p.d)) lines.add(l);
+    expect(label.kind === "text" && lines.lengthIn(textBox(label, label.text, label.size))).toBe(0);
+  });
+});
+
+describe("compileRecipe: axis numbers", () => {
+  const axesTicksY = (a: Axes) => axisTicks(a.y, axesStepY(a), axesOrigin(a).y);
+  /** Where TikZ writes an axis number: its shift in pt from the tick at (x, y). */
+  const numberShift = (tikz: string, at: string, text: string) => {
+    const m = tikz.match(new RegExp(`shift=\\{\\((-?[\\d.]+)pt,(-?[\\d.]+)pt\\)\\}\\]${at}\\) \\{\\$${text}\\$\\}`));
+    return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+  };
+
+  it("moves a number off the curve: across the axis, or beside its tick at a root", () => {
+    const { doc } = compiled({
+      v: 1,
+      steps: [
+        { do: "function", expr: "x^2 - 4x + 3", as: "f" },
+        { do: "notable", graph: "f", feature: "root" },
+      ],
+    });
+    const tikz = toTikz(doc);
+    // y = 4 sits where the curve crosses left of the y axis, so it goes right.
+    expect(numberShift(tikz, "0,4", "4")!.x).toBeGreaterThan(0);
+    expect(numberShift(tikz, "0,5", "5")!.x).toBeLessThan(0);
+    // The roots 1 and 3 keep their numbers, beside the tick away from the curve.
+    expect(numberShift(tikz, "1,0", "1")!.x).toBeLessThan(0);
+    expect(numberShift(tikz, "3,0", "3")!.x).toBeGreaterThan(0);
+    expect(numberShift(tikz, "-1,0", "-1")).toEqual({ x: 0, y: expect.any(Number) });
+  });
+
+  it("writes the numbers where the SVG does", () => {
+    const { doc } = compiled({ v: 1, steps: [{ do: "function", expr: "x^2 - 4x + 3" }] });
+    const axes = ofType(doc, "axes")[0];
+    const spots = buildScene(doc).numberSpots.get(axes.id)!;
+    const four = axesTicksY(axes).indexOf(4);
+    expect(spots.y[four]!.x).toBeGreaterThan(0);
+  });
+
+  it("leaves numbers clear of curves where they always were", () => {
+    const { doc } = compiled({ v: 1, steps: [{ do: "axes", x: [-3, 3], y: [-3, 3] }] });
+    const tikz = toTikz(doc);
+    expect(numberShift(tikz, "2,0", "2")).toEqual({ x: 0, y: expect.any(Number) });
+    expect(numberShift(tikz, "2,0", "2")!.y).toBeLessThan(0);
+    expect(numberShift(tikz, "0,2", "2")!.x).toBeLessThan(0);
+  });
+
+  it("reads 6.2832 as 2π when fitting the window", () => {
+    const { doc } = compiled({
+      v: 1,
+      steps: [
+        { do: "function", expr: "sen(x)", domain: [0, 6.2832] },
+        { do: "axes", xPi: 0.5 },
+      ],
+    });
+    expect(ofType(doc, "axes")[0].x[1]).toBeLessThan(2.5 * Math.PI + 1);
   });
 });
 
