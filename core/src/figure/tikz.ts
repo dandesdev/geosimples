@@ -10,7 +10,7 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { estimateTextWidth, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
+import { formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
 import {
   axesOrigin,
   axesStepX,
@@ -22,9 +22,9 @@ import {
   functionLines,
   gridValues,
   pointGuides,
-  xTickShift,
   xTickText,
 } from "./plot";
+import { buildScene, type AxisNumberSpots } from "./render";
 import { PATTERN } from "./svg";
 import type { Axes, Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
@@ -53,6 +53,9 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   const S = (w: Vec): Vec => ({ x: w.x * u.x, y: w.y * u.y });
   const colors = new Map<string, string>();
   let usesPatterns = false;
+  // Laid out once, and only when a number needs it.
+  let spots: Map<string, AxisNumberSpots> | null = null;
+  const numberSpots = () => (spots ??= buildScene(doc, { scale }).numberSpots);
 
   const color = (c: string): string => {
     if (c === INK || !isValidColor(c)) return "black";
@@ -273,15 +276,13 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         const node = (text: string, base: string, offset: Vec) =>
           `\\node${opts(textOptions(el.stroke.color, el.size, "serif", color))} at ${shifted(base, offset)} {${labelToLatex(text, "serif")}};`;
         if (el.numbers) {
-          const gap = el.size * 0.9;
-          for (const x of xs) {
-            const s = xTickText(el, x, doc.locale);
-            sections.label.push(node(s, at({ x, y: o.y }), { x: xTickShift(doc, el, x, s), y: -(tick + gap * 0.7) }));
-          }
-          for (const y of ys) {
-            const s = formatNumber(y, 2, doc.locale);
-            sections.label.push(node(s, at({ x: o.x, y }), { x: -(tick + 2 + estimateTextWidth(s, el.size) / 2), y: 0 }));
-          }
+          // The SVG's spot for each number (offsets in pt, y down), so a curve crosses neither.
+          const spots = numberSpots().get(el.id);
+          const write = (s: string, base: string, spot: Vec | null | undefined) => {
+            if (spot) sections.label.push(node(s, base, { x: spot.x, y: -spot.y }));
+          };
+          xs.forEach((x, i) => write(xTickText(el, x, doc.locale), at({ x, y: o.y }), spots?.x[i]));
+          ys.forEach((y, i) => write(formatNumber(y, 2, doc.locale), at({ x: o.x, y }), spots?.y[i]));
         }
         if (el.names[0]) sections.label.push(node(el.names[0], xEnd, { x: 2, y: -el.size }));
         if (el.names[1]) sections.label.push(node(el.names[1], yEnd, { x: el.size * 0.9, y: 0 }));

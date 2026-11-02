@@ -8,6 +8,7 @@ import {
   addPoints,
   addPointOnGraph,
   connectPoints,
+  deleteElements,
   dragHandle,
   elementHandles,
   emptyDoc,
@@ -55,37 +56,65 @@ describe("axes that fit the figure", () => {
   });
 
   it("take in geometry with a tick of room, and a tick past the origin", () => {
-    expect(fitted(triangle())).toEqual({ x: [-1, 5], y: [-1, 4], step: 1, yStep: undefined });
+    // Square: the spare tick goes above the triangle.
+    expect(fitted(triangle())).toEqual({ x: [-1, 5], y: [-1, 5], step: 1, yStep: undefined });
     // A unit circle counts in halves.
     const circle = makeCircle(addAxes(addPoints(emptyDoc(), [{ x: 0, y: 0 }]).doc).doc, ["p1"], "radius").doc;
     expect(fitted(circle)).toMatchObject({ x: [-1.5, 1.5], y: [-1.5, 1.5], step: 0.5 });
   });
 
-  it("drop the unused side of a graph, and cut a tall one rather than stretch", () => {
-    // x² never goes under 0: no y down to -5. x spans its vertex with room, and the curve is cut at 1.5 times the width.
+  it("center a graph on its symmetry, in a 4:3 or square window that cuts a tall curve", () => {
+    // x² is centered on its axis; the square window cuts its arms and keeps the vertex with a tick of room.
     const parabola = fitFigure(withGraph("x^2"));
-    expect(fitted(parabola)).toEqual({ x: [-3, 3], y: [-1, 10], step: 1, yStep: undefined });
+    expect(fitted(parabola)).toEqual({ x: [-3, 3], y: [-1, 5], step: 1, yStep: undefined });
     const graph = parabola.elements.find((e): e is FunctionGraph => e.type === "function")!;
-    expect([graph.domain, graph.range]).toEqual([[-3, 3], [-1, 10]]);
-    expect(fitted(withGraph("x^2 - 1"))).toMatchObject({ x: [-3, 3], y: [-2, 9] });
-    // An asymptote runs off both ways: an even split.
-    expect(fitted(withGraph("1/x"))).toMatchObject({ y: [-6, 6] });
-    expect(fitted(withGraph("x/2"))).toMatchObject({ y: [-3, 3] });
-    // Roots and turning points far apart widen x to take them all.
-    expect(fitted(withGraph("sen(x)"))).toMatchObject({ x: [-6, 6], y: [-1.5, 1.5] });
-    expect(fitted(withGraph("2x + 10"))).toMatchObject({ x: [-6, 1] });
-    // A curve far above the origin still shows: the cut keeps its part nearest the origin.
-    expect(fitted(withGraph("x + 100"))).toMatchObject({ y: [-10, 120] });
+    expect([graph.domain, graph.range]).toEqual([[-3, 3], [-1, 5]]);
+    // Off the origin both arms still match: x² − 4x + 3 is centered on x = 2.
+    expect(fitted(withGraph("x^2 - 4x + 3"))).toMatchObject({ x: [-1, 5], y: [-2, 4] });
+    // A hyperbola is centered on its center, (1; 2).
+    expect(fitted(withGraph("1/(x-1) + 2"))).toMatchObject({ x: [-2, 4], y: [-1, 5] });
+    // What fits 4:3 takes 4:3, centered on the curve's center.
+    expect(fitted(withGraph("1/x"))).toMatchObject({ x: [-3, 3], y: [-2.25, 2.25] });
+    // The y crossing must show and stands taller than a square: x widens to match.
+    expect(fitted(withGraph("2x + 10"))).toMatchObject({ x: [-7, 7], y: [-2, 12] });
+    for (const expr of ["x^2", "x^2 - 4x + 3", "1/(x-1) + 2", "1/x", "2x + 10", "sen(x)", "x^3", "exp(-(x-2)^2)", "ln(x)"]) {
+      const a = axesOf(fitFigure(withGraph(expr)));
+      const ratio = ((a.x[1] - a.x[0]) * (a.unit?.[0] ?? 1)) / ((a.y[1] - a.y[0]) * (a.unit?.[1] ?? 1));
+      expect([1, 4 / 3].some((r) => Math.abs(ratio - r) < 1e-6), expr).toBe(true);
+    }
+  });
+
+  it("give a flat or steep curve its own y scale, unless the figure has shapes or a scale set by hand", () => {
+    expect(axesOf(fitFigure(withGraph("sen(x)")))).toMatchObject({ x: [-6, 6], y: [-1.5, 1.5], unit: [1, 3], fitUnit: true });
+    expect(axesOf(fitFigure(withGraph("x^3")))).toMatchObject({ y: [-12, 12], unit: [1, 0.25], fitUnit: true });
+    // A circle would turn into an ellipse: y keeps the scale of x.
+    const circled = makeCircle(addPoints(withGraph("sen(x)"), [{ x: 0, y: 0 }]).doc, ["p1"], "radius").doc;
+    expect(axesOf(fitFigure(circled)).unit).toBeUndefined();
+    const byHand = fitFigure({ ...withGraph("sen(x)"), elements: withGraph("sen(x)").elements.map((e) => (e.type === "axes" ? { ...e, unit: [1, 2] as [number, number] } : e)) });
+    expect(axesOf(byHand)).toMatchObject({ unit: [1, 2] });
+    expect(axesOf(byHand).fitUnit).toBeUndefined();
+    // 1 and 1 set by hand stays too, even with the window fitting.
+    const plain = fitFigure({ ...withGraph("sen(x)"), elements: withGraph("sen(x)").elements.map((e) => (e.type === "axes" ? { ...e, unit: [1, 1] as [number, number] } : e)) });
+    expect(axesOf(plain).unit).toEqual([1, 1]);
+    // A shape drawn after the fit stretched y takes the stretch away, so the shape isn't bent.
+    const added = addPoints(fitFigure(withGraph("sen(x)")), [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+    const withSegment = fitFigure(connectPoints(added.doc, added.created, false).doc);
+    expect(axesOf(withSegment).unit).toBeUndefined();
+    expect(axesOf(withSegment).fitUnit).toBeUndefined();
+    // So does deleting the graph, leaving the axes empty.
+    const emptied = fitFigure(deleteElements(fitFigure(withGraph("sen(x)")), ["f1"]).doc);
+    expect(axesOf(emptied).unit).toBeUndefined();
+    expect(axesOf(emptied).fitUnit).toBeUndefined();
   });
 
   it("don't stretch a graph for a point on it, its roots or its crossings", () => {
     const parabola = fitFigure(withGraph("x^2"));
-    const onIt = fitFigure(addPointOnGraph(parabola, "f1", 2.5).doc);
+    const onIt = fitFigure(addPointOnGraph(parabola, "f1", 1.5).doc);
     expect(fitted(onIt)).toMatchObject({ x: [-3, 3] });
     expect(onIt.elements.find((e) => e.id === "f1")).toMatchObject({ domain: [-3, 3] });
     // Nor for geometry inside its window; past it, geometry gets its tick of room.
     expect(fitted(addPoints(parabola, [{ x: 2.5, y: 1 }]).doc)).toMatchObject({ x: [-3, 3] });
-    expect(fitted(addPoints(parabola, [{ x: 3.5, y: 1 }]).doc)).toMatchObject({ x: [-3, 5] });
+    expect(fitted(addPoints(parabola, [{ x: 3.5, y: 1 }]).doc).x[1]).toBe(5);
   });
 
   it("fit graphs and geometry together, and leave hand-set axes alone", () => {
@@ -129,7 +158,7 @@ describe("axes that fit the figure", () => {
   });
 
   it("show the fitted window in the exports", () => {
-    expect(toTikz(fitFigure(withGraph("x^2")))).toContain("(0,-1) -- (0,10)");
+    expect(toTikz(fitFigure(withGraph("x^2")))).toContain("(0,-1) -- (0,5)");
     expect(fitAxesWindow(withGraph("x + 100"), axesOf(withGraph("x + 100"))).yStep).toBe(10);
   });
 });
@@ -138,7 +167,7 @@ describe("printed grids", () => {
   it("lie over the axes, with their ticks, or fit around the figure", () => {
     const over = addGrid(fitFigure(withGraph("x^2"))).doc;
     const grid = over.elements[0] as Grid;
-    expect(gridWindow(over, grid)).toEqual({ x: [-3, 3], y: [-1, 10], stepX: 1, stepY: 1 });
+    expect(gridWindow(over, grid)).toEqual({ x: [-3, 3], y: [-1, 5], stepX: 1, stepY: 1 });
     expect(addGrid(over).error).toMatch(/já tem uma malha/);
 
     const alone = addGrid(addPoints(emptyDoc(), [{ x: 0.5, y: 0.5 }, { x: 3, y: 2 }]).doc).doc;
@@ -159,8 +188,8 @@ describe("Mover", () => {
     expect(elementHandles(doc, axesOf(doc)).map((h) => [h.end, h.at.x, h.at.y])).toEqual([
       ["x0", -3, 0],
       ["x1", 3, 0],
-      ["y0", 0, -4],
-      ["y1", 0, 4],
+      ["y0", 0, -3],
+      ["y1", 0, 3],
     ]);
     const wider = dragHandle(doc, { owner: "e1", end: "x1" }, { x: 7.3, y: 2 });
     expect(axesOf(wider)).toMatchObject({ x: [-3, 7], fit: false });
@@ -177,7 +206,9 @@ describe("Mover", () => {
     expect(dragHandle(grid, { owner: "m1", end: "y1" }, { x: 0, y: 7.8 }).elements[0]).toMatchObject({ y: [-5, 8], follow: "none" });
     const line = addNumberLine(emptyDoc()).doc;
     expect(dragHandle(line, { owner: "n1", end: "x0" }, { x: -8.2, y: 0 }).elements[0]).toMatchObject({ x: [-8, 5] });
-    const graph = fitFigure(withGraph("x^2"));
+    // The window the parabola had before 4:3 fitting, so its steep arm reaches y = 9.
+    const fitted2 = fitFigure(withGraph("x^2"));
+    const graph = setAxesWindow(fitted2, "e1", [-3, 3], [-1, 10]).doc;
     const domainAt = (x: number, reach?: number) =>
       dragHandle(graph, { owner: "f1", end: "x0" }, { x, y: x * x }, reach === undefined ? undefined : { x: reach, y: reach }).elements.find(
         (e) => e.id === "f1",
@@ -260,7 +291,7 @@ describe("axes at different scales", () => {
 
   it("let a fitting y axis take a steep curve without the cut, with ticks far enough apart", () => {
     // x³ up to 27: at a fifth of the scale in y it fits whole, counted every 5.
-    expect(fitted(withGraph("x^3"))).toMatchObject({ y: [-6, 6] });
-    expect(fitted(scaled(withGraph("x^3"), [1, 0.2]))).toMatchObject({ y: [-30, 30], yStep: 5 });
+    expect(fitted(withGraph("x^3"))).toMatchObject({ y: [-12, 12] });
+    expect(fitted(scaled(withGraph("x^3"), [1, 0.2]))).toMatchObject({ y: [-15, 15], yStep: 5 });
   });
 });

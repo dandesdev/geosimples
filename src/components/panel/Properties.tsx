@@ -606,9 +606,10 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
   /** cm per unit on each axis; 1 and 1 is the plain figure. */
   const setUnit = (next: [number, number]) =>
     update((a) => {
-      if (next[0] !== 1 || next[1] !== 1) return { ...a, unit: next };
-      const rest = { ...a };
-      delete rest.unit;
+      // A scale set by hand is the teacher's: the fit stops picking y.
+      // Even 1 and 1 stays written: a fitting window would otherwise pick its own y again.
+      const rest = { ...a, unit: next };
+      delete rest.fitUnit;
       return rest;
     }, "unit");
   const distorted = doc.elements.some((e) => e.type === "circle" || e.type === "angle" || e.type === "polygon");
@@ -621,7 +622,7 @@ function AxesProperties({ el, update, multi, doc }: EditorProps<Axes>) {
           label="Ajustar à figura"
           checked={!!el.fit}
           onChange={(fit) => update((a) => ({ ...a, fit }), "fit")}
-          help="Os eixos cobrem a figura toda, com uma marca de folga, e as marcas se espaçam para os números não se amontoarem. Mudar a janela ou as marcas à mão desliga o ajuste."
+          help="Os eixos cobrem a figura toda numa janela 4:3 ou quadrada, com o gráfico centrado na sua simetria, e as marcas se espaçam para os números não se amontoarem. Mudar a janela ou as marcas à mão desliga o ajuste."
         />
         <IntervalFields label="x de" value={el.x} onChange={(x) => setWindow(x, el.y)} />
         <IntervalFields label="y de" value={el.y} onChange={(y) => setWindow(el.x, y)} />

@@ -294,6 +294,11 @@ export interface Axes {
    */
   unit?: [number, number];
   /**
+   * The y scale in `unit` was picked by the fit, to keep a flat or steep curve
+   * readable in a 4:3 or square window. Setting the scale by hand clears it.
+   */
+  fitUnit?: boolean;
+  /**
    * The window follows the rest of the figure: everything fits with a tick of
    * room, and the steps keep the numbers apart. Setting the window or the
    * steps by hand turns it off.

@@ -360,6 +360,8 @@ class Build {
 
 function styleDefaults(d: RecipeDefaults | undefined): StyleDefaults {
   const s: StyleDefaults = JSON.parse(JSON.stringify(DEFAULT_STYLES)) as StyleDefaults;
+  // A recipe draws what the teacher asked for: polygons are outlines unless a fill is asked for.
+  s.polygonFilled = false;
   if (!d) return s;
   if (d.stroke) s.stroke = strokeWith(s.stroke, d.stroke);
   if (d.point) {
@@ -368,7 +370,7 @@ function styleDefaults(d: RecipeDefaults | undefined): StyleDefaults {
     if (d.point.size !== undefined) s.point.size = d.point.size;
   }
   if (d.fill !== undefined && typeof d.fill === "object") s.fill = fillWith(s.fill, d.fill);
-  if (d.fill === false) s.polygonFilled = false;
+  if (d.fill !== undefined) s.polygonFilled = d.fill !== false;
   if (d.polygonFilled !== undefined) s.polygonFilled = d.polygonFilled;
   if (d.angle) {
     if (d.angle.radius !== undefined) s.angle.radius = d.angle.radius;

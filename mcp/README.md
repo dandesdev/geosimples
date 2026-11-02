@@ -10,6 +10,10 @@ It is a stateless Cloudflare Worker: no storage, no sign-in, every tool read-onl
 - `render_doc(doc, output?, name?, scale?)`: export a figure that already exists.
 - `get_reference(topic?)`: the recipe guide with examples, from `core/src/recipe/guide.ts`.
 
+## Figure preview (MCP App)
+
+Hosts that support MCP Apps (claude.ai) show the figure under `draw_figure` and `render_doc`, with Copiar SVG, Copiar TikZ, Baixar PNG, Baixar SVG and Abrir no GeoSimples. The view is `ui://geosimples/figure.html` (`src/view.ts`): one self-contained page with no network access. It reads the figure from the result's `_meta["geosimples/figure"]` (name, SVG, TikZ, link), so its buttons work whatever outputs the agent asked for, and what the model reads stays as asked. Other clients get the text content alone. Where the host's sandbox blocks downloads, the view says to use the editor instead.
+
 ## Develop
 
 ```sh

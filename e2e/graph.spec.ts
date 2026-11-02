@@ -47,8 +47,8 @@ test("selecting a graph lets its expression and the axes window change", async (
     .poll(() => page.evaluate(() => localStorage.getItem(`geosimples-figure:${JSON.parse(localStorage.getItem("geosimples-library")!).activeId}`)))
     .toContain('"expr":"x^2"');
 
-  // On the x axis, at x = 3.5, away from the curve: the path runs along x, then up y.
-  await clickAlong(page, "e1", 0.25);
+  // On the x axis left of the origin, away from the line: the path runs along x, then up y.
+  await clickAlong(page, "e1", 0.1);
   await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
   const xTo = page.getByRole("textbox", { name: "x de: até" });
   await xTo.fill("8");
@@ -152,8 +152,8 @@ test("a point put on a curve doesn't stretch the curve", async ({ page }) => {
   await leaveInput(page);
   await expect.poll(async () => ((await saved(page, "f1")) as { domain: number[] } | null)?.domain).toEqual([-3, 3]);
   await toolbarButton(page, "Adicionar pontos").click();
-  // Far out on the right arm, near x = 2.5: room around the point would have pushed the axes to 4.
-  await clickAlong(page, "f1", 0.9);
+  // Far out on the right arm, past x = 2: room around the point would have pushed the axes to 4.
+  await clickAlong(page, "f1", 0.97);
   await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1, point: 1 });
   expect(((await saved(page, "p1")) as { x: number }).x).toBeGreaterThan(2);
   expect(((await saved(page, "f1")) as { domain: number[] }).domain).toEqual([-3, 3]);
@@ -472,7 +472,8 @@ test("axes come in without a graph, fit the figure as it grows, and stop when th
   await page.getByRole("menuitem", { name: /^Eixos/ }).click();
   const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { x: number[]; y: number[]; fit?: boolean };
   await expect.poll(async () => (await axes())?.x).toEqual([-1, 8]);
-  expect((await axes()).y).toEqual([-1, 5]);
+  // 4:3 on paper: 9 wide, 6,75 tall.
+  expect((await axes()).y).toEqual([-1, 5.75]);
 
   await toolbarButton(page, "Gráficos").click();
   await page.getByRole("menuitem", { name: /Malha quadriculada/ }).click();
@@ -550,7 +551,8 @@ test("a smaller scale in y fits a steep graph whole", async ({ page }) => {
   await yUnit.press("Enter");
   const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { y: number[]; unit?: number[]; yStep?: number };
   await expect.poll(async () => (await axes())?.unit).toEqual([1, 0.2]);
-  expect(await axes()).toMatchObject({ y: [-5, 15], yStep: 5 });
+  // 4:3 on paper: 6 cm wide, 22,5 units of 0,2 cm tall.
+  expect(await axes()).toMatchObject({ y: [-5, 17.5], yStep: 5 });
 });
 
 test("graph ends follow the pointer in Mover, and land on a tick near one with Encaixar na grade", async ({ page }) => {
@@ -642,4 +644,21 @@ test("in Ponto, a turning point shows as a ghost near the pointer, and a click a
   // Marked, it no longer shows.
   await page.mouse.move(vertex.x + 3, vertex.y - 4);
   await expect(page.getByTestId("spot-ghost")).toHaveCount(0);
+});
+
+test("a sine gets its own y scale in a 4:3 window, and a scale typed by hand stays, even 1 and 1", async ({ page }) => {
+  await pointInput(page).fill("y=sen(x)");
+  await pointInput(page).press("Enter");
+  type SavedAxes = { x: number[]; y: number[]; unit?: number[]; fitUnit?: boolean };
+  const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as SavedAxes | undefined;
+  await expect.poll(async () => (await axes())?.fitUnit).toBe(true);
+  const fitted = (await axes())!;
+  const ratio = ((fitted.x[1] - fitted.x[0]) * fitted.unit![0]) / ((fitted.y[1] - fitted.y[0]) * fitted.unit![1]);
+  expect(ratio).toBeCloseTo(4 / 3);
+
+  await clickAlong(page, "e1", 0.25);
+  await expect(page.getByText(/Selecionados: 1 par de eixos/)).toBeVisible();
+  await page.getByRole("textbox", { name: "Centímetros por unidade em y" }).fill("1");
+  await expect.poll(async () => (await axes())?.unit).toEqual([1, 1]);
+  expect((await axes())?.fitUnit).toBeUndefined();
 });

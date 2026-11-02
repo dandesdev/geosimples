@@ -175,9 +175,9 @@ describe("tangents", () => {
     const filled = fitFigure(setTangentFill(doc, segmentOf(doc).id, true).doc);
     expect(tangentOf(filled, segmentOf(filled))!.fill).toBe(true);
     const { x, y } = axesOf(filled);
-    // Its ends no longer need room: the window can only shrink.
-    expect(y[0]).toBeGreaterThanOrEqual(before.y[0]);
-    expect(y[1]).toBeLessThanOrEqual(before.y[1]);
+    // Its ends no longer need room: the window may move, but it doesn't grow.
+    expect(x[1] - x[0]).toBeLessThanOrEqual(before.x[1] - before.x[0]);
+    expect(y[1] - y[0]).toBeLessThanOrEqual(before.y[1] - before.y[0]);
     expect(fitFigure(filled)).toBe(filled);
     // y = 2x - 1 from the bottom of the window to its top, or its side, whichever comes first.
     const [lo, hi] = ends(filled);
