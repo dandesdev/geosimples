@@ -29,6 +29,9 @@ const MIN_TICK_CM = 0.5;
 const sameInterval = (a: Interval, b: Interval) => a[0] === b[0] && a[1] === b[1];
 const tidy = (v: number) => Math.round(v * 1e6) / 1e6 || 0;
 
+/** How far past a tick, in steps, an end may sit and still count as on it: 6.2832 is 2π, not a bit more. */
+const ON_TICK = 1e-3;
+
 class Span {
   lo = Infinity;
   hi = -Infinity;
@@ -63,7 +66,7 @@ export function niceStep(span: number, cm = 1): number {
 
 /** The interval out to the ticks just past it: a step of room on each side. */
 function withRoom([lo, hi]: Interval, step: number): Interval {
-  return [tidy(Math.floor(lo / step + 1e-9) * step - step), tidy(Math.ceil(hi / step - 1e-9) * step + step)];
+  return [tidy(Math.floor(lo / step + ON_TICK) * step - step), tidy(Math.ceil(hi / step - ON_TICK) * step + step)];
 }
 
 /** Points and segments that make up intervals on a number line: they belong to it, not to the figure. */
@@ -120,7 +123,7 @@ function featureXs(g: FunctionGraph): number[] {
 function atLeast(w: Interval, width: number, step: number): Interval {
   if (w[1] - w[0] >= width) return w;
   const mid = (w[0] + w[1]) / 2;
-  return [tidy(Math.floor((mid - width / 2) / step + 1e-9) * step), tidy(Math.ceil((mid + width / 2) / step - 1e-9) * step)];
+  return [tidy(Math.floor((mid - width / 2) / step + ON_TICK) * step), tidy(Math.ceil((mid + width / 2) / step - ON_TICK) * step)];
 }
 
 /** Points that sit on a graph drawn over the axes' x: on it, at its roots or turning points, or where it crosses something. */

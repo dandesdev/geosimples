@@ -20,6 +20,7 @@ import {
   measureRuns,
   type LabelRun,
 } from "./labels";
+import { grow, LineIndex, overlap, pathLines, textBox } from "./lines";
 import {
   axesOrigin,
   axesStepX,
@@ -112,6 +113,8 @@ export interface Scene {
   /** Paper pt per world unit along x and y: k times each axis' scale. */
   kx: number;
   ky: number;
+  /** Where each axis number went, by axes id: TikZ writes them in the same spots. */
+  numberSpots: Map<Id, AxisNumberSpots>;
 }
 
 export interface SceneOptions {
@@ -182,6 +185,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     point: [],
     label: [],
   };
+  const axisNumbers: { el: Axes; x: AxisNumber[]; y: AxisNumber[] }[] = [];
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
     grid: [],
@@ -484,16 +488,47 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         for (const p of [x0, x1, y0, y1]) box.add(p.x, p.y, tick);
         const text = (s: string, at: Vec) =>
           textRect(layers.label, el.id, at, s, labelRuns(s, "serif"), el.size, el.stroke.color, "serif", box);
+        // Numbers wait for the curves, then each takes the first spot around its tick that no curve crosses.
         if (el.numbers) {
-          const gap = el.size * 0.9;
-          for (const x of xs) {
-            const s = xTickText(el, x, doc.locale);
-            text(s, { x: x * kx + xTickShift(doc, el, x, s), y: x0.y + tick + gap * 0.7 });
-          }
-          for (const y of ys) {
-            const s = formatNumber(y, 2, doc.locale);
-            text(s, { x: y0.x - tick - 2 - estimateTextWidth(s, el.size) / 2, y: -y * ky });
-          }
+          const gap = tick + el.size * 0.9 * 0.7;
+          axisNumbers.push({
+            el,
+            x: xs.map((x) => {
+              const s = xTickText(el, x, doc.locale);
+              const dx = xTickShift(doc, el, x, s);
+              // Beside the tick: past it by half the text and a little.
+              const side = estimateTextWidth(s, el.size) / 2 + 3;
+              return {
+                text: s,
+                base: { x: x * kx, y: x0.y },
+                spots: [
+                  { x: dx, y: gap },
+                  { x: dx, y: -gap },
+                  { x: dx - side, y: gap },
+                  { x: dx + side, y: gap },
+                  { x: dx - side, y: -gap },
+                  { x: dx + side, y: -gap },
+                ],
+              };
+            }),
+            y: ys.map((y) => {
+              const s = formatNumber(y, 2, doc.locale);
+              const dx = tick + 2 + estimateTextWidth(s, el.size) / 2;
+              const up = el.size * 0.6 + 2;
+              return {
+                text: s,
+                base: { x: y0.x, y: -y * ky },
+                spots: [
+                  { x: -dx, y: 0 },
+                  { x: dx, y: 0 },
+                  { x: -dx, y: -up },
+                  { x: -dx, y: up },
+                  { x: dx, y: -up },
+                  { x: dx, y: up },
+                ],
+              };
+            }),
+          });
         }
         const [xName, yName] = el.names;
         if (xName) text(xName, { x: x1.x + 2, y: x1.y + el.size });
@@ -563,6 +598,28 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     addLabel(doc, el, layers.label, box, O);
   }
 
+  const numberSpots = new Map<Id, AxisNumberSpots>();
+  if (axisNumbers.length > 0) {
+    const spots = chooseNumberSpots(axisNumbers, [
+      ...layers.guide,
+      ...layers.polygon,
+      ...layers.circle,
+      ...layers.function,
+      ...layers.angle,
+      ...layers.segment,
+      ...layers.point,
+      ...layers.label,
+    ]);
+    axisNumbers.forEach(({ el, x, y }, i) => {
+      numberSpots.set(el.id, spots[i]);
+      const write = (n: AxisNumber, spot: Vec | null) => {
+        if (spot) textRect(layers.label, el.id, add(n.base, spot), n.text, labelRuns(n.text, "serif"), el.size, el.stroke.color, "serif", box);
+      };
+      x.forEach((n, j) => write(n, spots[i].x[j]));
+      y.forEach((n, j) => write(n, spots[i].y[j]));
+    });
+  }
+
   return {
     prims: [
       ...layers.grid,
@@ -594,7 +651,68 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     k,
     kx,
     ky,
+    numberSpots,
   };
+}
+
+/**
+ * Where each axis number went, as an offset in paper pt (y down) from its
+ * tick, or null when no spot was clear enough and it was left out.
+ */
+export interface AxisNumberSpots {
+  x: (Vec | null)[];
+  y: (Vec | null)[];
+}
+
+interface AxisNumber {
+  text: string;
+  /** The tick, in paper pt. */
+  base: Vec;
+  /** Offsets to try, the usual one first: across the axis, then beside the tick on either side. */
+  spots: Vec[];
+}
+
+/** Padding around a number, in pt, so a curve doesn't touch it either. */
+const NUMBER_PAD = 1.5;
+/** Cover, in pt of line, below which a spot counts as clear. */
+const NUMBER_CLEAR = 0.5;
+/** Cost of each step away from the usual spot, in pt of covered line. */
+const NUMBER_MOVE = 1;
+/** Cover in the best spot, in font sizes, past which the number is left out: a curve runs right through it anywhere. */
+const NUMBER_HIDE = 0.8;
+
+/**
+ * Keeps axis numbers off the curves and labels, as textbooks do by hand. A
+ * number that a line crosses goes across the axis, or beside its tick, where a
+ * curve through the tick (a root, a crossing at π) leaves room. One crossed in
+ * every spot is left out; its tick stays.
+ */
+function chooseNumberSpots(axes: { el: Axes; x: AxisNumber[]; y: AxisNumber[] }[], drawn: Prim[]): AxisNumberSpots[] {
+  const lines = new LineIndex();
+  const taken: Box[] = [];
+  for (const p of drawn) {
+    if (p.kind === "text") taken.push(textBox(p, p.text, p.size));
+    else for (const line of pathLines(p.d)) lines.add(line);
+  }
+  return axes.map(({ el, x, y }) => {
+    const cover = (n: AxisNumber, spot: Vec) => {
+      const b = textBox(add(n.base, spot), n.text, el.size);
+      const padded = grow(b, NUMBER_PAD);
+      return lines.lengthIn(padded) + overlap(padded, taken) / el.size;
+    };
+    const pick = (n: AxisNumber): Vec | null => {
+      const first = cover(n, n.spots[0]);
+      if (first <= NUMBER_CLEAR) return n.spots[0];
+      let best = { spot: n.spots[0], cover: first, cost: first };
+      n.spots.slice(1).forEach((spot, i) => {
+        const c = cover(n, spot);
+        const cost = c + NUMBER_MOVE * (i + 1);
+        if (cost < best.cost) best = { spot, cover: c, cost };
+      });
+      return best.cover > el.size * NUMBER_HIDE ? null : best.spot;
+    };
+    return { x: x.map(pick), y: y.map(pick) };
+  });
 }
 
 function addLabel(
