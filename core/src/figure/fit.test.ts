@@ -8,6 +8,7 @@ import {
   addPoints,
   addPointOnGraph,
   connectPoints,
+  deleteElements,
   dragHandle,
   elementHandles,
   emptyDoc,
@@ -100,6 +101,10 @@ describe("axes that fit the figure", () => {
     const withSegment = fitFigure(connectPoints(added.doc, added.created, false).doc);
     expect(axesOf(withSegment).unit).toBeUndefined();
     expect(axesOf(withSegment).fitUnit).toBeUndefined();
+    // So does deleting the graph, leaving the axes empty.
+    const emptied = fitFigure(deleteElements(fitFigure(withGraph("sen(x)")), ["f1"]).doc);
+    expect(axesOf(emptied).unit).toBeUndefined();
+    expect(axesOf(emptied).fitUnit).toBeUndefined();
   });
 
   it("don't stretch a graph for a point on it, its roots or its crossings", () => {

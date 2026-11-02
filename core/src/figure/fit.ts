@@ -292,7 +292,10 @@ export function fitAxesWindow(doc: FigureDoc, axes: Axes): AxesFit {
     x = geoX ? withRoom(geoX, pi ? pi * Math.PI : step) : [...DEFAULT_PLOT_WINDOW.x];
   }
   if (pi) x = piWindow(x, pi);
-  if (!geoX && following.length === 0 && ys.empty) return { x, y: [...DEFAULT_PLOT_WINDOW.y], step, yStep: undefined, unitY: null };
+  // Empty axes: the usual window, and a y scale the fit had picked goes back to 1.
+  if (!geoX && following.length === 0 && ys.empty) {
+    return { x, y: [...DEFAULT_PLOT_WINDOW.y], step, yStep: undefined, unitY: !axes.unit || axes.fitUnit ? 1 : null };
+  }
 
   // y: what must show (the x axis, geometry, turning points, a center of symmetry), then the curves.
   const must = new Span();
