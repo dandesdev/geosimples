@@ -7,7 +7,7 @@ const INSTRUCTIONS = `GeoSimples draws school geometry figures and function grap
 
 Before your first draw_figure call, read get_reference (topic "overview", then the topic you need): it explains recipes and has worked examples. Describe the figure as a recipe of steps; the server computes every coordinate, construction and mark. Don't compute constructed points yourself.
 
-Give the user the output they asked for, and the editor link so they can adjust the figure. When SVG or TikZ is long, give it as a file or code block exactly as returned.`;
+Give the user the output they asked for, and the editor link so they can adjust the figure. Show the link exactly as it comes, a markdown link [Abrir no GeoSimples](…), never as a bare URL: the URL holds the whole figure and is long. When SVG or TikZ is long, give it as a file or code block exactly as returned.`;
 
 /** One fresh server per request: the handler is stateless. */
 export function createServer(site: string = DEFAULT_SITE): McpServer {

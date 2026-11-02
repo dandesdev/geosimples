@@ -31,7 +31,7 @@ const outputSchema = z
   .max(OUTPUTS.length)
   .optional()
   .describe(
-    'What to return; default ["svg", "link"]. svg: SVG code. tikz: a tikzpicture to paste. tex: a standalone .tex file. link: opens the figure in the GeoSimples editor. doc: the figure as JSON, to edit later with "from" or render_doc.',
+    'What to return; default ["svg", "link"]. svg: SVG code. tikz: a tikzpicture to paste. tex: a standalone .tex file. link: a markdown link that opens the figure in the GeoSimples editor. doc: the figure as JSON, to edit later with "from" or render_doc.',
   );
 
 const scaleSchema = z.number().min(0.1).max(5).optional().describe("cm per unit when exported; default 1");
@@ -82,13 +82,14 @@ function issueLine(issue: RecipeIssue): string {
   return `- ${where} [${issue.code}]: ${issue.message}`;
 }
 
-/** Reads `from` / `doc`: a FigureDoc object, or a share link. */
+/** Reads `from` / `doc`: a FigureDoc object, or a share link, bare or as the markdown link a link output gives. */
 async function readFigure(value: unknown, fallbackName: string): Promise<{ doc: FigureDoc; name: string } | { error: string }> {
   if (typeof value !== "string") return { doc: normalizeDoc(value), name: fallbackName };
-  const hash = value.includes("#") ? value.slice(value.indexOf("#")) : value;
-  const token = shareTokenFromHash(hash) ?? (value.trim().startsWith("{") ? null : value.trim());
+  const link = value.match(/\]\((\S+)\)\s*$/)?.[1] ?? value;
+  const hash = link.includes("#") ? link.slice(link.indexOf("#")) : link;
+  const token = shareTokenFromHash(hash) ?? (link.trim().startsWith("{") ? null : link.trim());
   if (!token) {
-    const parsed = parseFigureFile(value, fallbackName);
+    const parsed = parseFigureFile(link, fallbackName);
     return parsed.ok ? { doc: parsed.file.doc, name: parsed.file.name } : { error: "Not a GeoSimples figure or share link." };
   }
   const parsed = await decodeShareToken(token, fallbackName);
@@ -110,7 +111,7 @@ async function outputs(doc: FigureDoc, wanted: readonly Output[], name: string, 
         blocks.push(text(toTikz(doc, { scale, standalone: true })));
         break;
       case "link":
-        blocks.push(text(`Abrir no GeoSimples: ${shareUrl(site, await encodeShareToken({ name, doc }))}`));
+        blocks.push(text(`[Abrir no GeoSimples](${shareUrl(site, await encodeShareToken({ name, doc }))})`));
         break;
       case "doc":
         blocks.push(text(JSON.stringify(doc)));

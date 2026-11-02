@@ -64,8 +64,8 @@ describe("MCP over HTTP", () => {
     expect(summary).toMatch(/^Figure built with \d+ elements\.$/);
     expect(svg).toMatch(/^<svg /);
     expect(svg).toContain("2,4");
-    expect(link).toMatch(/^Abrir no GeoSimples: https:\/\/geosimples\.vercel\.app\/#figura=/);
-    const opened = await decodeShareToken(shareTokenFromHash(link.slice(link.indexOf("#")))!, "x");
+    expect(link).toMatch(/^\[Abrir no GeoSimples\]\(https:\/\/geosimples\.vercel\.app\/#figura=[\w-]+\)$/);
+    const opened = await decodeShareToken(shareTokenFromHash(link.slice(link.indexOf("#"), -1))!, "x");
     expect(opened.ok && opened.file.name).toBe("Pitágoras");
     expect(opened.ok && opened.file.doc).toEqual(JSON.parse(doc));
   });
@@ -91,7 +91,8 @@ describe("MCP over HTTP", () => {
 
   it("builds on a figure from a share link, and exports one", async () => {
     const first = texts(await call("draw_figure", { recipe: PYTHAGOREAN, output: ["link"] }))[1];
-    const link = first.replace("Abrir no GeoSimples: ", "");
+    // Agents pass the link back as it came, in markdown.
+    const link = first;
     const more = await call("draw_figure", {
       from: link,
       recipe: { v: 1, steps: [{ do: "circle", center: "H", radius: 1 }] },
