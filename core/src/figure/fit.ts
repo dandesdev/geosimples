@@ -203,6 +203,7 @@ function hasShapes(doc: FigureDoc, skip: Set<Id>): boolean {
       e.type === "circle" ||
       e.type === "polygon" ||
       e.type === "angle" ||
+      e.type === "vector" ||
       (e.type === "segment" && !(skip.has(e.a) && skip.has(e.b))),
   );
 }
@@ -449,6 +450,9 @@ function drawnBox(doc: FigureDoc): { x: Span; y: Span } {
       case "numberline":
         add(el.x[0], el.y);
         add(el.x[1], el.y);
+        break;
+      case "board":
+        add(el.x, el.y);
         break;
     }
   }

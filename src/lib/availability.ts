@@ -2,8 +2,12 @@ import { useMemo } from "react";
 import {
   addAxes,
   addGrid,
+  addBasis,
   addPointOnGraph,
   addTangentAt,
+  addVennDiagram,
+  makeVectors,
+  vectorOp,
   addSpot,
   construct,
   connectPoints,
@@ -19,6 +23,7 @@ import {
   type NotableFeature,
   type CircleMode,
   type ConstructionKind,
+  type VectorOperation,
   type FigureDoc,
   type Id,
   type OpResult,
@@ -41,7 +46,11 @@ export type CheckId =
   | `notable-${NotableFeature}`
   | "toFunctions"
   | "axes"
-  | "grid";
+  | "grid"
+  | "vector"
+  | "basis"
+  | `vector-${VectorOperation}`
+  | `venn-${1 | 2 | 3}`;
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -53,6 +62,8 @@ export interface Availability {
 const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircle"];
 
 export const NOTABLE_FEATURES: NotableFeature[] = ["root", "extremum", "yAxis"];
+
+export const VECTOR_OPERATIONS: VectorOperation[] = ["sum", "parallelogram", "difference", "projection", "unit", "components", "scale"];
 
 export const CONSTRUCTION_KINDS: ConstructionKind[] = [
   "midpoint",
@@ -107,7 +118,15 @@ export function useAvailability(): Record<CheckId, Availability> {
       toFunctions: check(doc, toFunctions(doc, selection, opts), text),
       axes: check(doc, addAxes(doc), null),
       grid: check(doc, addGrid(doc), null),
+      vector: check(doc, makeVectors(doc, selection, opts), text),
+      basis: check(doc, addBasis(doc, opts), null),
     } as Record<CheckId, Availability>;
+    for (const op of VECTOR_OPERATIONS) {
+      out[`vector-${op}`] = check(doc, vectorOp(doc, selection, op, opts), text);
+    }
+    for (const n of [1, 2, 3] as const) {
+      out[`venn-${n}`] = check(doc, addVennDiagram(doc, n, opts), null);
+    }
     for (const feature of NOTABLE_FEATURES) {
       out[`notable-${feature}`] = check(doc, markNotable(doc, selection, feature, opts), text);
     }

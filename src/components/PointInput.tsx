@@ -44,6 +44,11 @@ function summary(parsed: ParsedInput): string {
   if (parsed.lines.length > 0) return "Reta vertical. Enter para adicionar.";
   if (parsed.graphPoints.length > 0) return "Ponto sobre o gráfico. Enter para adicionar.";
   if (parsed.intervals.length > 0) return "Intervalo na reta numérica. Enter para adicionar.";
+  if (parsed.vectors.length > 0) return "Vetor. Enter para adicionar.";
+  if (parsed.boards.length > 0) return "Conta ou quadro, já calculado. Enter para adicionar.";
+  if (parsed.sets.length > 0) return `Elementos de ${parsed.sets[0].name} no diagrama. Enter para adicionar.`;
+  if (parsed.counts.length > 0) return "Quantidade numa região do diagrama. Enter para adicionar.";
+  if (parsed.regions.length > 0) return "Região do diagrama. Enter para marcar.";
   const fresh = parsed.nodes.filter((n) => n.kind === "new").length;
   const parts: string[] = [];
   if (fresh) parts.push(`${fresh} ${fresh === 1 ? "ponto novo" : "pontos novos"}`);
@@ -217,6 +222,15 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             </p>
             <p>
               <b>[a; b]</b> marca um intervalo na reta numérica; <b>]</b> e <b>[</b> viradas para fora deixam a ponta aberta: <code>[-2; 3[</code>, <code>]-∞; 1]</code>
+            </p>
+            <p>
+              <b>vetor</b> desenha uma seta: <code>vetor u=(3;2)</code>, <code>vetor F=(5:30)@(1;1)</code>
+            </p>
+            <p>
+              <b>A=</b> escreve os elementos no diagrama: <code>A={"{1,2,3}"}</code>, <code>n(A∩B)=3</code>; <b>região</b> marca uma parte: <code>região A∩B</code>
+            </p>
+            <p>
+              <b>Contas e quadros:</b> <code>1234÷5</code>, <code>58+67</code>, <code>fatorar 360</code>, <code>mmc(12;18)</code>, <code>varal [1;3]∩]2;5[</code>, <code>sinal x²-4</code>, <code>quadro (x-1)/(x+2)</code>, <code>|x-1|=3</code>
             </p>
           </TooltipContent>
         </Tooltip>

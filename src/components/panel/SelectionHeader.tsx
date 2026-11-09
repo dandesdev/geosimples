@@ -18,6 +18,9 @@ function describe(doc: FigureDoc, el: Element): string {
   }
   if (el.type === "text") return `${name} "${el.text}"`;
   if (el.type === "vline") return `${name} x = ${formatNumber(el.x)}`;
+  if (el.type === "region") return `${name} ${el.expr}`;
+  if (el.type === "board") return el.source;
+  if (el.type === "vennitems") return name;
   if (el.type === "extension") {
     const point = (id: string) => {
       const p = doc.elements.find((e) => e.id === id);

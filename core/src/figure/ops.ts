@@ -11,8 +11,11 @@ import {
   resolveConstructions,
   signedArea2,
 } from "./geometry";
-import { formatNumber, labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
+import { canHaveLabel, formatNumber, labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
+import { addBoard } from "./boardOps";
 import { functionValue, nearestOnGraph } from "./plot";
+import { addRegion, setMembers, setRegionCount } from "./setOps";
+import { addVector } from "./vectorOps";
 import type { ParsedInput, ParsedPoint } from "./parse";
 import type {
   Axes,
@@ -30,6 +33,9 @@ import type {
   NumberLine,
   Polygon,
   Segment,
+  Vector,
+  VectorNotation,
+  VennItems,
   VerticalLine,
 } from "./types";
 import { dist, heading, lerp, normDeg, sub, type Vec } from "./vec";
@@ -94,6 +100,10 @@ const PREFIX: Record<ElementType, string> = {
   axes: "e",
   grid: "m",
   numberline: "n",
+  vector: "v",
+  region: "z",
+  vennitems: "i",
+  board: "b",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
@@ -145,6 +155,14 @@ export function addPoints(doc: FigureDoc, parsed: ParsedPoint[], opts: OpOptions
  */
 export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions = {}): OpResult {
   if (parsed.errors.length > 0) return fail(doc, parsed.errors[0].message);
+  if (parsed.vectors.length > 0) {
+    const [v] = parsed.vectors;
+    return addVector(doc, v.name, v.from, v.to, opts);
+  }
+  if (parsed.boards.length > 0) return addBoard(doc, parsed.boards[0], opts);
+  if (parsed.sets.length > 0) return setMembers(doc, parsed.sets[0].name, parsed.sets[0].items, opts);
+  if (parsed.counts.length > 0) return setRegionCount(doc, parsed.counts[0].expr, parsed.counts[0].value, opts);
+  if (parsed.regions.length > 0) return addRegion(doc, parsed.regions[0], opts);
   if (parsed.functions.length > 0) {
     const [f] = parsed.functions;
     return addFunction(doc, f.expr, f.name, opts);
@@ -187,6 +205,23 @@ export function segmentExists(doc: FigureDoc, a: Id, b: Id): boolean {
   return doc.elements.some(
     (e) => e.type === "segment" && ((e.a === a && e.b === b) || (e.a === b && e.b === a)),
   );
+}
+
+/** Length in pt of a new vector's arrowhead. */
+export const DEFAULT_VECTOR_HEAD = 6;
+
+export function newVector(id: Id, a: Id, b: Id, name: string, notation: VectorNotation, opts: OpOptions): Vector {
+  const styles = stylesOf(opts);
+  return {
+    id,
+    type: "vector",
+    a,
+    b,
+    stroke: { ...styles.stroke },
+    head: DEFAULT_VECTOR_HEAD,
+    notation,
+    ...(name ? { label: withText(undefined, name, styles.label) } : {}),
+  };
 }
 
 export function newSegment(id: Id, a: Id, b: Id, opts: OpOptions): Segment {
@@ -455,8 +490,13 @@ function referencedPoints(el: Element): Id[] {
     case "axes":
     case "grid":
     case "numberline":
+    case "vennitems":
+    case "board":
       return [];
+    case "region":
+      return [...el.sets.map((s) => s.shape), ...(el.universe ? [el.universe] : [])];
     case "segment":
+    case "vector":
       return [el.a, el.b];
     case "extension":
       return [...el.line, el.point];
@@ -480,6 +520,7 @@ export function deleteElements(doc: FigureDoc, ids: Id[]): OpResult {
     .filter((el) => !gone.has(el.id))
     .map((el): Element => {
       if (el.type === "point") return freedPoint(el, gone);
+      if (el.type === "vennitems") return withoutSets(el, gone);
       if (el.type !== "circle") return el;
       const c = el.construction;
       const lost =
@@ -507,6 +548,15 @@ function withLostHelpers(doc: FigureDoc, ids: Id[]): Id[] {
       gone.has(el.construction.circle),
   );
   return [...ids, ...helpers.map((el) => el.id)];
+}
+
+/** What is written in a set that was deleted goes with it; the other sets keep theirs. */
+function withoutSets(el: VennItems, gone: Set<Id>): VennItems {
+  return {
+    ...el,
+    members: el.members.filter((m) => !gone.has(m.set)),
+    counts: el.counts.filter((c) => !c.in.some((id) => gone.has(id))),
+  };
 }
 
 function freedPoint(p: Point, gone: Set<Id>): Point {
@@ -630,7 +680,7 @@ export function autoLabel(
   const kind = scheme === "area" || scheme === "perimeter" ? scheme : undefined;
   const elements = doc.elements.map((el) => {
     const text = texts.get(el.id);
-    if (text === undefined || el.type === "text") return el;
+    if (text === undefined || !canHaveLabel(el)) return el;
     const label = withText(el.label, text, stylesOf(opts).label);
     const measure = live ? newMeasure(el, el.type === "angle" ? Math.min(decimals, 1) : decimals, kind) : null;
     return { ...el, label: measure ? { ...label, measure } : label } as Element;
@@ -714,7 +764,7 @@ export function removeLabels(doc: FigureDoc, ids: Id[]): OpResult {
   const set = new Set(ids);
   let removed = 0;
   const elements = doc.elements.map((el) => {
-    if (!set.has(el.id) || el.type === "text" || !el.label) return el;
+    if (!set.has(el.id) || !canHaveLabel(el) || !el.label) return el;
     removed++;
     const bare = { ...el };
     delete bare.label;
@@ -764,7 +814,7 @@ export function addText(doc: FigureDoc, at: { x: number; y: number }, text: stri
 
 export function setLabelText(doc: FigureDoc, id: Id, text: string, opts: OpOptions = {}): FigureDoc {
   return updateElements(doc, [id], (el) => {
-    if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return el;
+    if (!canHaveLabel(el)) return el;
     const trimmed = text.slice(0, LIMITS.labelLength);
     if (trimmed === "") {
       const next = { ...el };

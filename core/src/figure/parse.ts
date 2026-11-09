@@ -1,5 +1,7 @@
+import { boardError, parseBoard, MAX_BOARD_SOURCE } from "./board";
 import { LIMITS } from "./defaults";
 import { parseExpr, type Expr } from "../plot";
+import { parseSetExpr } from "./sets";
 import type { Id } from "./types";
 import { add, dist, polar, type Vec } from "./vec";
 
@@ -51,6 +53,23 @@ export interface ParsedGraphPoint {
   label: string;
 }
 
+/** A vector to create: from its tail to its tip, each a position or an existing point. */
+export interface ParsedVector {
+  name: string;
+  from: { id: Id } | Vec;
+  to: { id: Id } | Vec;
+}
+
+export interface ParsedSet {
+  name: string;
+  items: string[];
+}
+
+export interface ParsedCount {
+  expr: string;
+  value: string;
+}
+
 export type InputTokenKind = "name" | "point" | "ref" | "connector" | "text" | "error";
 
 /** A span of the input text, used to color it as the teacher types. */
@@ -80,6 +99,16 @@ export interface ParsedInput {
   graphPoints: ParsedGraphPoint[];
   /** Intervals on the number line, written [-2; 3[. The whole input is then the interval. */
   intervals: ParsedInterval[];
+  /** A vector, written vetor u=(3;2). The whole input is then the vector. */
+  vectors: ParsedVector[];
+  /** A worked layout, written 1234÷5, mmc(12;18), varal …. The whole input is then the board. */
+  boards: string[];
+  /** The elements of a set, written A={1,2,3}. The whole input is then the set. */
+  sets: ParsedSet[];
+  /** A count in a region, written n(A∩B)=3. The whole input is then the count. */
+  counts: ParsedCount[];
+  /** A region of a diagram to mark, written região A∩B. The whole input is then the region. */
+  regions: string[];
   tokens: InputToken[];
   errors: InputError[];
 }
@@ -113,7 +142,16 @@ const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
  */
 export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
   const whole =
-    parseFunctionInput(text) ?? parseLineInput(text) ?? parseGraphPointInput(text, ctx) ?? parseIntervalInput(text);
+    parseSetInput(text) ??
+    parseRegionInput(text) ??
+    parseVectorInput(text, ctx) ??
+    parseFunctionInput(text) ??
+    // After the functions: n(x) = x^2 is a graph, and only n(A∩B) = 3 is a count.
+    parseCountInput(text) ??
+    parseLineInput(text) ??
+    parseGraphPointInput(text, ctx) ??
+    parseIntervalInput(text) ??
+    parseBoardInput(text);
   if (whole) return whole;
   const nodes: InputNode[] = [];
   const segments: [number, number][] = [];
@@ -355,6 +393,11 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     lines: [],
     graphPoints: [],
     intervals: [],
+    vectors: [],
+    boards: [],
+    sets: [],
+    counts: [],
+    regions: [],
     tokens: tokens.sort((x, y) => x.start - y.start),
     errors,
   };
@@ -400,9 +443,123 @@ const emptyInput = (): ParsedInput => ({
   lines: [],
   graphPoints: [],
   intervals: [],
+  vectors: [],
+  boards: [],
+  sets: [],
+  counts: [],
+  regions: [],
   tokens: [],
   errors: [],
 });
+
+/** The whole input as one thing that didn't parse, with why. */
+function inputFailure(text: string, message: string): ParsedInput {
+  const result = emptyInput();
+  result.errors.push({ message, start: 0, end: text.length });
+  result.tokens.push({ kind: "error", start: 0, end: text.length });
+  return result;
+}
+
+/** A = {1, 2, 3}: the elements of a set of a Venn diagram. */
+const SET_INPUT = /^\s*([A-ZΑ-Ω][0-9₀-₉]*)\s*=\s*\{([^{}]*)\}\s*$/u;
+
+function parseSetInput(text: string): ParsedInput | null {
+  const m = SET_INPUT.exec(text);
+  if (!m) return null;
+  const result = emptyInput();
+  const items = [...new Set(m[2].split(/[,;]/).map((s) => s.trim()).filter((s) => s !== ""))];
+  if (items.length > 60) return inputFailure(text, "Use até 60 elementos em cada conjunto.");
+  result.sets.push({ name: m[1], items });
+  result.tokens.push({ kind: "name", start: 0, end: text.indexOf("=") + 1 }, { kind: "text", start: text.indexOf("=") + 1, end: text.length });
+  return result;
+}
+
+/** n(A∩B) = 3: a count in one region of a diagram. */
+const COUNT_INPUT = /^\s*n\s*\((.*)\)\s*=\s*(\S+)\s*$/u;
+
+function parseCountInput(text: string): ParsedInput | null {
+  const m = COUNT_INPUT.exec(text);
+  if (!m) return null;
+  const parsed = parseSetExpr(m[1]);
+  if (!parsed.ok) return inputFailure(text, parsed.error);
+  const result = emptyInput();
+  result.counts.push({ expr: m[1].trim(), value: m[2].slice(0, 20) });
+  result.tokens.push({ kind: "text", start: 0, end: text.length });
+  return result;
+}
+
+/** região A∩B: marks that part of the diagram. */
+const REGION_INPUT = /^\s*(?:regi[aã]o|regiao)\s+(.*)$/iu;
+
+function parseRegionInput(text: string): ParsedInput | null {
+  const m = REGION_INPUT.exec(text);
+  if (!m) return null;
+  const expr = m[1].trim();
+  const result = emptyInput();
+  result.tokens.push({ kind: "name", start: 0, end: text.length - m[1].length });
+  if (expr === "") return result;
+  const parsed = parseSetExpr(expr);
+  if (!parsed.ok) return inputFailure(text, parsed.error);
+  result.regions.push(expr);
+  result.tokens.push({ kind: "text", start: text.length - m[1].length, end: text.length });
+  return result;
+}
+
+const POSITION = String.raw`\(?\s*([+-]?\d+(?:[.,]\d+)?)\s*([;:])\s*([+-]?\d+(?:[.,]\d+)?)\s*\)?`;
+const VECTOR_VALUE = new RegExp(`^${POSITION}(?:\\s*@\\s*${POSITION})?$`);
+const num = (s: string) => Number(s.replace(",", "."));
+
+/**
+ * vetor u=(3;2), or (5:30) in polar, optionally @(1;1) to choose its tail; or
+ * vetor A B between existing points.
+ */
+function parseVectorInput(text: string, ctx: InputContext): ParsedInput | null {
+  const m = /^\s*vetor\b\s*(.*)$/iu.exec(text);
+  if (!m) return null;
+  const rest = m[1].trim();
+  const result = emptyInput();
+  result.tokens.push({ kind: "name", start: 0, end: text.length - m[1].length });
+  if (rest === "") return result;
+  const named = /^([A-Za-zα-ωΑ-Ω][A-Za-z0-9′'₀-₉_]*)\s*=\s*(.*)$/u.exec(rest);
+  const name = named ? named[1].slice(0, LIMITS.labelLength) : "";
+  const value = named ? named[2].trim() : rest;
+  const v = VECTOR_VALUE.exec(value);
+  if (v) {
+    const vec = (a: string, sep: string, b: string): Vec => (sep === ";" ? { x: num(a), y: num(b) } : polar(num(a), num(b)));
+    const d = vec(v[1], v[2], v[3]);
+    const from: Vec = v[4] !== undefined ? vec(v[4], v[5], v[6]) : { x: 0, y: 0 };
+    if (Math.hypot(d.x, d.y) === 0) return inputFailure(text, "O vetor nulo não tem direção para desenhar.");
+    result.vectors.push({ name, from, to: { x: roundTiny(from.x + d.x), y: roundTiny(from.y + d.y) } });
+    result.tokens.push({ kind: "point", start: text.length - m[1].length, end: text.length });
+    return result;
+  }
+  const refs = value.split(/\s+|--/).filter((s) => s !== "");
+  const known = (n: string) => ctx.points.find((p) => p.label === n);
+  const pair = refs.length === 2 ? refs : refs.length === 1 && Array.from(refs[0]).length === 2 ? Array.from(refs[0]) : null;
+  if (pair) {
+    const [a, b] = pair.map(known);
+    if (a && b) {
+      result.vectors.push({ name, from: { id: a.id }, to: { id: b.id } });
+      result.tokens.push({ kind: "ref", start: text.length - m[1].length, end: text.length });
+      return result;
+    }
+  }
+  return inputFailure(text, "Use vetor u=(3;2), vetor F=(5:30)@(1;1) ou vetor A B com pontos que existem.");
+}
+
+/** A division, an MMC, a varal…: everything laid out on its own. Null when the text is none of them. */
+function parseBoardInput(text: string): ParsedInput | null {
+  const trimmed = text.trim();
+  if (trimmed === "" || trimmed.length > MAX_BOARD_SOURCE) return null;
+  const spec = parseBoard(trimmed);
+  if (spec === null) return null;
+  const error = typeof spec === "string" ? spec : boardError(trimmed);
+  if (error !== null) return inputFailure(text, error);
+  const result = emptyInput();
+  result.boards.push(trimmed);
+  result.tokens.push({ kind: "text", start: 0, end: text.length });
+  return result;
+}
 
 const hasX = (e: Expr): boolean =>
   e.kind === "x" ||

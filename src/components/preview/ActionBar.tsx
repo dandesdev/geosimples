@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { emitCommand } from "@/lib/commands";
-import { ChartSpline, Download, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Blend, Calculator, ChartSpline, Download, MoveUpRight, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,12 @@ import {
   VerticalLineIcon,
   YInterceptIcon,
 } from "@/components/icons";
-import { CIRCLE_OPTIONS, CONSTRUCTIONS } from "./tools";
+import { BOARD_ITEMS, CIRCLE_OPTIONS, CONSTRUCTIONS, VECTOR_ITEMS } from "./tools";
 import { actions } from "@/lib/actions";
 import {
   CONSTRUCTION_KINDS,
   NOTABLE_FEATURES,
+  VECTOR_OPERATIONS,
   previewProps,
   useAvailability,
   type Availability,
@@ -151,6 +152,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
   const anyConnect = !av.connect.reason || !av.closeContour.reason;
   const anyConstruction = CONSTRUCTION_KINDS.some((kind) => !av[`construct-${kind}`].reason);
   const anyGraphTool = GRAPH_CHECKS.some((id) => !av[id].reason);
+  const anyVectorOp = !av.vector.reason || VECTOR_OPERATIONS.some((op) => !av[`vector-${op}`].reason);
   const menu = { side: menuSide, align: "start" } as const;
   /** Set by the items that go on in the input bar, so the closing menu leaves focus there. */
   const toInput = useRef(false);
@@ -377,6 +379,126 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
             availability={av.toFunctions}
             onSelect={actions.toFunctions}
           />
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label="Vetores"
+            hint="Setas entre pontos, soma, diferença, projeção, versor e componentes. O que é construído acompanha os vetores."
+            ready={hasSelection && anyVectorOp}
+          >
+            <MoveUpRight />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          {...menu}
+          className="w-80"
+          onCloseAutoFocus={(e) => {
+            if (!toInput.current) return;
+            toInput.current = false;
+            e.preventDefault();
+          }}
+        >
+          <DropdownMenuLabel>Vetores</DropdownMenuLabel>
+          <MenuItem icon={<MoveUpRight />} title="Vetor entre pontos" hint="A origem primeiro, depois a extremidade." availability={av.vector} onSelect={actions.vector} />
+          <MenuItem
+            icon={<MoveUpRight />}
+            title="Digitar vetor…"
+            hint="vetor u=(3;2), vetor F=(5:30)@(1;1)"
+            availability={ALWAYS}
+            onSelect={startTyping(() => actions.startTyping("vetor "))}
+          />
+          <MenuItem icon={<MoveUpRight />} title="Versores i e j" hint="Saindo da origem." availability={av.basis} onSelect={actions.basis} />
+          <DropdownMenuSeparator />
+          {VECTOR_ITEMS.map((item) => (
+            <MenuItem
+              key={item.op}
+              icon={<MoveUpRight />}
+              title={item.title}
+              hint={item.hint}
+              availability={av[`vector-${item.op}`]}
+              onSelect={() => actions.vectorOp(item.op)}
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+        <DropdownMenuTrigger asChild>
+          <IconButton label="Conjuntos" hint="Diagramas de Venn, regiões e elementos.">
+            <Blend />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          {...menu}
+          className="w-80"
+          onCloseAutoFocus={(e) => {
+            if (!toInput.current) return;
+            toInput.current = false;
+            e.preventDefault();
+          }}
+        >
+          <DropdownMenuLabel>Conjuntos</DropdownMenuLabel>
+          {([1, 2, 3] as const).map((n) => (
+            <MenuItem
+              key={n}
+              icon={<Blend />}
+              title={n === 1 ? "Diagrama com 1 conjunto" : `Diagrama com ${n} conjuntos`}
+              hint="Dentro de um retângulo U. Arraste os círculos no modo Mover."
+              availability={av[`venn-${n}`]}
+              onSelect={() => actions.venn(n)}
+            />
+          ))}
+          <DropdownMenuSeparator />
+          <MenuItem
+            icon={<Blend />}
+            title="Marcar região…"
+            hint="região A∩B, região (A∪B)', região A−B"
+            availability={ALWAYS}
+            onSelect={startTyping(() => actions.startTyping("região "))}
+          />
+          <MenuItem
+            icon={<Blend />}
+            title="Elementos…"
+            hint="A={1,2,3}. Cada um vai para a região certa. Ou n(A∩B)=3."
+            availability={ALWAYS}
+            onSelect={startTyping(() => actions.startTyping("A={"))}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <IconButton label="Contas e quadros" hint="Contas armadas, fatoração, MMC, MDC, varais, estudo de sinal e equações modulares, calculados e prontos para imprimir.">
+            <Calculator />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          {...menu}
+          className="w-80"
+          onCloseAutoFocus={(e) => {
+            if (!toInput.current) return;
+            toInput.current = false;
+            e.preventDefault();
+          }}
+        >
+          <DropdownMenuLabel>Contas e quadros</DropdownMenuLabel>
+          {BOARD_ITEMS.map((item, i) =>
+            item === null ? (
+              <DropdownMenuSeparator key={i} />
+            ) : (
+              <MenuItem
+                key={item.title}
+                icon={<Calculator />}
+                title={item.title}
+                hint={item.hint}
+                availability={ALWAYS}
+                onSelect={startTyping(() => actions.startTyping(item.prefill))}
+              />
+            ),
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

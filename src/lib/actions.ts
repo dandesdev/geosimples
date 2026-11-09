@@ -1,7 +1,12 @@
 import { toast } from "sonner";
 import {
+  addBasis,
   addPoints,
   addText,
+  addVennDiagram,
+  makeVectors,
+  vectorOp,
+  type VectorOperation,
   autoLabelMany,
   buildScene,
   clearLabels,
@@ -63,7 +68,7 @@ const selectedPoints = (doc: FigureDoc, selection: Id[]) =>
   selectedOfType(doc, selection, "point").map((p) => p.id);
 
 /** Text typed in for the teacher to finish in the input bar, like "y = ". Text already there stays. */
-export const PREFILLS = ["y = ", "x = ", "["];
+export const PREFILLS = ["y = ", "x = ", "[", "vetor ", "região ", "A={", "conta ", "fatorar ", "mmc(", "mdc(", "euclides(", "varal ", "sinal ", "quadro ", "modular "];
 
 function startInput(prefill: string) {
   const store = useFigureStore.getState();
@@ -130,6 +135,21 @@ export const actions = {
     if (!perform((doc) => addNumberLine(doc))) return;
     startInput("[");
   },
+
+  /** Text that starts something typed in the input bar, like "mmc(". */
+  startTyping: (prefill: string) => startInput(prefill),
+
+  /** An arrow from each selected point to the next. */
+  vector: () => perform((doc, sel) => makeVectors(doc, sel, opOptions())),
+
+  /** Builds on the selected vectors: sum, difference, projection and the rest. */
+  vectorOp: (op: VectorOperation) => perform((doc, sel) => vectorOp(doc, sel, op, opOptions())),
+
+  /** The versors i and j from the origin. */
+  basis: () => perform((doc) => addBasis(doc, opOptions())),
+
+  /** A Venn diagram of 1 to 3 sets. */
+  venn: (n: 1 | 2 | 3) => perform((doc) => addVennDiagram(doc, n, opOptions())),
 
   /** Axes on their own, fitting the figure. */
   addAxes: () => perform((doc) => addAxes(doc)),

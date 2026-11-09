@@ -21,6 +21,10 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   numberline: { one: "reta numérica", many: "retas numéricas", title: "Reta numérica" },
   axes: { one: "par de eixos", many: "pares de eixos", title: "Eixos" },
   grid: { one: "malha", many: "malhas", title: "Malha quadriculada" },
+  vector: { one: "vetor", many: "vetores", title: "Vetor" },
+  region: { one: "região", many: "regiões", title: "Região" },
+  vennitems: { one: "conteúdo do diagrama", many: "conteúdos do diagrama", title: "Conteúdo do diagrama" },
+  board: { one: "conta ou quadro", many: "contas e quadros", title: "Conta ou quadro" },
 };
 
 /** What the preview calls a point it could add under the pointer, and the menu item that adds it. */
@@ -81,5 +85,11 @@ export function describeConstruction(doc: FigureDoc, c: PointConstruction): stri
       return `${NOTABLE_NAMES[c.feature]} de ${name(c.graph)}`;
     case "tangent":
       return `Na reta tangente a ${name(c.graph)} em ${name(c.point)}`;
+    case "translate":
+      return c.factor === 1 ? `${name(c.point)} deslocado por ${line(c.by)}` : `${name(c.point)} mais ${formatNumber(c.factor)} vezes ${line(c.by)}`;
+    case "unit":
+      return `Versor de ${line(c.of)}`;
+    case "corner":
+      return `Com o x de ${name(c.x)} e o y de ${name(c.y)}`;
   }
 }

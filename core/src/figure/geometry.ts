@@ -664,6 +664,22 @@ export function constructedPosition(
       const edge = c.fill && frame ? reachInBox(p, scale(dir, side), frame) : null;
       return add(p, scale(dir, edge === null ? c.along : side * edge));
     }
+    case "translate": {
+      const p = pts.get(c.point);
+      const [a, b] = c.by.map((id) => pts.get(id));
+      return p && a && b ? add(p, scale(sub(b, a), c.factor)) : null;
+    }
+    case "unit": {
+      const from = pts.get(c.from);
+      const [a, b] = c.of.map((id) => pts.get(id));
+      if (!from || !a || !b || dist(a, b) === 0) return null;
+      return add(from, unit(sub(b, a)));
+    }
+    case "corner": {
+      const x = pts.get(c.x);
+      const y = pts.get(c.y);
+      return x && y ? { x: x.x, y: y.y } : null;
+    }
   }
 }
 
@@ -686,6 +702,12 @@ export function constructionParents(c: PointConstruction): Id[] {
       return [c.graph];
     case "tangent":
       return [c.point, c.graph];
+    case "translate":
+      return [c.point, ...c.by];
+    case "unit":
+      return [...c.of, c.from];
+    case "corner":
+      return [c.x, c.y];
   }
 }
 

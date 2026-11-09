@@ -14,12 +14,16 @@ import {
   estimateTextWidth,
   formatNumber,
   labelPlacement,
+  canHaveLabel,
   labelRuns,
   labelText,
   measureNumber,
   measureRuns,
+  vectorNameSpans,
   type LabelRun,
 } from "./labels";
+import { boardLayout, layoutMath, type MathPart } from "./board";
+import { regionOutline, vennItemSpots, type RegionEdge } from "./sets";
 import { grow, LineIndex, overlap, pathLines, textBox } from "./lines";
 import {
   axesOrigin,
@@ -171,17 +175,19 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   const pts = pointMap(doc);
   const box = new BoxBuilder();
   const layers: Record<
-    "grid" | "axes" | "guide" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    "grid" | "axes" | "guide" | "polygon" | "region" | "circle" | "function" | "angle" | "segment" | "board" | "point" | "label",
     Prim[]
   > = {
     grid: [],
     axes: [],
     guide: [],
     polygon: [],
+    region: [],
     circle: [],
     function: [],
     angle: [],
     segment: [],
+    board: [],
     point: [],
     label: [],
   };
@@ -193,10 +199,14 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     function: [],
     vline: [],
     polygon: [],
+    region: [],
     circle: [],
     angle: [],
     segment: [],
+    vector: [],
     extension: [],
+    board: [],
+    vennitems: [],
     point: [],
     text: [],
   };
@@ -297,6 +307,124 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         box.add(pa.x, pa.y, stroke.width / 2);
         box.add(pb.x, pb.y, stroke.width / 2);
         hits.segment.push({ owner: el.id, type: "segment", d, area: false });
+        break;
+      }
+      case "vector": {
+        const a = pts.get(el.a);
+        const b = pts.get(el.b);
+        if (!a || !b) break;
+        const pa = P(a);
+        const pb = P(b);
+        const length = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+        if (length === 0) break;
+        const dir = { x: (pb.x - pa.x) / length, y: (pb.y - pa.y) / length };
+        // A short vector keeps a head that fits it.
+        const head = Math.min(el.head, length * 0.6);
+        const half = head * 0.38;
+        const stroke = paintStroke(el.stroke);
+        const neck = { x: pb.x - dir.x * head * 0.8, y: pb.y - dir.y * head * 0.8 };
+        const d = `M${f(pa.x)} ${f(pa.y)}L${f(neck.x)} ${f(neck.y)}`;
+        layers.segment.push({ kind: "path", owner: el.id, d, stroke, fill: null });
+        const back = { x: pb.x - dir.x * head, y: pb.y - dir.y * head };
+        layers.segment.push({
+          kind: "path",
+          owner: el.id,
+          d: `M${f(pb.x)} ${f(pb.y)}L${f(back.x - dir.y * half)} ${f(back.y + dir.x * half)}L${f(back.x + dir.y * half)} ${f(back.y - dir.x * half)}Z`,
+          stroke: null,
+          fill: { color: stroke.color, opacity: stroke.opacity, pattern: "solid", angle: 0 },
+        });
+        box.add(pa.x, pa.y, stroke.width / 2);
+        box.add(pb.x, pb.y, half);
+        hits.vector.push({ owner: el.id, type: "vector", d: `M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`, area: false });
+        break;
+      }
+      case "region": {
+        const d = regionOutline(doc, el).map((loop) => loopPath(loop, kx, ky)).join("");
+        if (!d) break;
+        layers.region.push({ kind: "path", owner: el.id, d, stroke: el.stroke ? paintStroke(el.stroke) : null, fill: paintFill(el.fill) });
+        hits.region.push({ owner: el.id, type: "region", d, area: true });
+        break;
+      }
+      case "vennitems": {
+        for (const spot of vennItemSpots(doc, el)) {
+          const at = O(spot.anchor, spot.offset);
+          const r = textRect(layers.label, el.id, at, spot.text, labelRuns(spot.text, el.font), el.size, el.color, el.font, box);
+          hits.vennitems.push({
+            owner: el.id,
+            type: "vennitems",
+            d: `M${f(r.minX)} ${f(r.minY)}H${f(r.maxX)}V${f(r.maxY)}H${f(r.minX)}Z`,
+            area: true,
+          });
+        }
+        break;
+      }
+      case "board": {
+        const layout = boardLayout(el, doc);
+        if (!layout) break;
+        const base = P(el);
+        const T = (o: Vec): Vec => ({ x: base.x + o.x, y: base.y - o.y });
+        const color = resolveColor(el.color);
+        const lineStroke = (width?: number, dash?: Dash): PaintStroke => ({ color, width: width ?? el.width, dash: dash ?? "solid", opacity: 1 });
+        const solidFill: PaintFill = { color, opacity: 1, pattern: "solid", angle: 0 };
+        const path = (d: string, stroke: PaintStroke | null, fillWith: PaintFill | null) =>
+          layers.board.push({ kind: "path", owner: el.id, d, stroke, fill: fillWith });
+        const writePart = (part: MathPart, origin: Vec) => {
+          if (part.kind === "line") {
+            const [a, b] = [T({ x: origin.x + part.a.x, y: origin.y + part.a.y }), T({ x: origin.x + part.b.x, y: origin.y + part.b.y })];
+            path(`M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, lineStroke(Math.min(el.width, 0.6)), null);
+            return;
+          }
+          const at = T({ x: origin.x + part.x, y: origin.y + part.y });
+          // Words stay upright; inside math, letters go italic as in LaTeX.
+          const runs = part.word ? [{ text: part.text, italic: false }] : labelRuns(part.text, el.font);
+          textRect(layers.board, el.id, at, part.text, runs, part.size, el.color, el.font, box);
+        };
+        for (const m of layout.marks) {
+          switch (m.kind) {
+            case "line": {
+              const [a, b] = [T(m.a), T(m.b)];
+              path(`M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, lineStroke(m.width, m.dash), null);
+              break;
+            }
+            case "curve": {
+              const d = m.points.map((p, i) => `${i === 0 ? "M" : "L"}${f(T(p).x)} ${f(T(p).y)}`).join("");
+              path(d, lineStroke(m.width, m.dash), null);
+              break;
+            }
+            case "text": {
+              const b = layoutMath(m.node, m.size);
+              for (const part of b.parts) writePart(part, { x: m.at.x - b.w / 2, y: m.at.y });
+              break;
+            }
+            case "dot": {
+              const c = T(m.at);
+              path(circlePath(c.x, c.y, m.r), m.open ? lineStroke(0.7) : null, m.open ? { ...solidFill, color: "#ffffff" } : solidFill);
+              break;
+            }
+            case "ring": {
+              const c = T(m.at);
+              path(circlePath(c.x, c.y, m.r), lineStroke(0.6), null);
+              break;
+            }
+            case "head": {
+              const c = T(m.tip);
+              const dir = { x: m.dir.x, y: -m.dir.y };
+              const back = { x: c.x - dir.x * m.length, y: c.y - dir.y * m.length };
+              const half = m.length * 0.4;
+              path(`M${f(c.x)} ${f(c.y)}L${f(back.x - dir.y * half)} ${f(back.y + dir.x * half)}L${f(back.x + dir.y * half)} ${f(back.y - dir.x * half)}Z`, null, solidFill);
+              break;
+            }
+            case "box": {
+              const a = T({ x: m.at.x - m.w / 2, y: m.at.y + m.h / 2 });
+              path(`M${f(a.x)} ${f(a.y)}h${f(m.w)}v${f(m.h)}h${f(-m.w)}Z`, lineStroke(0.5), null);
+              break;
+            }
+          }
+        }
+        const [c0, c1] = [T({ x: layout.box.minX, y: layout.box.maxY }), T({ x: layout.box.maxX, y: layout.box.minY })];
+        box.add(c0.x, c0.y, 2);
+        box.add(c1.x, c1.y, 2);
+        hits.board.push({ owner: el.id, type: "board", d: `M${f(c0.x)} ${f(c0.y)}H${f(c1.x)}V${f(c1.y)}H${f(c0.x)}Z`, area: true });
         break;
       }
       case "extension": {
@@ -603,6 +731,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     const spots = chooseNumberSpots(axisNumbers, [
       ...layers.guide,
       ...layers.polygon,
+      ...layers.region,
       ...layers.circle,
       ...layers.function,
       ...layers.angle,
@@ -626,10 +755,12 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...layers.axes,
       ...layers.guide,
       ...layers.polygon,
+      ...layers.region,
       ...layers.circle,
       ...layers.function,
       ...layers.angle,
       ...layers.segment,
+      ...layers.board,
       ...layers.point,
       ...layers.label,
     ],
@@ -638,12 +769,16 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...hits.axes,
       ...hits.numberline,
       ...hits.polygon,
+      ...hits.region,
       ...hits.circle,
       ...hits.function,
       ...hits.vline,
       ...hits.angle,
       ...hits.extension,
       ...hits.segment,
+      ...hits.vector,
+      ...hits.board,
+      ...hits.vennitems,
       ...hits.text,
       ...hits.point,
     ],
@@ -715,6 +850,52 @@ function chooseNumberSpots(axes: { el: Axes; x: AxisNumber[]; y: AxisNumber[] }[
   });
 }
 
+/** One closed outline of a region, on paper. A positive sweep is counterclockwise on the page too. */
+function loopPath(loop: RegionEdge[], kx: number, ky: number): string {
+  const P = (v: Vec) => ({ x: v.x * kx, y: -v.y * ky });
+  const start = P(loop[0].from);
+  let d = `M${f(start.x)} ${f(start.y)}`;
+  for (const e of loop) {
+    if (e.kind === "line") {
+      const q = P(e.to);
+      d += `L${f(q.x)} ${f(q.y)}`;
+      continue;
+    }
+    const [rx, ry] = [e.r * kx, e.r * ky];
+    const flag = e.sweep > 0 ? 0 : 1;
+    // A whole circle can't be one arc: its two ends would be the same point.
+    if (Math.abs(e.sweep) >= 359.999) {
+      const middle = P(add(e.c, polar(e.r, e.start + e.sweep / 2)));
+      const back = P(e.to);
+      d += `A${f(rx)} ${f(ry)} 0 0 ${flag} ${f(middle.x)} ${f(middle.y)}A${f(rx)} ${f(ry)} 0 0 ${flag} ${f(back.x)} ${f(back.y)}`;
+      continue;
+    }
+    const q = P(e.to);
+    d += `A${f(rx)} ${f(ry)} 0 ${Math.abs(e.sweep) > 180 ? 1 : 0} ${flag} ${f(q.x)} ${f(q.y)}`;
+  }
+  return `${d}Z`;
+}
+
+/** The arrow or hat over each name of a vector's label. */
+function vectorMark(el: Element, at: Vec, text: string, size: number, color: string, out: Prim[]) {
+  if (el.type !== "vector" || el.notation === "none") return;
+  const paint = { color: resolveColor(color), width: Math.max(0.4, size * 0.05), dash: "solid" as const, opacity: 1 };
+  const y = at.y - size * 0.68;
+  for (const span of vectorNameSpans(text, size)) {
+    const [x0, x1] = [at.x + span.from, at.x + span.to];
+    let d: string;
+    if (el.notation === "hat") {
+      const c = (x0 + x1) / 2;
+      const w = size * 0.22;
+      d = `M${f(c - w)} ${f(y + size * 0.1)}L${f(c)} ${f(y - size * 0.08)}L${f(c + w)} ${f(y + size * 0.1)}`;
+    } else {
+      const tip = size * 0.16;
+      d = `M${f(x0)} ${f(y)}H${f(x1)}M${f(x1 - tip)} ${f(y - tip * 0.75)}L${f(x1)} ${f(y)}L${f(x1 - tip)} ${f(y + tip * 0.75)}`;
+    }
+    out.push({ kind: "path", owner: el.id, d, stroke: paint, fill: null });
+  }
+}
+
 function addLabel(
   doc: FigureDoc,
   el: Element,
@@ -722,14 +903,16 @@ function addLabel(
   box: BoxBuilder,
   O: (w: Vec, o: Vec) => Vec,
 ) {
-  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return;
+  if (!canHaveLabel(el)) return;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return;
   const { size, color, font, measure } = el.label;
   const text = labelText(doc, el);
   const number = measure ? measureNumber(doc, el, measure) : null;
   const runs = measure && number !== null ? measureRuns(measure, number, font) : labelRuns(text, font);
-  textRect(out, el.id, O(placement.anchor, placement.offset), text, runs, size, color, font, box);
+  const at = O(placement.anchor, placement.offset);
+  textRect(out, el.id, at, text, runs, size, color, font, box);
+  if (!measure) vectorMark(el, at, text, size, color, out);
 }
 
 /** Draws text centered on a paper point and returns the box it takes. */

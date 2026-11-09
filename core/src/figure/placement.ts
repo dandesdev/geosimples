@@ -94,6 +94,10 @@ const PRIORITY: Record<ElementType, number> = {
   point: 0,
   angle: 1,
   segment: 2,
+  vector: 2,
+  region: 9,
+  vennitems: 9,
+  board: 9,
   polygon: 3,
   circle: 4,
   function: 5,
@@ -143,6 +147,7 @@ function candidates(doc: FigureDoc, el: Element, label: Label, text: string): Ca
       break;
     }
     case "segment":
+    case "vector":
       for (const side of [0, 180]) {
         for (const tilt of [0, 20, -20, 40, -40]) {
           farther(autoDir + side + tilt, (side ? 2 : 0) + Math.abs(tilt) / 40, [0, 4, 8, 12, 18, 26]);

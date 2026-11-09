@@ -54,8 +54,8 @@ describe("MCP over HTTP", () => {
     }
     const schema = JSON.stringify(tools[0].inputSchema);
     expect(schema).toContain('"locale"');
-    // About 5k tokens: the schema loads into every conversation with the connector on.
-    expect(schema.length).toBeLessThan(23000);
+    // About 6k tokens: the schema loads into every conversation with the connector on.
+    expect(schema.length).toBeLessThan(26000);
   });
 
   it("draws the Pythagorean triangle as SVG with an editor link that opens the same figure", async () => {

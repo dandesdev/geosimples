@@ -19,3 +19,8 @@ export * from "./fit";
 export * from "./handles";
 export * from "./messages";
 export * from "./placement";
+export * from "./vectorOps";
+export * from "./sets";
+export * from "./setOps";
+export * from "./board";
+export * from "./boardOps";

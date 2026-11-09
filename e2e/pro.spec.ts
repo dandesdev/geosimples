@@ -442,7 +442,9 @@ test("pro layout: toolbars keep every button in view, and the app buttons float 
   // Across the top, side by side: the splitter between them can't hide buttons either.
   await drag(page, page.getByLabel("Arrastar Ferramentas"), at(preview, 0.5, 0.01));
   await expect(tools).toHaveAttribute("aria-orientation", "horizontal");
-  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(await box(tools), 0.97, 0.5));
+  const across = await box(tools);
+  // Its group spans the whole row, so this spot stays in the group's left drop zone however many buttons it has.
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), { x: across.x + 120, y: across.y + across.height / 2 });
   await expect(file).toHaveAttribute("aria-orientation", "horizontal");
   for (const by of [-200, 600]) {
     await dragSplitter(page, tools, "right", by);

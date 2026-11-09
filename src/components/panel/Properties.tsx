@@ -4,18 +4,27 @@ import {
   axesStepY,
   deleteElements,
   functionValue,
+  boardError,
   gridWindow,
   moveNumberLine,
+  parseBoard,
+  parseSetExpr,
+  setRegionExpr,
   piText,
   piWindow,
   setAxesWindow,
   updateElements,
   type Axes,
+  type Board,
+  type BoardShow,
   type EndMark,
   type FunctionGraph,
   type Grid,
   type GridFollow,
   type NumberLine,
+  type Region,
+  type Vector,
+  type VennItems,
   type VerticalLine,
 } from "@geosimples/core/figure";
 import { toast } from "sonner";
@@ -74,6 +83,11 @@ export function Properties() {
       {el.type === "numberline" && <NumberLineProperties el={el} {...props} />}
       {el.type === "axes" && <AxesProperties el={el} {...props} />}
       {el.type === "grid" && <GridProperties el={el} {...props} />}
+      {el.type === "vector" && <VectorProperties el={el} {...props} />}
+      {/* Keyed, so a half-typed text stays with its object when the selection changes. */}
+      {el.type === "region" && <RegionProperties key={el.id} el={el} {...props} />}
+      {el.type === "vennitems" && <VennItemsProperties el={el} {...props} />}
+      {el.type === "board" && <BoardProperties key={el.id} el={el} {...props} />}
     </div>
   );
 }
@@ -540,6 +554,173 @@ function NumberLineProperties({ el, update, multi }: EditorProps<NumberLine>) {
       <SwitchField label="Números" checked={el.numbers} onChange={(numbers) => update((l) => ({ ...l, numbers }), "numbers")} />
       <Hint>Intervalos: digite [-2; 3[ ou ]-∞; 1] na barra de entrada. Mudar a altura leva os intervalos junto.</Hint>
     </Section>
+  );
+}
+
+function VectorProperties({ el, doc, multi }: EditorProps<Vector>) {
+  const pts = pointMap(doc);
+  const a = pts.get(el.a);
+  const b = pts.get(el.b);
+  const decimals = useFigureStore((s) => s.settings.decimals);
+  const tip = b?.construction;
+  const n = (v: number) => formatNumber(v, decimals);
+  // A multiple's factor lives on the construction of its tip.
+  const isMultiple = !multi && tip?.kind === "translate" && tip.point === el.a;
+  const setFactor = (factor: number) => {
+    const store = useFigureStore.getState();
+    store.commit(
+      updateElements(store.doc, [el.b], (p) => (p.type === "point" && p.construction?.kind === "translate" ? { ...p, construction: { ...p.construction, factor } } : p)),
+      `${el.id}:factor`,
+    );
+  };
+  return (
+    <Section title="Medidas">
+      {a && b && (
+        <>
+          <Readout label="Módulo" value={n(dist(a, b))} />
+          <Readout label="Componentes" value={`(${n(b.x - a.x)}; ${n(b.y - a.y)})`} />
+          <Readout label="Direção" value={`${formatNumber(((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI + 360) % 360, 1)}°`} />
+        </>
+      )}
+      {isMultiple && (
+        <Field label="Fator k">
+          <NumberInput ariaLabel="Fator do múltiplo" value={tip.factor} min={-100} max={100} onChange={setFactor} />
+        </Field>
+      )}
+      <Hint>Soma, diferença, projeção, versor e componentes ficam no menu Vetores, e acompanham o vetor quando ele se move.</Hint>
+    </Section>
+  );
+}
+
+function RegionProperties({ el, multi }: EditorProps<Region>) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? el.expr;
+  const parsed = parseSetExpr(text);
+  const commit = () => {
+    if (draft === null || !parsed.ok) return;
+    const store = useFigureStore.getState();
+    const result = setRegionExpr(store.doc, el.id, text);
+    if (result.error) toast.error(result.error);
+    else store.commit(result.doc, `${el.id}:expr`);
+    setDraft(null);
+  };
+  if (multi) return <Hint>Com várias regiões selecionadas, a expressão se ajusta uma por vez.</Hint>;
+  return (
+    <Section title="Região">
+      <Field label="Expressão">
+        <Input
+          value={text}
+          aria-label="Expressão da região"
+          aria-invalid={!parsed.ok}
+          spellCheck={false}
+          className="font-mono"
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setDraft(null);
+          }}
+        />
+      </Field>
+      {!parsed.ok && <p className="mb-1 text-xs text-destructive">{parsed.error}</p>}
+      <Hint>∪ união, ∩ interseção, − diferença e ' complementar. A região acompanha os conjuntos quando eles se movem.</Hint>
+    </Section>
+  );
+}
+
+function VennItemsProperties({ el, doc }: EditorProps<VennItems>) {
+  const name = (id: string) => nameOf(doc, id);
+  return (
+    <Section title="Conteúdo do diagrama">
+      {el.members.map((m) => (
+        <Readout key={m.set} label={name(m.set)} value={`{${m.items.join(", ")}}`} />
+      ))}
+      {el.counts.map((c) => (
+        <Readout key={c.in.join()} label={`n(${c.in.map(name).join("∩") || "fora"})`} value={c.text} />
+      ))}
+      <Hint>Cada elemento vai para a região dos conjuntos em que aparece. Para mudar, digite de novo na barra: A={"{1,2,3}"} ou n(A∩B)=3.</Hint>
+    </Section>
+  );
+}
+
+const BOARD_SHOW: { value: BoardShow; label: string; title: string }[] = [
+  { value: "full", label: "Resolvido", title: "Com todos os passos, para o gabarito" },
+  { value: "blank", label: "Em branco", title: "Só o enunciado armado, para o aluno resolver" },
+  { value: "gaps", label: "Lacunas", title: "Alguns resultados viram quadradinhos para completar" },
+];
+
+function BoardProperties({ el, update, multi }: EditorProps<Board>) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? el.source;
+  const error = boardError(text);
+  const spec = parseBoard(el.source);
+  const kind = spec && typeof spec !== "string" ? spec.kind : null;
+  const commit = () => {
+    if (draft === null || error !== null) return;
+    update((b) => ({ ...b, source: text.trim() }), "source");
+    setDraft(null);
+  };
+  return (
+    <>
+      {!multi && (
+        <Section title="Conteúdo">
+          <Field label="Texto">
+            <Input
+              value={text}
+              aria-label="Texto da conta ou do quadro"
+              aria-invalid={error !== null}
+              spellCheck={false}
+              className="font-mono"
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commit();
+                if (e.key === "Escape") setDraft(null);
+              }}
+            />
+          </Field>
+          {error !== null && <p className="mb-1 text-xs text-destructive">{error}</p>}
+        </Section>
+      )}
+      <Section title="Para a prova">
+        <Choice label="Mostrar" value={el.show} options={BOARD_SHOW} onChange={(show) => update((b) => ({ ...b, show }), "show")} />
+        {el.show === "gaps" && (
+          <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => update((b) => ({ ...b, seed: b.seed + 1 }), "seed")}>
+            Sortear outras lacunas
+          </Button>
+        )}
+      </Section>
+      {kind === "div" && (
+        <Section title="Divisão">
+          <Choice
+            label="Processo"
+            value={el.method}
+            options={[
+              { value: "long", label: "Longo", title: "Escreve cada subtração" },
+              { value: "short", label: "Breve", title: "Escreve só os restos" },
+            ]}
+            onChange={(method) => update((b) => ({ ...b, method }), "method")}
+          />
+          <Field label="Casas decimais">
+            <NumberInput ariaLabel="Casas decimais do quociente" value={el.places} min={0} max={6} decimals={0} onChange={(places) => update((b) => ({ ...b, places: Math.round(places) }), "places")} />
+          </Field>
+        </Section>
+      )}
+      {(kind === "add" || kind === "sub" || kind === "mul") && (
+        <Section title="Conta">
+          <SwitchField label="Vai um e empréstimos" checked={el.marks} onChange={(marks) => update((b) => ({ ...b, marks }), "marks")} />
+        </Section>
+      )}
+      {!multi && (
+        <Section title="Posição">
+          <div className="grid grid-cols-2 gap-2">
+            <NumberInput ariaLabel="Coordenada X" value={el.x} suffix="x" onChange={(x) => update((b) => ({ ...b, x }), "x")} />
+            <NumberInput ariaLabel="Coordenada Y" value={el.y} suffix="y" onChange={(y) => update((b) => ({ ...b, y }), "y")} />
+          </div>
+          <Hint>Para arrastar, use o modo Mover.</Hint>
+        </Section>
+      )}
+    </>
   );
 }
 
