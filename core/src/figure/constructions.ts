@@ -21,6 +21,7 @@ import {
   LIMIT_ERROR,
   newAngle,
   newSegment,
+  newVector,
   segmentExists,
   selectedOfType,
   updateElements,
@@ -39,6 +40,7 @@ import type {
   PointConstruction,
   Segment,
   Stroke,
+  VectorNotation,
 } from "./types";
 import { add, dist, mid, perp, polar, scale, sub, type Vec } from "./vec";
 
@@ -85,7 +87,7 @@ const SAME = 1e-9;
  * with the same parents and position, and existing segments and angles, are
  * reused instead of doubled.
  */
-function draft(doc: FigureDoc, opts: OpOptions) {
+export function draft(doc: FigureDoc, opts: OpOptions) {
   const styles = opts.styles ?? DEFAULT_STYLES;
   const nextId = idMaker(doc);
   const created: Id[] = [];
@@ -114,10 +116,25 @@ function draft(doc: FigureDoc, opts: OpOptions) {
       push(p);
       return p.id;
     },
+    /** Adds a hidden free point, an end of a vector that needs no name of its own. */
+    freePoint(at: Vec): Id {
+      const p: Point = { id: nextId("point"), type: "point", x: at.x, y: at.y, ...styles.point, shape: "none" };
+      push(p);
+      return p.id;
+    },
     segment(a: Id, b: Id, stroke: Partial<Stroke> = {}) {
       if (a === b || segmentExists(working, a, b)) return;
       const s = newSegment(nextId("segment"), a, b, opts);
       push({ ...s, stroke: { ...s.stroke, ...stroke } });
+    },
+    /** Adds an arrow from a to b, unless the same one is there. Returns its id, or null when its ends coincide. */
+    vector(a: Id, b: Id, name: string, notation: VectorNotation = "arrow", stroke: Partial<Stroke> = {}): Id | null {
+      if (a === b) return null;
+      const same = working.elements.find((e) => e.type === "vector" && e.a === a && e.b === b);
+      if (same) return same.id;
+      const v = newVector(nextId("vector"), a, b, name, notation, opts);
+      push({ ...v, stroke: { ...v.stroke, ...stroke } });
+      return v.id;
     },
     /**
      * A dashed continuation of the line through `line` out to `point`, which

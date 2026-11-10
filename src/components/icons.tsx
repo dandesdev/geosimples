@@ -23,6 +23,43 @@ const Dot = ({ cx, cy }: { cx: number; cy: number }) => (
   <circle cx={cx} cy={cy} r={1.8} fill="currentColor" stroke="none" />
 );
 
+/** Two overlapping sets, with the part an operation keeps shaded. */
+const SetsOutline = () => (
+  <>
+    <circle cx={9} cy={12} r={6} />
+    <circle cx={15} cy={12} r={6} />
+  </>
+);
+const LENS = "M12 6.8 A6 6 0 0 1 12 17.2 A6 6 0 0 1 12 6.8 Z";
+
+export const SetUnionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 6.8 A6 6 0 1 1 12 17.2 A6 6 0 1 1 12 6.8 Z" fill="currentColor" fillOpacity={0.45} stroke="none" />
+    <SetsOutline />
+  </Icon>
+);
+
+export const SetIntersectionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d={LENS} fill="currentColor" fillOpacity={0.6} stroke="none" />
+    <SetsOutline />
+  </Icon>
+);
+
+export const SetDifferenceIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 6.8 A6 6 0 1 0 12 17.2 A6 6 0 0 1 12 6.8 Z" fill="currentColor" fillOpacity={0.6} stroke="none" />
+    <SetsOutline />
+  </Icon>
+);
+
+export const SetComplementIcon = (p: IconProps) => (
+  <Icon {...p}>
+    {/* Even-odd leaves the circle empty, showing whatever is behind the icon. */}
+    <path d="M2 4 H22 V20 H2 Z M6.5 12 A5.5 5.5 0 1 0 17.5 12 A5.5 5.5 0 1 0 6.5 12 Z" fill="currentColor" fillOpacity={0.45} fillRule="evenodd" strokeWidth={1.2} />
+  </Icon>
+);
+
 export const AddPointIcon = (p: IconProps) => (
   <Icon {...p}>
     <Dot cx={9} cy={15} />

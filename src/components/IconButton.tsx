@@ -79,7 +79,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         </p>
         {hint && <p className="opacity-90">{hint}</p>}
         {unavailable && (
-          <p className="mt-1 flex gap-1.5 rounded bg-black/15 px-1.5 py-1">
+          <p className="mt-1 flex gap-1.5 rounded bg-background/15 px-1.5 py-1">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{unavailable}</span>
           </p>

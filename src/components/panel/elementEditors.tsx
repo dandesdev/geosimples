@@ -3,6 +3,7 @@ import {
   sectorRadii,
   type Angle,
   type Axes,
+  type Board,
   type Circle,
   type Extension,
   type FreeText,
@@ -10,9 +11,13 @@ import {
   type Grid,
   type Point,
   type Polygon,
+  type Region,
   type Segment,
   type NumberLine,
   type Ticks,
+  type Vector,
+  type VectorNotation,
+  type VennItems,
   type VerticalLine,
 } from "@geosimples/core/figure";
 import { useActivePrefs } from "@/store/useActivePrefs";
@@ -188,6 +193,58 @@ export function NumberLineEditor({ el, update }: EditorProps<NumberLine>) {
       <StrokeEditor title="Traço da reta" stroke={el.stroke} onChange={(stroke, key) => update((l) => ({ ...l, stroke }), key)} />
       <Section title="Números">
         <RangeField label="Tamanho" value={el.size} min={5} max={16} step={0.5} format={pt} onChange={(size) => update((l) => ({ ...l, size }), "size")} />
+      </Section>
+    </div>
+  );
+}
+
+const NOTATIONS: { value: VectorNotation; label: string; title: string }[] = [
+  { value: "arrow", label: "Seta", title: "Seta sobre o nome" },
+  { value: "hat", label: "Chapéu", title: "Chapéu sobre o nome, para versores" },
+  { value: "none", label: "Sem", title: "Só o nome" },
+];
+
+export function VectorEditor({ el, update, updateLabel, multi }: EditorProps<Vector>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor stroke={el.stroke} onChange={(stroke, key) => update((v) => ({ ...v, stroke }), key)} />
+      <Section title="Seta">
+        <RangeField label="Ponta" value={el.head} min={3} max={16} step={0.5} format={pt} onChange={(head) => update((v) => ({ ...v, head }), "head")} />
+        <Choice label="Sobre o nome" value={el.notation} options={NOTATIONS} onChange={(notation) => update((v) => ({ ...v, notation }), "notation")} />
+      </Section>
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.vector} placeholder="Ex.: u, F₁, u + v, F_x" />
+    </div>
+  );
+}
+
+export function RegionEditor({ el, update }: EditorProps<Region>) {
+  return (
+    <div className="space-y-2">
+      <FillEditor
+        fill={el.fill}
+        // A region exists to be shaded: turning its fill off would leave nothing to see or pick.
+        onChange={(fill, key) => fill && update((r) => ({ ...r, fill }), key)}
+      />
+    </div>
+  );
+}
+
+export function VennItemsEditor({ el, update }: EditorProps<VennItems>) {
+  return (
+    <div className="space-y-2">
+      <Section title="Estilo">
+        <TextStyleFields value={el} onChange={(patch, key) => update((t) => ({ ...t, ...patch }), key)} />
+      </Section>
+    </div>
+  );
+}
+
+export function BoardEditor({ el, update }: EditorProps<Board>) {
+  return (
+    <div className="space-y-2">
+      <Section title="Estilo">
+        <TextStyleFields value={el} onChange={(patch, key) => update((b) => ({ ...b, ...patch }), key)} />
+        <RangeField label="Linhas" value={el.width} min={0.3} max={2} step={0.1} format={pt} onChange={(width) => update((b) => ({ ...b, width }), "width")} />
       </Section>
     </div>
   );

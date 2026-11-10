@@ -24,6 +24,7 @@ import {
   type Paper,
   type ParsedInput,
   type Prim,
+  type SceneSlot,
   type Spot,
   type Vec,
 } from "@geosimples/core/figure";
@@ -573,6 +574,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 hit={coarse ? HIT_COARSE : HIT_FINE}
                 paper={paper}
               />
+              {selection.length === 1 && <GapPicker slots={scene.boardSlots.filter((s) => s.owner === selection[0])} px={unitsPerPx} />}
               {ghost && <DraftGhost parsed={ghost} ppu={ppu} px={unitsPerPx} paper={paper} />}
               {graphGhost && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: graphGhost.markup }} />}
               {hoverSpot && spots.includes(hoverSpot) && <SpotGhost spot={hoverSpot} ppu={ppu} px={unitsPerPx} paper={paper} />}
@@ -899,4 +901,40 @@ function tint(p: Prim): Prim {
     stroke: p.stroke && { ...p.stroke, color: PRIMARY, opacity: Math.max(p.stroke.opacity, 0.8) },
     fill: p.fill && { ...p.fill, color: PRIMARY, opacity: Math.min(Math.max(p.fill.opacity, 0.2), 0.45) },
   };
+}
+
+/**
+ * Every digit and sign of a selected "gaps" board, outlined: a click leaves
+ * one out or puts it back. Drawn over the figure, in the preview only.
+ */
+function GapPicker({ slots, px }: { slots: SceneSlot[]; px: number }) {
+  if (slots.length === 0) return null;
+  return (
+    <g data-gap-picker="">
+      {slots.map((s) => (
+        <rect
+          key={s.index}
+          x={s.x}
+          y={s.y}
+          width={s.w}
+          height={s.h}
+          rx={2 * px}
+          role="button"
+          aria-label={s.gap ? `Lacuna ${s.index + 1}: mostrar de novo` : `Parte ${s.index + 1}: virar lacuna`}
+          aria-pressed={s.gap}
+          className="cursor-pointer"
+          fill={PRIMARY}
+          fillOpacity={s.gap ? 0.28 : 0.04}
+          stroke={PRIMARY}
+          strokeOpacity={s.gap ? 0.9 : 0.45}
+          strokeWidth={1}
+          strokeDasharray={s.gap ? undefined : "3 2"}
+          vectorEffect="non-scaling-stroke"
+          // The preview would take the press as the start of a selection.
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => actions.toggleGap(s.owner, s.index)}
+        />
+      ))}
+    </g>
+  );
 }

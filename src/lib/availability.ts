@@ -2,8 +2,14 @@ import { useMemo } from "react";
 import {
   addAxes,
   addGrid,
+  addBasis,
   addPointOnGraph,
   addTangentAt,
+  addVennDiagram,
+  makeVectors,
+  markSetOperation,
+  vectorOp,
+  type SetOperation,
   addSpot,
   construct,
   connectPoints,
@@ -19,6 +25,7 @@ import {
   type NotableFeature,
   type CircleMode,
   type ConstructionKind,
+  type VectorOperation,
   type FigureDoc,
   type Id,
   type OpResult,
@@ -40,8 +47,12 @@ export type CheckId =
   | "guides"
   | `notable-${NotableFeature}`
   | "toFunctions"
-  | "axes"
-  | "grid";
+  | "vector"
+  | `vector-${VectorOperation}`
+  | `set-${SetOperation}`;
+
+/** What Inserir adds that can't always run: axes only once, a vector only from two points. */
+export type InsertCheckId = "axes" | "grid" | "basis" | `venn-${1 | 2 | 3}` | "vector" | "toFunctions";
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -53,6 +64,10 @@ export interface Availability {
 const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircle"];
 
 export const NOTABLE_FEATURES: NotableFeature[] = ["root", "extremum", "yAxis"];
+
+export const SET_OPERATIONS: SetOperation[] = ["union", "inter", "diff", "comp"];
+
+export const VECTOR_OPERATIONS: VectorOperation[] = ["sum", "parallelogram", "difference", "projection", "unit", "components", "scale"];
 
 export const CONSTRUCTION_KINDS: ConstructionKind[] = [
   "midpoint",
@@ -105,9 +120,14 @@ export function useAvailability(): Record<CheckId, Availability> {
       graphPoint: check(doc, pointOnSelectedGraph(doc, selection, opts), text),
       guides: check(doc, toggleGuides(doc, selection), text),
       toFunctions: check(doc, toFunctions(doc, selection, opts), text),
-      axes: check(doc, addAxes(doc), null),
-      grid: check(doc, addGrid(doc), null),
+      vector: check(doc, makeVectors(doc, selection, opts), text),
     } as Record<CheckId, Availability>;
+    for (const op of VECTOR_OPERATIONS) {
+      out[`vector-${op}`] = check(doc, vectorOp(doc, selection, op, opts), text);
+    }
+    for (const op of SET_OPERATIONS) {
+      out[`set-${op}`] = check(doc, markSetOperation(doc, selection, op, opts), text);
+    }
     for (const feature of NOTABLE_FEATURES) {
       out[`notable-${feature}`] = check(doc, markNotable(doc, selection, feature, opts), text);
     }
@@ -118,6 +138,27 @@ export function useAvailability(): Record<CheckId, Availability> {
       out[`construct-${kind}`] = check(doc, construct(doc, selection, kind, opts), text);
     }
     return out;
+  }, [doc, selection, prefs]);
+}
+
+/** Whether each Inserir item that can't always run can run now. */
+export function useInsertAvailability(): Record<InsertCheckId, Availability> {
+  const doc = useFigureStore((s) => s.doc);
+  const selection = useFigureStore((s) => s.selection);
+  const prefs = useActivePrefs();
+  return useMemo(() => {
+    const opts = prefs && opOptions();
+    const text = describeSelection(doc, selection);
+    return {
+      vector: check(doc, makeVectors(doc, selection, opts), text),
+      toFunctions: check(doc, toFunctions(doc, selection, opts), text),
+      axes: check(doc, addAxes(doc), null),
+      grid: check(doc, addGrid(doc), null),
+      basis: check(doc, addBasis(doc, opts), null),
+      "venn-1": check(doc, addVennDiagram(doc, 1, opts), null),
+      "venn-2": check(doc, addVennDiagram(doc, 2, opts), null),
+      "venn-3": check(doc, addVennDiagram(doc, 3, opts), null),
+    };
   }, [doc, selection, prefs]);
 }
 

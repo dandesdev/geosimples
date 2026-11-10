@@ -1,4 +1,5 @@
 import { buildScene, type Box, type PaintFill, type PaintStroke, type Prim, type Scene } from "./render";
+import type { LabelRun } from "./labels";
 import { paintScene, type Paper } from "./paper";
 import type { FigureDoc } from "./types";
 
@@ -50,10 +51,16 @@ function primMarkup(p: Prim): string {
     // A baseline offset instead of dominant-baseline, which some editors ignore.
     const y = p.y + p.size * 0.35;
     const italic = ' font-style="italic"';
-    const single = p.runs.length <= 1;
-    const body = single
-      ? escapeXml(p.text)
-      : p.runs.map((r) => (r.italic ? `<tspan${italic}>${escapeXml(r.text)}</tspan>` : escapeXml(r.text))).join("");
+    const single = p.runs.length <= 1 && !p.runs[0]?.sub;
+    const drop = f(p.size * 0.25);
+    let lowered = false;
+    const run = (r: LabelRun) => {
+      const shift = r.sub ? (lowered ? "" : ` dy="${drop}"`) : lowered ? ` dy="-${drop}"` : "";
+      const attrs = `${shift}${r.italic ? italic : ""}${r.sub ? ` font-size="${f(p.size * 0.7)}"` : ""}`;
+      lowered = !!r.sub;
+      return attrs ? `<tspan${attrs}>${escapeXml(r.text)}</tspan>` : escapeXml(r.text);
+    };
+    const body = single ? escapeXml(p.text) : p.runs.map(run).join("");
     const style = `${single && p.runs[0]?.italic ? italic : ""} font-family="${escapeXml(LABEL_FONTS[p.font])}"`;
     return `<text x="${f(p.x)}" y="${f(y)}" font-size="${f(p.size)}" text-anchor="middle" fill="${p.color}"${style}>${body}</text>`;
   }

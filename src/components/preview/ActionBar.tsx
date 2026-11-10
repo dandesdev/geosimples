@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { emitCommand } from "@/lib/commands";
-import { ChartSpline, Download, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Blend, ChartSpline, Download, MoveUpRight, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   AngleIcon,
-  AxesIcon,
-  GridIcon,
   CircleThroughIcon,
   CloseLoopIcon,
   ConnectIcon,
@@ -25,18 +23,19 @@ import {
   GraphPointIcon,
   TangentIcon,
   GuidesIcon,
-  NumberLineIcon,
   PolygonIcon,
   RootsIcon,
   ToFunctionsIcon,
-  VerticalLineIcon,
   YInterceptIcon,
 } from "@/components/icons";
-import { CIRCLE_OPTIONS, CONSTRUCTIONS } from "./tools";
+import { CIRCLE_OPTIONS, CONSTRUCTIONS, SET_ITEMS, VECTOR_ITEMS } from "./tools";
+import { InsertCatalog } from "./InsertCatalog";
 import { actions } from "@/lib/actions";
 import {
   CONSTRUCTION_KINDS,
   NOTABLE_FEATURES,
+  SET_OPERATIONS,
+  VECTOR_OPERATIONS,
   previewProps,
   useAvailability,
   type Availability,
@@ -128,11 +127,11 @@ function ToolStrip({ children }: { children: React.ReactNode }) {
 
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
-/** The Gráficos menu's actions on the selection: the button looks ready when one can run. */
-const GRAPH_CHECKS: CheckId[] = ["graphPoint", "guides", "toFunctions", ...NOTABLE_FEATURES.map((f) => `notable-${f}` as const)];
+/** The Gráficos menu's actions on the selection: the menu shows while one can run. */
+const GRAPH_CHECKS: CheckId[] = ["graphPoint", "guides", "construct-tangent", ...NOTABLE_FEATURES.map((f) => `notable-${f}` as const)];
 
-/** Menu items that need no selection, like the ones that start typing in the input bar. */
-const ALWAYS: Availability = { reason: null, preview: null };
+/** The menus that come and go with the selection fade in, so the change is seen. */
+const APPEAR = "animate-in fade-in-0 zoom-in-90";
 
 /** Runs an action after clearing its hover preview, which would be stale afterwards. */
 const act = (fn: () => void) => () => {
@@ -144,20 +143,26 @@ const act = (fn: () => void) => () => {
 /** Where the toolbar's menus open: below the classic row; in the pro layout, away from the edge the toolbar sits on. */
 export type MenuSide = "top" | "right" | "bottom" | "left";
 
+/**
+ * The geometry tools, and the menus for the selection's kind: Gráficos,
+ * Vetores and Conjuntos show only while one of their actions can run, so the
+ * toolbar holds what the selection allows instead of every domain at once.
+ * What needs no selection is in Inserir.
+ */
 export function Tools({ menuSide }: { menuSide: MenuSide }) {
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const av = useAvailability();
   const anyCircle = CIRCLE_OPTIONS.some((o) => !av[`circle-${o.mode}`].reason);
   const anyConnect = !av.connect.reason || !av.closeContour.reason;
   const anyConstruction = CONSTRUCTION_KINDS.some((kind) => !av[`construct-${kind}`].reason);
-  const anyGraphTool = GRAPH_CHECKS.some((id) => !av[id].reason);
+  const hasGraph = useFigureStore((s) => s.doc.elements.some((e) => e.type === "axes" || e.type === "function"));
+  const hasVector = useFigureStore((s) => s.doc.elements.some((e) => e.type === "vector"));
+  // Only for a figure of that kind: two points or a segment alone don't bring in Gráficos and Vetores.
+  // Inserir has their first steps, Transformar em funções and Vetor entre pontos.
+  const anyGraphTool = GRAPH_CHECKS.some((id) => !av[id].reason) || (hasGraph && !av.toFunctions.reason);
+  const anyVectorOp = VECTOR_OPERATIONS.some((op) => !av[`vector-${op}`].reason) || (hasVector && !av.vector.reason);
+  const anySetOp = SET_OPERATIONS.some((op) => !av[`set-${op}`].reason);
   const menu = { side: menuSide, align: "start" } as const;
-  /** Set by the items that go on in the input bar, so the closing menu leaves focus there. */
-  const toInput = useRef(false);
-  const startTyping = (start: () => void) => () => {
-    toInput.current = true;
-    start();
-  };
   return (
     <>
       <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
@@ -270,115 +275,126 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
-        <DropdownMenuTrigger asChild>
-          <IconButton
-            label="Gráficos"
-            hint="Funções, eixos, malha, retas verticais, reta numérica, pontos notáveis e formas que viram funções."
-            ready={anyGraphTool}
-          >
-            <ChartSpline />
-          </IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          {...menu}
-          className="w-80"
-          onCloseAutoFocus={(e) => {
-            if (!toInput.current) return;
-            toInput.current = false;
-            // The input bar has the focus now; the menu button would take it back.
-            e.preventDefault();
-          }}
-        >
-          <DropdownMenuLabel>Gráficos</DropdownMenuLabel>
-          <MenuItem
-            icon={<ChartSpline />}
-            title="Nova função…"
-            hint="y = na barra de entrada, como x^2 - 1. Os eixos vêm junto."
-            availability={ALWAYS}
-            onSelect={startTyping(actions.startGraph)}
-          />
-          <MenuItem
-            icon={<VerticalLineIcon />}
-            title="Reta vertical…"
-            hint="x = na barra, como x = 2. Tracejada, como uma assíntota."
-            availability={ALWAYS}
-            onSelect={startTyping(actions.startVerticalLine)}
-          />
-          <MenuItem
-            icon={<NumberLineIcon />}
-            title="Reta numérica"
-            hint="Intervalos na barra: [-2; 3[ ou ]-∞; 1]."
-            availability={ALWAYS}
-            onSelect={startTyping(actions.addNumberLine)}
-          />
-          <MenuItem
-            icon={<AxesIcon />}
-            title="Eixos"
-            hint="Sem gráfico também. Eles se ajustam à figura."
-            availability={av.axes}
-            onSelect={actions.addAxes}
-          />
-          <MenuItem
-            icon={<GridIcon />}
-            title="Malha quadriculada"
-            hint="Impressa, atrás da figura: sobre os eixos ou em volta de tudo."
-            availability={av.grid}
-            onSelect={actions.addGrid}
-          />
-          <DropdownMenuSeparator />
-          <MenuItem
-            icon={<GraphPointIcon />}
-            title="Ponto sobre o gráfico"
-            hint="Também P=f(2) na barra, ou um clique na curva."
-            availability={av.graphPoint}
-            onSelect={() => actions.pointOnGraph()}
-          />
-          <MenuItem
-            icon={<TangentIcon />}
-            title="Reta tangente"
-            hint="No ponto selecionado sobre o gráfico. Ou clique com o botão direito na curva."
-            availability={av["construct-tangent"]}
-            onSelect={() => actions.construct("tangent")}
-          />
-          <MenuItem
-            icon={<RootsIcon />}
-            title="Raízes"
-            hint="x₁, x₂… Seguem a função quando ela muda."
-            availability={av["notable-root"]}
-            onSelect={() => actions.markNotable("root")}
-          />
-          <MenuItem
-            icon={<ExtremumIcon />}
-            title="Máximos e mínimos"
-            hint="O vértice V, ou cada pico e vale."
-            availability={av["notable-extremum"]}
-            onSelect={() => actions.markNotable("extremum")}
-          />
-          <MenuItem
-            icon={<YInterceptIcon />}
-            title="Corte no eixo y"
-            hint="O ponto (0; f(0))."
-            availability={av["notable-yAxis"]}
-            onSelect={() => actions.markNotable("yAxis")}
-          />
-          <MenuItem
-            icon={<GuidesIcon />}
-            title="Linhas até os eixos"
-            hint="Tracejadas, do ponto aos eixos. Liga e desliga."
-            availability={av.guides}
-            onSelect={actions.toggleGuides}
-          />
-          <DropdownMenuSeparator />
-          <MenuItem
-            icon={<ToFunctionsIcon />}
-            title="Transformar em funções"
-            hint="Segmentos viram retas; circunferências, duas metades."
-            availability={av.toFunctions}
-            onSelect={actions.toFunctions}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {anyGraphTool && (
+        <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+          <DropdownMenuTrigger asChild>
+            <IconButton
+              label="Gráficos"
+              hint="Para o gráfico ou o ponto selecionado: pontos notáveis, tangente, linhas até os eixos e formas que viram funções."
+              ready
+              className={APPEAR}
+            >
+              <ChartSpline />
+            </IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent {...menu} className="w-80">
+            <DropdownMenuLabel>Gráficos</DropdownMenuLabel>
+            <MenuItem
+              icon={<GraphPointIcon />}
+              title="Ponto sobre o gráfico"
+              hint="Também P=f(2) na barra, ou um clique na curva."
+              availability={av.graphPoint}
+              onSelect={() => actions.pointOnGraph()}
+            />
+            <MenuItem
+              icon={<TangentIcon />}
+              title="Reta tangente"
+              hint="No ponto selecionado sobre o gráfico. Ou clique com o botão direito na curva."
+              availability={av["construct-tangent"]}
+              onSelect={() => actions.construct("tangent")}
+            />
+            <MenuItem
+              icon={<RootsIcon />}
+              title="Raízes"
+              hint="x₁, x₂… Seguem a função quando ela muda."
+              availability={av["notable-root"]}
+              onSelect={() => actions.markNotable("root")}
+            />
+            <MenuItem
+              icon={<ExtremumIcon />}
+              title="Máximos e mínimos"
+              hint="O vértice V, ou cada pico e vale."
+              availability={av["notable-extremum"]}
+              onSelect={() => actions.markNotable("extremum")}
+            />
+            <MenuItem
+              icon={<YInterceptIcon />}
+              title="Corte no eixo y"
+              hint="O ponto (0; f(0))."
+              availability={av["notable-yAxis"]}
+              onSelect={() => actions.markNotable("yAxis")}
+            />
+            <MenuItem
+              icon={<GuidesIcon />}
+              title="Linhas até os eixos"
+              hint="Tracejadas, do ponto aos eixos. Liga e desliga."
+              availability={av.guides}
+              onSelect={actions.toggleGuides}
+            />
+            <DropdownMenuSeparator />
+            <MenuItem
+              icon={<ToFunctionsIcon />}
+              title="Transformar em funções"
+              hint="Segmentos viram retas; circunferências, duas metades."
+              availability={av.toFunctions}
+              onSelect={actions.toFunctions}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {anyVectorOp && (
+        <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+          <DropdownMenuTrigger asChild>
+            <IconButton
+              label="Vetores"
+              hint="Com os pontos ou vetores selecionados: seta, soma, diferença, projeção, versor e componentes."
+              ready
+              className={APPEAR}
+            >
+              <MoveUpRight />
+            </IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent {...menu} className="w-80">
+            <DropdownMenuLabel>Vetores</DropdownMenuLabel>
+            <MenuItem icon={<MoveUpRight />} title="Vetor entre pontos" hint="A origem primeiro, depois a extremidade." availability={av.vector} onSelect={actions.vector} />
+            <DropdownMenuSeparator />
+            {VECTOR_ITEMS.map((item) => (
+              <MenuItem
+                key={item.op}
+                icon={<MoveUpRight />}
+                title={item.title}
+                hint={item.hint}
+                availability={av[`vector-${item.op}`]}
+                onSelect={() => actions.vectorOp(item.op)}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {anySetOp && (
+        <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+          <DropdownMenuTrigger asChild>
+            <IconButton label="Conjuntos" hint="União, interseção, diferença e complementar, marcadas no diagrama." ready className={APPEAR}>
+              <Blend />
+            </IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent {...menu} className="w-80">
+            <DropdownMenuLabel>Conjuntos</DropdownMenuLabel>
+            {SET_ITEMS.map((item) => (
+              <MenuItem
+                key={item.op}
+                icon={<item.Icon />}
+                title={item.title}
+                hint={item.hint}
+                availability={av[`set-${item.op}`]}
+                onSelect={() => actions.setOperation(item.op)}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </>
   );
 }
@@ -445,7 +461,8 @@ export function ActionBar({ layout, zoom = null }: { layout: "row" | "strip"; zo
       role="toolbar"
       aria-label="Ações da figura"
       className={cn(
-        "flex shrink-0 items-center gap-0.5 border-b bg-background px-2 py-1.5",
+        // A container, so labels drop when the preview is narrow rather than the row wrapping.
+        "@container flex shrink-0 items-center gap-0.5 border-b bg-background px-2 py-1.5",
         layout === "strip" ? "flex-nowrap" : "flex-wrap",
       )}
     >
@@ -458,29 +475,39 @@ export function ActionBar({ layout, zoom = null }: { layout: "row" | "strip"; zo
         aria-label="Exportar"
       >
         <Download />
-        <span className="hidden sm:inline">Exportar</span>
+        <span className="hidden @[54rem]:inline">Exportar</span>
       </Button>
       <Divider />
       <History />
       {layout === "strip" ? (
         // Phones: one row that scrolls sideways, instead of two rows over the small preview.
-        <ToolStrip>
-          {/* Modes first: on a phone, tapping points in is how a figure usually starts. */}
-          <ModeSwitch />
+        // Inserir stays out of it, always in view.
+        <>
           <Divider />
-          <Tools menuSide="bottom" />
-          {zoom && <Divider />}
-          {zoom && <ZoomBar {...zoom} placement="toolbar" />}
+          <InsertCatalog side="bottom" />
           <Divider />
-          <DeleteButton />
-        </ToolStrip>
+          <ToolStrip>
+            {/* Modes first: on a phone, tapping points in is how a figure usually starts. */}
+            <ModeSwitch />
+            <Divider />
+            <Tools menuSide="bottom" />
+            {zoom && <Divider />}
+            {zoom && <ZoomBar {...zoom} placement="toolbar" />}
+            <Divider />
+            <DeleteButton />
+          </ToolStrip>
+        </>
       ) : (
         <>
           <DeleteButton />
           <Divider />
+          <InsertCatalog side="bottom" wideLabel />
+          <Divider />
           <Tools menuSide="bottom" />
-          <Divider className="hidden sm:block" />
-          <ModeSwitch />
+          {/* At the far end, so menus that come and go with the selection don't move it. */}
+          <div className="ml-auto flex items-center gap-0.5 pl-1">
+            <ModeSwitch />
+          </div>
         </>
       )}
     </div>

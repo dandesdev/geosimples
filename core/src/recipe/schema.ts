@@ -303,6 +303,58 @@ const step = z.discriminatedUnion("do", [
   z
     .strictObject({ do: z.literal("style"), targets, style: styleSchema })
     .describe("Restyle things made earlier"),
+  z
+    .strictObject({
+      do: z.literal("vector"),
+      name: name.optional().describe("Default u, v, w…"),
+      from: ref.optional().describe("Point at the tail"),
+      to: ref.optional().describe("Point at the tip"),
+      components: xy.optional().describe("(x, y) of the vector, instead of `to`"),
+      at: xy.optional().describe("Tail, when it isn't a point; default the origin"),
+      notation: z.enum(["arrow", "hat", "none"]).optional().describe("Mark over its name"),
+      style: styleSchema.optional(),
+      as: asName.optional(),
+    })
+    .describe("An arrow, by two points or by its components"),
+  z
+    .strictObject({
+      do: z.literal("vectorOp"),
+      op: z.enum(["sum", "parallelogram", "difference", "projection", "unit", "components", "scale"]),
+      vectors: z.array(ref).min(1).max(12).describe("In order: difference is first − second; projection is first on second"),
+      k: z.number().optional().describe("Factor for scale; default 2"),
+      as: asName.optional(),
+    })
+    .describe("Build on vectors. They follow when the originals move"),
+  z.strictObject({ do: z.literal("basis") }).describe("The versors i and j from the origin"),
+  z
+    .strictObject({ do: z.literal("venn"), sets: z.array(name).min(1).max(3).describe('Default names are ["A","B"]') })
+    .describe("A Venn diagram inside a rectangle U"),
+  z
+    .strictObject({ do: z.literal("region"), expr: z.string().min(1).max(100).describe("Like (A∪B)'∩C, A−B, A'"), style: styleSchema.optional() })
+    .describe("Shade part of the Venn diagram"),
+  z
+    .strictObject({ do: z.literal("members"), set: name.describe("U for what is in no set"), items: z.array(z.string().min(1).max(40)).max(60) })
+    .describe("Write a set's elements in the diagram; each goes where its sets overlap"),
+  z
+    .strictObject({ do: z.literal("count"), expr: z.string().min(1).max(100).describe("One region, like A∩B or A−B"), value: z.string().min(1).max(20) })
+    .describe("Write how many elements one region has"),
+  z
+    .strictObject({
+      do: z.literal("board"),
+      source: z.string().min(1).max(200).describe('Like "1234÷5", "12,5+3", "7x8", "fatorar 360", "mmc(12;18)", "mdc(12;18)", "euclides(48;18)", "varal [1;3] ∩ ]2;5[", "sinal x²-4 ≥ 0", "quadro (x-1)/(x+2) < 0", "modular |x²-1|=3", "|sen(x)| = 1/2 em [0; 2pi]"'),
+      show: z.enum(["full", "blank", "gaps"]).optional().describe("blank: only the setup, to solve; gaps: some results as empty boxes"),
+      method: z.enum(["long", "short"]).optional().describe("Division: write each subtraction, or only the remainders"),
+      places: z.number().int().min(0).max(6).optional().describe("Division: decimal places of the quotient"),
+      marks: z.boolean().optional().describe("Carries and borrows; default true"),
+      gaps: z.array(z.number().int().min(0)).max(200).optional().describe("With show gaps: which results, by order, instead of drawn at random"),
+      gapStyle: z.enum(["box", "blank", "text"]).optional(),
+      gapText: z.string().max(12).optional().describe('In each gap with gapStyle text, like "?"'),
+      signSide: z.enum(["left", "right"]).optional().describe("Columns: side of the + − ×"),
+      intervals: z.enum(["thick", "wave"]).optional().describe("Number lines: sets as thick or wavy lines"),
+      at: xy.optional().describe("Top left corner; default under what is drawn"),
+      size: z.number().min(6).max(40).optional().describe("Font size, pt"),
+    })
+    .describe("A worked layout: columns, long division, factoring, MMC, MDC, sign charts"),
 ]);
 
 export const recipeSchema = z.strictObject({

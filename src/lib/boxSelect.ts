@@ -31,7 +31,14 @@ export function elementsInBox(doc: FigureDoc, ppu: { x: number; y: number }, box
       case "point":
         return pointInside(el.id);
       case "segment":
+      case "vector":
         return pointInside(el.a) && pointInside(el.b);
+      case "board":
+        return inside(el.x * kx, -el.y * ky);
+      case "region":
+      case "vennitems":
+        // They go with their sets: picked from the preview, not by a box around them.
+        return false;
       case "extension": {
         // Only while it shows: the dashed part between its ends.
         const ends = extensionEnds(el, pts);

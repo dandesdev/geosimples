@@ -1,4 +1,12 @@
 import {
+  addBasis,
+  addBoard,
+  addRegion,
+  addVector,
+  addVennDiagram,
+  setMembers,
+  setRegionCount,
+  vectorOp,
   addAxes,
   addFunction,
   addGrid,
@@ -463,8 +471,14 @@ function styleElements(build: Build, ids: Id[], p: StylePatch) {
         return { ...el, stroke: strokeWith(el.stroke, p), fill: fillFrom(el.fill, p.fill, styles) };
       case "polygon":
         return { ...el, fill: fillFrom(el.fill, p.fill, styles) };
+      case "region":
+        return { ...el, fill: fillFrom(el.fill, p.fill, styles) ?? el.fill };
       case "text":
+      case "vennitems":
         return { ...el, color: p.color ? color(p.color) : el.color, size: p.size ?? el.size };
+      case "board":
+        return { ...el, color: p.color ? color(p.color) : el.color };
+      case "vector":
       case "extension":
       case "function":
       case "vline":
@@ -476,7 +490,7 @@ function styleElements(build: Build, ids: Id[], p: StylePatch) {
   });
 }
 
-const UNLABELED: ElementType[] = ["text", "axes", "grid", "numberline", "extension"];
+const UNLABELED: ElementType[] = ["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board"];
 
 function labelElement(build: Build, id: Id, spec: LabelSpec) {
   const el = build.el(id);
@@ -927,6 +941,70 @@ function runStep(build: Build, step: RecipeStep) {
     case "style":
       styleElements(build, resolveTargets(build, step.targets), step.style);
       return;
+    case "vector": {
+      const tail: { id: Id } | { x: number; y: number } = step.from ? { id: build.point(step.from).id } : { x: step.at?.[0] ?? 0, y: step.at?.[1] ?? 0 };
+      let tip: { id: Id } | { x: number; y: number };
+      if (step.to) tip = { id: build.point(step.to).id };
+      else if (step.components) {
+        const at = "id" in tail ? pointMap(build.doc).get(tail.id)! : tail;
+        tip = { x: at.x + step.components[0], y: at.y + step.components[1] };
+      } else throw new StepError("invalid", "A vector needs `to` or `components`.");
+      const created = build.take(addVector(build.doc, step.name ?? "", tail, tip, build.opts));
+      const v = build.created(created, "vector")[0];
+      if (step.notation) build.update([v.id], (e) => (e.type === "vector" ? { ...e, notation: step.notation! } : e));
+      build.register(v.label?.text, [v.id]);
+      if (step.style) styleElements(build, [v.id], step.style);
+      build.register(step.as, [v.id]);
+      return;
+    }
+    case "vectorOp": {
+      const ids = step.vectors.map((r) => build.one(r, "vector").id);
+      const made = build.created(build.take(vectorOp(build.doc, ids, step.op, build.opts, step.k ?? 2)), "vector");
+      for (const v of made) build.registerQuietly(v.label?.text, [v.id]);
+      build.register(step.as, made.map((v) => v.id));
+      return;
+    }
+    case "basis": {
+      for (const v of build.created(build.take(addBasis(build.doc, build.opts)), "vector")) build.registerQuietly(v.label?.text, [v.id]);
+      return;
+    }
+    case "venn": {
+      for (const c of build.created(build.take(addVennDiagram(build.doc, step.sets, build.opts)), "circle")) build.registerQuietly(c.label?.text, [c.id]);
+      return;
+    }
+    case "region": {
+      const created = build.take(addRegion(build.doc, step.expr, build.opts));
+      if (step.style) styleElements(build, created, step.style);
+      return;
+    }
+    case "members":
+      build.take(setMembers(build.doc, step.set, step.items, build.opts));
+      return;
+    case "count":
+      build.take(setRegionCount(build.doc, step.expr, step.value, build.opts));
+      return;
+    case "board": {
+      const at = step.at ? { x: step.at[0], y: step.at[1] } : undefined;
+      const [id] = build.take(addBoard(build.doc, step.source, build.opts, at));
+      build.update([id], (e) =>
+        e.type === "board"
+          ? {
+              ...e,
+              show: step.show ?? e.show,
+              method: step.method ?? e.method,
+              places: step.places ?? e.places,
+              marks: step.marks ?? e.marks,
+              gaps: step.gaps ?? e.gaps,
+              gapStyle: step.gapStyle ?? e.gapStyle,
+              gapText: step.gapText ?? e.gapText,
+              signSide: step.signSide ?? e.signSide,
+              intervals: step.intervals ?? e.intervals,
+              size: step.size ?? e.size,
+            }
+          : e,
+      );
+      return;
+    }
   }
 }
 

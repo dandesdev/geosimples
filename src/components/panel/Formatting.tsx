@@ -1,15 +1,19 @@
 import {
   AngleEditor,
   AxesEditor,
+  BoardEditor,
   CircleEditor,
   ExtensionEditor,
   FunctionEditor,
   GridEditor,
   PointEditor,
   PolygonEditor,
+  RegionEditor,
   SegmentEditor,
   NumberLineEditor,
   TextEditor,
+  VectorEditor,
+  VennItemsEditor,
   VerticalLineEditor,
 } from "./elementEditors";
 import { useInspected } from "./inspected";
@@ -39,6 +43,10 @@ export function Formatting() {
       {el.type === "numberline" && <NumberLineEditor el={el} {...props} />}
       {el.type === "axes" && <AxesEditor el={el} {...props} />}
       {el.type === "grid" && <GridEditor el={el} {...props} />}
+      {el.type === "vector" && <VectorEditor el={el} {...props} />}
+      {el.type === "region" && <RegionEditor el={el} {...props} />}
+      {el.type === "vennitems" && <VennItemsEditor el={el} {...props} />}
+      {el.type === "board" && <BoardEditor el={el} {...props} />}
     </>
   );
 }

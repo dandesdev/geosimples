@@ -6,6 +6,8 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 
 **Main flow**: type points in the input bar (`A=0;0 B=4;0 +3:90`), select them in the preview, build with the action bar (connect, angle, polygon, circle), style in the side panel, export.
 
+**Toolbar**: the geometry tools are always there. Gráficos, Vetores and Conjuntos appear only while the selection can use them (`availability.ts`). Whatever starts something new without a selection (functions, axes, Venn diagrams, boards) goes in the Inserir catalog (`InsertCatalog.tsx`, shortcut I, with search): a new kind of figure becomes a catalog section, not a toolbar button. The classic row drops its button labels when the preview is narrow, using a container query, instead of wrapping.
+
 ## Architecture
 
 - **Layout**: kept from v1 (tikzgenerator), Adobe-like: a large preview with the action bar on top and zoom on its edge, the point input below it, and a side panel with three accordions: Propriedades (measures, constructions and geometry of the selection), Formatação (looks only) and Rótulos e textos (auto labels, free text). Sections inside them open and close from their titles.
@@ -13,6 +15,8 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 - **One renderer**: `buildScene` (core) lays the figure out in pt. The preview injects the same markup that `toSvg` writes, so the preview is the export. `toTikz` writes TikZ from the doc with the same geometry helpers.
 - **Editing operations** are pure functions in `core/src/figure/ops.ts` and return `{ doc, created, error }`. The app wraps them in `src/lib/actions.ts` and shows errors as toasts.
 - **Store**: `src/store/figureStore.ts` (Zustand). Undo history starts from the loaded doc. Edits with the same key within 1 s merge into one undo step, and a drag is one step.
+- **Vectors, sets and boards**: all are elements of the same `FigureDoc`. Vectors build on points, with `translate`, `unit` and `corner` constructions so results follow (`vectorOps.ts`). Venn regions hold an expression; `sets.ts` cuts the outlines of the sets where they cross and keeps the pieces with the region on one side, for one exact path in SVG and TikZ. A `board` (`board/`) is a placed layout typed as one line, like `1234÷5`, `mmc(12;18)`, `varal [1;3]∩]2;5[`, `sinal x²-4`, `quadro (x-1)/(x+2)` or `|x-1|=3`: it is laid out again from its text as marks in pt, which the SVG and the TikZ both write. `sinal`, `quadro` and modules also take inequalities (`board/relation.ts`: the solution set, drawn on the line and written as S). A "gaps" board leaves out the results listed in `gaps` (picked by clicking them in the preview; null draws them by `seed`), as a box, a blank or a text.
+- **Input guide**: `guia.html` is a second page of the Vite build (`src/guide/`), with live examples that run the real input parser. New input syntax gets an example there.
 - **Figure library**: every figure is kept in localStorage (`geosimples-library` index plus one `geosimples-figure:<id>` key per doc; logic in `core/src/figure/library.ts`). The open figure autosaves; switching figures starts a fresh undo history. Files (`.geosimples.json`) and share links (`#figura=`, deflate-raw + base64url) are in `core/src/figure/file.ts` and always open as a new figure.
 - **Stack**: React 19 + TypeScript + React Compiler, Tailwind CSS v4, shadcn/ui (Radix), Zustand, sonner.
 

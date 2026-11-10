@@ -10,7 +10,9 @@ import {
   segmentTicks,
   type OffsetLine,
 } from "./geometry";
-import { formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex } from "./labels";
+import { canHaveLabel, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex, vectorLabelToLatex } from "./labels";
+import { boardLayout, mathToLatex } from "./board";
+import { regionOutline, vennItemSpots } from "./sets";
 import {
   axesOrigin,
   axesStepX,
@@ -26,7 +28,7 @@ import {
 } from "./plot";
 import { buildScene, type AxisNumberSpots } from "./render";
 import { PATTERN } from "./svg";
-import type { Axes, Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
+import type { Axes, Dash, Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
 
 export interface TikzOptions {
@@ -104,7 +106,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       .join("\n");
 
   const sections: Record<
-    "coords" | "grid" | "axes" | "guide" | "polygon" | "circle" | "function" | "angle" | "segment" | "point" | "label",
+    "coords" | "grid" | "axes" | "guide" | "polygon" | "region" | "circle" | "function" | "angle" | "segment" | "board" | "point" | "label",
     string[]
   > = {
     coords: [],
@@ -112,10 +114,12 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
     axes: [],
     guide: [],
     polygon: [],
+    region: [],
     circle: [],
     function: [],
     angle: [],
     segment: [],
+    board: [],
     point: [],
     label: [],
   };
@@ -147,6 +151,102 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         if (el.ticks > 0) {
           const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
           sections.segment.push(offsetLines(at(m), segmentTicks(S(a), S(b), el.ticks), el.stroke));
+        }
+        break;
+      }
+      case "vector": {
+        const a = pts.get(el.a);
+        const b = pts.get(el.b);
+        if (!a || !b) break;
+        // On paper, where an arrowhead keeps its size and shape whatever the scale.
+        const dx = (b.x - a.x) * u.x * 28.3465 * scale;
+        const dy = (b.y - a.y) * u.y * 28.3465 * scale;
+        const length = Math.hypot(dx, dy);
+        if (length === 0) break;
+        const dir = { x: dx / length, y: dy / length };
+        const head = Math.min(el.head, length * 0.6);
+        const half = head * 0.38;
+        sections.segment.push(`\\draw${opts(strokeOpts(el.stroke))} (${el.a}) -- ${shifted(el.b, { x: -dir.x * head * 0.8, y: -dir.y * head * 0.8 })};`);
+        const headOpts = [color(el.stroke.color)];
+        if (el.stroke.opacity < 1) headOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
+        const back = { x: -dir.x * head, y: -dir.y * head };
+        sections.segment.push(
+          `\\fill${opts(headOpts)} (${el.b}) -- ${shifted(el.b, { x: back.x - dir.y * half, y: back.y + dir.x * half })} -- ${shifted(el.b, { x: back.x + dir.y * half, y: back.y - dir.x * half })} -- cycle;`,
+        );
+        break;
+      }
+      case "region": {
+        const loops = regionOutline(doc, el);
+        if (loops.length === 0) break;
+        const path = loops
+          .map((loop) => {
+            const body = loop
+              .map((e, i) => {
+                const join = i === 0 ? `(${at(e.from)})` : `-- (${at(e.from)})`;
+                if (e.kind === "line") return `${join} -- (${at(e.to)})`;
+                return `${join} arc[start angle=${n(e.start)}, end angle=${n(e.start + e.sweep)}, radius=${n(e.r)}]`;
+              })
+              .join(" ");
+            return `${body} -- cycle`;
+          })
+          .join(" ");
+        const o = [...fillOpts(el.fill), ...(el.stroke ? strokeOpts(el.stroke) : [])];
+        sections.region.push(`\\path${opts(o)} ${path};`);
+        break;
+      }
+      case "vennitems":
+        for (const spot of vennItemSpots(doc, el)) {
+          sections.label.push(
+            `\\node${opts(textOptions(el.color, el.size, el.font, color))} at ${shifted(at(spot.anchor), spot.offset)} {${labelToLatex(spot.text, el.font)}};`,
+          );
+        }
+        break;
+      case "board": {
+        const layout = boardLayout(el, doc);
+        if (!layout) break;
+        const base = at(el);
+        const c = color(el.color);
+        const lineOpts = (width?: number, dash?: Dash) => {
+          const o = [`draw=${c}`, `line width=${n(width ?? el.width)}pt`];
+          if (dash && dash !== "solid") o.push(dash);
+          return opts(o);
+        };
+        const P = (v: Vec) => shifted(base, v);
+        for (const m of layout.marks) {
+          switch (m.kind) {
+            case "line":
+              sections.board.push(`\\draw${lineOpts(m.width, m.dash)} ${P(m.a)} -- ${P(m.b)};`);
+              break;
+            case "curve":
+              sections.board.push(`\\draw${lineOpts(m.width, m.dash)} ${m.points.map(P).join(" -- ")};`);
+              break;
+            case "text":
+              sections.board.push(`\\node${opts(textOptions(el.color, m.size, el.font, color))} at ${P(m.at)} {${mathToLatex(m.node)}};`);
+              break;
+            case "dot":
+              sections.board.push(
+                m.open
+                  ? `\\filldraw[draw=${c}, fill=white, line width=0.7pt] ${P(m.at)} circle[radius=${n(m.r)}pt];`
+                  : `\\fill[${c}] ${P(m.at)} circle[radius=${n(m.r)}pt];`,
+              );
+              break;
+            case "ring":
+              sections.board.push(`\\draw${lineOpts(0.6)} ${P(m.at)} circle[radius=${n(m.r)}pt];`);
+              break;
+            case "head": {
+              const back = { x: m.tip.x - m.dir.x * m.length, y: m.tip.y - m.dir.y * m.length };
+              const half = m.length * 0.4;
+              sections.board.push(
+                `\\fill[${c}] ${P(m.tip)} -- ${P({ x: back.x - m.dir.y * half, y: back.y + m.dir.x * half })} -- ${P({ x: back.x + m.dir.y * half, y: back.y - m.dir.x * half })} -- cycle;`,
+              );
+              break;
+            }
+            case "box": {
+              const corner = { x: m.at.x - m.w / 2, y: m.at.y - m.h / 2 };
+              sections.board.push(`\\draw${lineOpts(0.5)} ${P(corner)} rectangle ${P({ x: corner.x + m.w, y: corner.y + m.h })};`);
+              break;
+            }
+          }
         }
         break;
       }
@@ -341,7 +441,7 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
   // Axes at different scales stretch x and y; TikZ then draws circles as ellipses, as the SVG does.
   lines.push(`\\begin{tikzpicture}[x=${n(scale * u.x)}cm, y=${n(scale * u.y)}cm, miter limit=4]`);
   for (const [hex, name] of colors) lines.push(`\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}`);
-  const order = ["coords", "grid", "axes", "guide", "polygon", "circle", "function", "angle", "segment", "point", "label"] as const;
+  const order = ["coords", "grid", "axes", "guide", "polygon", "region", "circle", "function", "angle", "segment", "board", "point", "label"] as const;
   for (const key of order) lines.push(...sections[key]);
   lines.push("\\end{tikzpicture}");
   if (!options.standalone) return lines.join("\n") + "\n";
@@ -368,7 +468,7 @@ function textOptions(c: string, size: number, font: LabelFont, color: (c: string
 }
 
 function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string): string | null {
-  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return null;
+  if (!canHaveLabel(el)) return null;
   const placement = labelPlacement(doc, el);
   if (!placement || !el.label) return null;
   const { size, measure } = el.label;
@@ -376,7 +476,8 @@ function labelCommand(doc: FigureDoc, el: Element, color: (c: string) => string)
   const o = textOptions(el.label.color, size, el.label.font, color);
   // A live measure is written with the value it has at export time.
   const number = measure ? measureNumber(doc, el, measure) : null;
-  const latex = measure && number !== null ? measureToLatex(measure, number, el.label.font) : labelToLatex(labelText(doc, el), el.label.font);
+  let latex = measure && number !== null ? measureToLatex(measure, number, el.label.font) : labelToLatex(labelText(doc, el), el.label.font);
+  if (el.type === "vector" && !measure) latex = vectorLabelToLatex(labelText(doc, el), el.notation, el.label.font);
   return `\\node[${o.join(", ")}] at ${shifted(base, placement.offset)} {${latex}};`;
 }
 

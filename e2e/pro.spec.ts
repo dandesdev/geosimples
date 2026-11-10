@@ -442,7 +442,9 @@ test("pro layout: toolbars keep every button in view, and the app buttons float 
   // Across the top, side by side: the splitter between them can't hide buttons either.
   await drag(page, page.getByLabel("Arrastar Ferramentas"), at(preview, 0.5, 0.01));
   await expect(tools).toHaveAttribute("aria-orientation", "horizontal");
-  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(await box(tools), 0.97, 0.5));
+  const across = await box(tools);
+  // Its group spans the whole row, so this spot stays in the group's left drop zone however many buttons it has.
+  await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), { x: across.x + 120, y: across.y + across.height / 2 });
   await expect(file).toHaveAttribute("aria-orientation", "horizontal");
   for (const by of [-200, 600]) {
     await dragSplitter(page, tools, "right", by);
@@ -600,4 +602,28 @@ test("pro layout: two full-height panel columns on both sides of the preview sti
   const labels = await box(panel(page, "labels"));
   expect(Math.abs(labels.x - after.x)).toBeLessThanOrEqual(1);
   expect(labels.y).toBeGreaterThan(after.y + after.height - 5);
+});
+
+test("pro layout: a toolbar between the preview and the panels doesn't widen the panels at each reload", async ({ page }) => {
+  const width = async () => Math.round((await box(panel(page, "properties"))).width);
+  const p = await box(page.getByRole("region", { name: "Prévia da figura" }));
+  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(p, 0.98, 0.5));
+  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toHaveAttribute("aria-orientation", "vertical");
+  const start = await width();
+  for (let i = 0; i < 2; i++) {
+    await page.reload();
+    await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+    await expect.poll(width).toBe(start);
+  }
+  expect(Math.round((await box(page.getByRole("toolbar", { name: "Ferramentas" }))).width)).toBeLessThanOrEqual(48);
+});
+
+test("pro layout: back from the classic layout, toolbars are one button wide again", async ({ page }) => {
+  const widths = () => page.locator("[data-toolbar]").evaluateAll((els) => els.map((el) => Math.round(el.closest(".dv-groupview")!.getBoundingClientRect().width)));
+  await expect.poll(widths).toEqual([48, 48, 48]);
+  await page.getByRole("button", { name: "Janelas" }).click();
+  await page.getByRole("menuitem", { name: /layout clássico/ }).click();
+  await page.getByRole("button", { name: "Layout profissional" }).click();
+  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+  await expect.poll(widths).toEqual([48, 48, 48]);
 });

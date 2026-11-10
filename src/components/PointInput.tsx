@@ -39,11 +39,36 @@ function runs(text: string, parsed: ParsedInput): { text: string; kind: InputTok
   return out;
 }
 
+const SET_SYMBOLS = [
+  { text: "∪", title: "União (ou digite U)" },
+  { text: "∩", title: "Interseção (ou digite n)" },
+  { text: "−", title: "Diferença (ou digite -)" },
+];
+
+/** Symbols a keyboard doesn't have, offered while typing what uses them. */
+function symbolsFor(text: string) {
+  if (/^\s*(?:regi|n\s*\()/i.test(text)) return [...SET_SYMBOLS, { text: "'", title: "Complementar" }];
+  if (/^\s*(?:varal\b|[[\]])/i.test(text)) return [...SET_SYMBOLS, { text: "∞", title: "Infinito (ou digite inf)" }];
+  if (/^\s*(?:sinal|quadro|modular|m[oó]dulo)\b|\|/i.test(text)) {
+    return [
+      { text: "≤", title: "Menor ou igual (ou digite <=)" },
+      { text: "≥", title: "Maior ou igual (ou digite >=)" },
+      { text: "π", title: "Pi (ou digite pi)" },
+    ];
+  }
+  return [];
+}
+
 function summary(parsed: ParsedInput): string {
   if (parsed.functions.length > 0) return "Gráfico da função. Enter para adicionar.";
   if (parsed.lines.length > 0) return "Reta vertical. Enter para adicionar.";
   if (parsed.graphPoints.length > 0) return "Ponto sobre o gráfico. Enter para adicionar.";
   if (parsed.intervals.length > 0) return "Intervalo na reta numérica. Enter para adicionar.";
+  if (parsed.vectors.length > 0) return "Vetor. Enter para adicionar.";
+  if (parsed.boards.length > 0) return "Conta ou quadro, já calculado. Enter para adicionar.";
+  if (parsed.sets.length > 0) return `Elementos de ${parsed.sets[0].name} no diagrama. Enter para adicionar.`;
+  if (parsed.counts.length > 0) return "Quantidade numa região do diagrama. Enter para adicionar.";
+  if (parsed.regions.length > 0) return "Região do diagrama. Enter para marcar.";
   const fresh = parsed.nodes.filter((n) => n.kind === "new").length;
   const parts: string[] = [];
   if (fresh) parts.push(`${fresh} ${fresh === 1 ? "ponto novo" : "pontos novos"}`);
@@ -103,6 +128,19 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
   };
 
   const message = text.trim() === "" ? "" : parsed.errors[0]?.message ?? summary(parsed);
+  const symbols = symbolsFor(text);
+  const insertSymbol = (symbol: string) => {
+    const input = inputRef.current;
+    if (!input) return;
+    const from = input.selectionStart ?? text.length;
+    const to = input.selectionEnd ?? from;
+    setText(text.slice(0, from) + symbol + text.slice(to));
+    requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(from + symbol.length, from + symbol.length);
+      syncScroll();
+    });
+  };
 
   return (
     <div className="flex shrink-0 flex-col gap-1">
@@ -139,7 +177,17 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             id="point-input"
             value={text}
             onChange={(e) => {
-              setText(e.target.value);
+              const input = e.currentTarget;
+              const typed = input.value;
+              // >= and <= become ≥ and ≤ as they are typed: keyboards have no key for them.
+              const joined = typed.replace(/>=/g, "≥").replace(/<=/g, "≤");
+              if (joined !== typed) {
+                // Changed here, with the caret, so the next key lands where it should.
+                const caret = (input.selectionStart ?? typed.length) - (typed.length - joined.length);
+                input.value = joined;
+                input.setSelectionRange(caret, caret);
+              }
+              setText(joined);
               requestAnimationFrame(syncScroll);
             }}
             onScroll={syncScroll}
@@ -186,37 +234,19 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             className="max-w-[min(24rem,calc(100vw-1rem))] space-y-1 p-3 text-left"
           >
             <p>
-              <b>(X;Y)</b> coordenadas: <code>(2;3)</code>, <code>(1,5;-2)</code>. Os parênteses são opcionais.
+              <b>(X;Y)</b> cria um ponto: <code>(2;3)</code>. <b>Nome=</b> dá nome a ele: <code>A=(0;0)</code>
             </p>
             <p>
-              <b>(R:θ)</b> polar, R unidades a θ graus da origem: <code>(3:60)</code>
+              <b>--</b> liga os pontos e, no fim, fecha o contorno: <code>A=(0;0)--B=(4;0)--C=(0;3)--</code>
             </p>
             <p>
-              <b>+(X;Y)</b> e <b>+(R:θ)</b> a partir do ponto anterior: <code>(0;0) +(4;0) +(3:90)</code>
+              <b>f(x)=</b> desenha um gráfico: <code>f(x)=x^2-1</code>
             </p>
+            <p>Também vale para vetores, conjuntos, contas e tabelas.</p>
             <p>
-              <b>Nome=</b> dá nome ao ponto: <code>A=(0;0)</code>. Um nome sozinho usa um ponto existente.
-            </p>
-            <p>
-              <b>--</b> liga os pontos vizinhos; no fim, fecha o contorno: <code>A=(0;0)--B=(4;0)--C=(0;3)--</code>
-            </p>
-            <p>
-              Espaço sem <b>--</b> separa pontos soltos. <code>A--C</code> liga pontos que já existem.
-            </p>
-            <p>
-              <b>"texto"@(X;Y)</b> escreve um texto solto centrado no ponto: <code>"Figura 1"@(2;-1)</code>
-            </p>
-            <p>
-              <b>f(x)=</b> ou <b>y=</b> desenha o gráfico, com eixos: <code>f(x)=x^2-1</code>, <code>y=2sen(x)</code>
-            </p>
-            <p>
-              <b>x=</b> traça uma reta vertical, tracejada como assíntota: <code>x=2</code>, <code>x=pi/2</code>
-            </p>
-            <p>
-              <b>Nome=f(a)</b> põe um ponto sobre o gráfico de f: <code>P=f(2)</code>
-            </p>
-            <p>
-              <b>[a; b]</b> marca um intervalo na reta numérica; <b>]</b> e <b>[</b> viradas para fora deixam a ponta aberta: <code>[-2; 3[</code>, <code>]-∞; 1]</code>
+              <a href="/guia.html" target="_blank" rel="noopener" className="font-semibold underline underline-offset-2">
+                Mais explicações, com exemplos para experimentar
+              </a>
             </p>
           </TooltipContent>
         </Tooltip>
@@ -231,6 +261,26 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
           <span className="hidden sm:inline">Adicionar</span>
         </Button>
       </form>
+      {symbols.length > 0 && (
+        <div className="flex items-center gap-1 px-1" role="group" aria-label="Inserir símbolo">
+          {symbols.map((s) => (
+            <Button
+              key={s.text}
+              type="button"
+              variant="outline"
+              size="sm"
+              title={s.title}
+              aria-label={s.title}
+              className="h-7 w-8 p-0 font-mono"
+              // Keeps the caret in the input, where the symbol goes.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertSymbol(s.text)}
+            >
+              {s.text}
+            </Button>
+          ))}
+        </div>
+      )}
       <p
         id="point-input-message"
         aria-live="polite"

@@ -7,6 +7,14 @@ import { hasTranslation, translate } from "./messages";
 import normalize from "./normalize.ts?raw";
 import ops from "./ops.ts?raw";
 import parse from "./parse.ts?raw";
+import vectorOps from "./vectorOps.ts?raw";
+import sets from "./sets.ts?raw";
+import setOps from "./setOps.ts?raw";
+import boardOps from "./boardOps.ts?raw";
+import boardIndex from "./board/index.ts?raw";
+import boardArithmetic from "./board/arithmetic.ts?raw";
+import boardLine from "./board/number-line.ts?raw";
+import boardRelation from "./board/relation.ts?raw";
 import { emptyDoc } from "./defaults";
 
 /** Sentences in quotes: the messages the user or an agent reads. */
@@ -15,7 +23,7 @@ function messages(source: string): string[] {
 }
 
 describe("English messages", () => {
-  const sources = { ops, constructions, graphOps, parse, file, normalize };
+  const sources = { ops, constructions, graphOps, parse, file, normalize, vectorOps, sets, setOps, boardOps, boardIndex, boardArithmetic, boardLine, boardRelation };
 
   it("has every message of the operations, the input bar and files", () => {
     expect(messages(ops).length).toBeGreaterThan(30);

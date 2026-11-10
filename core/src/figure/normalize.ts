@@ -1,9 +1,13 @@
 import { AXES_GRID, DEFAULT_AXES_STROKE, DEFAULT_LABEL, DEFAULT_PLOT_WINDOW, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
 import { MAX_EXPR_LENGTH } from "../plot";
+import { boardError, MAX_BOARD_SOURCE, MAX_GAP_TEXT } from "./board";
 import { MEASURES } from "./labels";
 import type {
   Angle,
   Axes,
+  Board,
+  BoardShow,
+  GapStyle,
   Circle,
   CircleConstruction,
   Dash,
@@ -24,9 +28,13 @@ import type {
   Point,
   PointConstruction,
   Polygon,
+  Region,
   Segment,
   Stroke,
   Ticks,
+  Vector,
+  VectorNotation,
+  VennItems,
   VerticalLine,
 } from "./types";
 
@@ -246,8 +254,56 @@ export function normalizeDoc(input: unknown): FigureDoc {
           vertices,
           stroke: isObj(r.stroke) ? stroke(r.stroke) : null,
           fill: fill(r.fill),
+          ...(r.universe === true ? { universe: true as const } : {}),
         };
         out.push(withLabel(poly, r));
+        break;
+      }
+      case "vector": {
+        if (ids.has(id) || !points.has(r.a as string) || !points.has(r.b as string)) break;
+        ids.add(id);
+        const v: Vector = {
+          id,
+          type: "vector",
+          a: r.a as string,
+          b: r.b as string,
+          stroke: stroke(r.stroke),
+          head: num(r.head, 2, 30, 6),
+          notation: oneOf<VectorNotation>(r.notation, ["arrow", "hat", "none"], "arrow"),
+        };
+        out.push(withLabel(v, r));
+        break;
+      }
+      case "board": {
+        const x = coord(r.x);
+        const y = coord(r.y);
+        const source = str(r.source)?.trim() ?? "";
+        if (ids.has(id) || x === null || y === null || source.length > MAX_BOARD_SOURCE || boardError(source) !== null) break;
+        ids.add(id);
+        const b: Board = {
+          id,
+          type: "board",
+          x,
+          y,
+          source,
+          show: oneOf<BoardShow>(r.show, ["full", "blank", "gaps"], "full"),
+          seed: Math.round(num(r.seed, 0, 1e6, 0)),
+          gaps: Array.isArray(r.gaps)
+            ? [...new Set(r.gaps.filter((g): g is number => Number.isInteger(g) && g >= 0 && g < 2000))].slice(0, 500)
+            : null,
+          gapStyle: oneOf<GapStyle>(r.gapStyle, ["box", "blank", "text"], "box"),
+          gapText: (str(r.gapText) ?? "?").slice(0, MAX_GAP_TEXT),
+          signSide: r.signSide === "right" ? "right" : "left",
+          intervals: r.intervals === "wave" ? "wave" : "thick",
+          method: r.method === "short" ? "short" : "long",
+          places: Math.round(num(r.places, 0, 6, 0)),
+          marks: r.marks !== false,
+          size: num(r.size, 6, 40, 12),
+          color: color(r.color, DEFAULT_LABEL.color),
+          width: num(r.width, 0.1, 5, 0.8),
+          font: r.font === "sans" ? "sans" : "serif",
+        };
+        out.push(b);
         break;
       }
       case "function": {
@@ -364,6 +420,53 @@ export function normalizeDoc(input: unknown): FigureDoc {
       }
     }
   }
+  // Regions and Venn items point to circles and polygons, so they wait for those.
+  const known = new Map(out.map((e) => [e.id, e.type]));
+  const isShape = (x: unknown) => typeof x === "string" && (known.get(x) === "circle" || known.get(x) === "polygon");
+  for (const r of raws) {
+    if (!idOk(r.id) || ids.has(r.id)) continue;
+    if (r.type === "region") {
+      const expr = str(r.expr)?.trim() ?? "";
+      if (expr === "" || expr.length > LIMITS.labelLength || !Array.isArray(r.sets)) continue;
+      const sets = r.sets.filter(isObj).filter((s) => typeof s.name === "string" && isShape(s.shape));
+      if (sets.length === 0 || sets.length !== r.sets.length) continue;
+      ids.add(r.id);
+      const region: Region = {
+        id: r.id,
+        type: "region",
+        expr,
+        sets: sets.map((s) => ({ name: s.name as string, shape: s.shape as string })),
+        universe: isShape(r.universe) ? (r.universe as string) : null,
+        fill: fill(r.fill) ?? { color: "#808080", opacity: 0.3, pattern: "solid", angle: 45 },
+        stroke: isObj(r.stroke) ? stroke(r.stroke) : null,
+      };
+      out.push(region);
+    } else if (r.type === "vennitems") {
+      const text = (v: unknown) => str(v)?.slice(0, 40) ?? "";
+      const members = (Array.isArray(r.members) ? r.members : [])
+        .filter(isObj)
+        .filter((m) => isShape(m.set) && Array.isArray(m.items))
+        .map((m) => ({ set: m.set as string, items: (m.items as unknown[]).map(text).filter((t) => t !== "").slice(0, 60) }));
+      const counts = (Array.isArray(r.counts) ? r.counts : [])
+        .filter(isObj)
+        .filter((c) => Array.isArray(c.in) && c.in.every(isShape) && text(c.text) !== "")
+        .map((c) => ({ in: c.in as string[], text: text(c.text) }));
+      ids.add(r.id);
+      const items: VennItems = {
+        id: r.id,
+        type: "vennitems",
+        members,
+        counts,
+        size: num(r.size, 4, 72, DEFAULT_LABEL.size),
+        color: color(r.color, DEFAULT_LABEL.color),
+        font: r.font === "sans" ? "sans" : "serif",
+      };
+      out.push(items);
+    }
+  }
+  // In the order they were saved: those last two kinds were read apart from the rest.
+  const savedAt = new Map(raws.map((r, i) => [r.id, i]));
+  out.sort((a, b) => savedAt.get(a.id)! - savedAt.get(b.id)!);
   if (axesGrid && !out.some((e) => e.type === "grid")) {
     let n = 1;
     while (ids.has(`m${n}`)) n++;
@@ -466,6 +569,17 @@ function pointConstruction(
         ? { kind: "tangent", graph, point: x.point, along: at, fill: true }
         : { kind: "tangent", graph, point: x.point, along: at };
     }
+    case "translate": {
+      const by = pair(x.by);
+      if (!by || !isPoint(x.point) || !finite(x.factor)) return undefined;
+      return { kind: "translate", point: x.point, by, factor: num(x.factor, -1000, 1000, 1) };
+    }
+    case "unit": {
+      const of = pair(x.of);
+      return of && isPoint(x.from) ? { kind: "unit", of, from: x.from } : undefined;
+    }
+    case "corner":
+      return isPoint(x.x) && isPoint(x.y) ? { kind: "corner", x: x.x, y: x.y } : undefined;
   }
   return undefined;
 }

@@ -1,6 +1,6 @@
 import { Hand, Move, SquareDashedMousePointer } from "lucide-react";
 import type { ComponentType } from "react";
-import type { ConstructionKind } from "@geosimples/core/figure";
+import type { ConstructionKind, SetOperation, VectorOperation } from "@geosimples/core/figure";
 import {
   AddPointIcon,
   AltitudeIcon,
@@ -15,6 +15,10 @@ import {
   PerpendicularBisectorIcon,
   ProjectionIcon,
   QuickFigureIcon,
+  SetComplementIcon,
+  SetDifferenceIcon,
+  SetIntersectionIcon,
+  SetUnionIcon,
   TangentIcon,
 } from "@/components/icons";
 import type { CanvasMode } from "@/store/figureStore";
@@ -64,6 +68,40 @@ export const CONSTRUCTIONS: Record<ConstructionKind, { Icon: ComponentType; titl
     hint: "Tangente ao gráfico no ponto selecionado sobre ele. Ou clique com o botão direito na curva.",
   },
 };
+
+/** What the Vetores menu builds on the selected vectors. */
+export const VECTOR_ITEMS: { op: VectorOperation; title: string; hint: string }[] = [
+  { op: "sum", title: "Soma (regra do polígono)", hint: "Cada vetor sai da ponta do anterior, na ordem da seleção." },
+  { op: "parallelogram", title: "Soma (paralelogramo)", hint: "Dois vetores da mesma origem, com os lados tracejados." },
+  { op: "difference", title: "Diferença", hint: "O primeiro menos o segundo, na ordem da seleção." },
+  { op: "projection", title: "Projeção", hint: "O primeiro na direção do segundo, com perpendiculares tracejadas." },
+  { op: "unit", title: "Versor", hint: "Módulo 1, com a direção e o sentido do vetor." },
+  { op: "components", title: "Componentes", hint: "Decompõe na horizontal e na vertical." },
+  { op: "scale", title: "Múltiplo", hint: "2 vezes o vetor. Mude o fator em Propriedades." },
+];
+
+/** The operations of the Conjuntos menu, which mark a region of the diagram. */
+export const SET_ITEMS: { op: SetOperation; Icon: ComponentType; title: string; hint: string }[] = [
+  { op: "union", Icon: SetUnionIcon, title: "União", hint: "Dos conjuntos selecionados, ou de todos se nenhum estiver." },
+  { op: "inter", Icon: SetIntersectionIcon, title: "Interseção", hint: "Dos conjuntos selecionados, ou de todos se nenhum estiver." },
+  { op: "diff", Icon: SetDifferenceIcon, title: "Diferença", hint: "O primeiro selecionado menos o segundo." },
+  { op: "comp", Icon: SetComplementIcon, title: "Complementar", hint: "O que está fora dos selecionados, dentro do universo." },
+];
+
+/** What the Contas e quadros menu starts in the input bar. Null is a divider. */
+export const BOARD_ITEMS: ({ title: string; hint: string; prefill: string } | null)[] = [
+  { title: "Conta armada…", hint: "1234÷5, 58+67, 302-5, 12x34. Também com vírgula.", prefill: "conta " },
+  null,
+  { title: "Fatoração em primos…", hint: "fatorar 360", prefill: "fatorar " },
+  { title: "MMC…", hint: "mmc(12; 18), pela fatoração simultânea.", prefill: "mmc(" },
+  { title: "MDC…", hint: "mdc(12; 18), com os primos comuns marcados.", prefill: "mdc(" },
+  { title: "MDC por divisões sucessivas…", hint: "euclides(48; 18), no jogo da velha.", prefill: "euclides(" },
+  null,
+  { title: "Varal de intervalos…", hint: "varal [1;3] n ]2;5[, com U (união), n (interseção) ou -.", prefill: "varal " },
+  { title: "Esboço de sinal…", hint: "sinal x²-4, a curva sobre a reta.", prefill: "sinal " },
+  { title: "Quadro de sinais…", hint: "quadro (x-1)(x+2)/(x-3), um fator por linha.", prefill: "quadro " },
+  { title: "Equação modular…", hint: "modular |x-1| + |x+2| = 5, em colunas.", prefill: "modular " },
+];
 
 /** The ways to build a circle, for the toolbar and the preview's menu. */
 export const CIRCLE_OPTIONS = [

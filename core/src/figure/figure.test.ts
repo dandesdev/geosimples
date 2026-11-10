@@ -6,6 +6,7 @@ import {
   autoLabel,
   autoLabelMany,
   buildScene,
+  canHaveLabel,
   circumcircle,
   connectPoints,
   deleteElements,
@@ -45,6 +46,7 @@ import {
   darkColor,
   DARK_PAPER,
   type Circle,
+  type Element,
   type FigureDoc,
   type FreeText,
   type Label,
@@ -681,7 +683,7 @@ describe("live measure labels", () => {
       doc = {
         ...doc,
         elements: doc.elements.map((e) =>
-          e.id === id && e.type !== "text" && e.type !== "axes" && e.type !== "numberline" && e.type !== "extension" && e.type !== "grid" ? { ...e, label: { ...DEFAULT_STYLES.label, text: "?", measure: m } } : e,
+          e.id === id && canHaveLabel(e) ? ({ ...e, label: { ...DEFAULT_STYLES.label, text: "?", measure: m } } as Element) : e,
         ),
       };
       return labelText(doc, doc.elements.find((e) => e.id === id)!);

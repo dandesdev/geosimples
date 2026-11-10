@@ -18,7 +18,7 @@ export interface GuideTopic {
   examples: GuideExample[];
 }
 
-export const GUIDE_TOPIC_NAMES = ["overview", "geometry", "constructions", "graphs", "labels"] as const;
+export const GUIDE_TOPIC_NAMES = ["overview", "geometry", "constructions", "graphs", "labels", "vectors", "sets", "boards"] as const;
 export type GuideTopicName = (typeof GUIDE_TOPIC_NAMES)[number];
 
 export const GUIDE: Record<GuideTopicName, GuideTopic> = {
@@ -185,6 +185,87 @@ On a graph: "pointOnGraph" at x, "notable" for roots (x₁, x₂…), turning po
           steps: [
             { do: "numberline", x: [-4, 5] },
             { do: "interval", from: -2, to: 3, closed: [true, false] },
+          ],
+        },
+      },
+    ],
+  },
+  vectors: {
+    title: "Vectors",
+    text: `"vector" draws an arrow by two points ("from", "to") or by its "components" from a tail ("from" a point, or "at" [x, y], default the origin). It is named u, v, w… unless "name" is given; its name is marked with an arrow unless "notation" is "hat" or "none".
+
+"vectorOp" builds on vectors already drawn, and what it makes follows when they move: "sum" is the polygon rule (each one carried to the tip of the one before, any number of vectors, in order), "parallelogram" the rule for two, "difference" first − second, "projection" first on the direction of second, with its dashed perpendiculars and right-angle mark, "unit" the versor, "components" the horizontal and vertical parts (F_x, F_y), "scale" k times the vector. "basis" draws the versors i and j.`,
+    examples: [
+      {
+        request: "Dois vetores, u = (4; 1) e v = (1; 3), e a soma pela regra do paralelogramo.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "vector", name: "u", components: [4, 1] },
+            { do: "vector", name: "v", components: [1, 3] },
+            { do: "vectorOp", op: "parallelogram", vectors: ["u", "v"] },
+          ],
+        },
+      },
+      {
+        request: "Uma força F de módulo 5 a 37° decomposta nos eixos.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "axes" },
+            { do: "vector", name: "F", components: [4, 3] },
+            { do: "vectorOp", op: "components", vectors: ["F"] },
+          ],
+        },
+      },
+    ],
+  },
+  sets: {
+    title: "Venn diagrams",
+    text: `"venn" draws 1 to 3 circles inside a rectangle named U; "sets" gives their names. "region" shades what an expression describes: ∪ union, ∩ intersection, − difference, ' complement, parentheses, U alone for the universe. Give it a "style" with a hatch to print well in black.
+
+"members" writes a set's elements, and each element lands where its sets overlap: an element of both A and B goes in A∩B. Use "U" for those in no set. "count" writes how many elements one region has: "expr" must be one region of the diagram, like A∩B or A−B.`,
+    examples: [
+      {
+        request: "Diagrama de A e B com a região A∩B hachurada.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "venn", sets: ["A", "B"] },
+            { do: "region", expr: "A∩B", style: { fill: { pattern: "hatch", color: "ink", opacity: 1 } } },
+          ],
+        },
+      },
+      {
+        request: "A = {1, 2, 3} e B = {3, 4} num diagrama.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "venn", sets: ["A", "B"] },
+            { do: "members", set: "A", items: ["1", "2", "3"] },
+            { do: "members", set: "B", items: ["3", "4"] },
+          ],
+        },
+      },
+    ],
+  },
+  boards: {
+    title: "Worked layouts",
+    text: `"board" lays out what is taught as a written procedure, from one line of text, and computes every step: columns ("123+45", "1000-37", "12,5x3"), long division with the chave as taught in Brazil ("1234÷5"), "fatorar 360", "mmc(12;18)", "mdc(12;18)", "euclides(48;18)", "varal [1;3] ∩ ]2;5[" (interval operations in aligned lines), "sinal x²-4" (a sketch of the curve over the line, with signs), "quadro (x-1)(x+2)/(x-3)" (sign chart by factor) and "modular |x-1| + |x+2| = 5" (a column for each stretch of the line; any degree, and functions like sen with "em [0; 2pi]"). "sinal", "quadro" and "modular" also take inequalities (<, ≤, >, ≥): the set that solves it is drawn on the line, with open and closed balls, and written as S.
+
+For a test, "show": "blank" keeps only the setup and "gaps" leaves some results out: "gaps" lists which by order, "gapStyle" is "box", "blank" or "text" (with "gapText", like "?"). "signSide": "right" writes + − × right of the numbers; "intervals": "wave" draws sets as wavy lines. In a division, "method" is "long" (each subtraction) or "short" (only remainders), and "places" carries the quotient to that many decimals. Boards go one under the other unless "at" says where.`,
+    examples: [
+      {
+        request: "A conta 1234 ÷ 5 armada, com todos os passos.",
+        recipe: { v: 1, steps: [{ do: "board", source: "1234÷5" }] },
+      },
+      {
+        request: "Estudo de sinal de (x−1)/(x+2) e o MMC de 12 e 18 para os alunos completarem.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "board", source: "quadro (x-1)/(x+2)" },
+            { do: "board", source: "mmc(12;18)", show: "gaps" },
           ],
         },
       },

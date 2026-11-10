@@ -12,8 +12,16 @@ import type {
   LabelMeasure,
   MeasureKind,
   Point,
+  VectorNotation,
 } from "./types";
 import { add, dist, len, mid, perp, polar, scale, sub, unit, type Vec } from "./vec";
+
+/** Elements that draw no label of their own. */
+type Unlabeled = Extract<Element, { label?: never }>;
+
+export function canHaveLabel(el: Element): el is Exclude<Element, Unlabeled> {
+  return !["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board"].includes(el.type);
+}
 
 /** Formats a number with no trailing zeros, with the decimal comma (pt-BR) or point (en). */
 export function formatNumber(n: number, decimals = 2, locale: Locale = "pt-BR"): string {
@@ -128,6 +136,10 @@ export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   axes: [],
   grid: [],
   numberline: [],
+  vector: ["length"],
+  region: [],
+  vennitems: [],
+  board: [],
 };
 
 /** Value of a measure in world units (degrees for angles), or null when it can't be measured. */
@@ -135,7 +147,8 @@ export function measureValue(doc: FigureDoc, el: Element, kind: MeasureKind): nu
   if (!MEASURES[el.type].includes(kind)) return null;
   const pts = pointMap(doc);
   switch (el.type) {
-    case "segment": {
+    case "segment":
+    case "vector": {
       const a = pts.get(el.a);
       const b = pts.get(el.b);
       return a && b ? dist(a, b) : null;
@@ -174,7 +187,7 @@ export function newMeasure(el: Element, decimals: number, measure?: MeasureKind)
 
 /** The text a label shows now: its measure computed from the figure, or its static text. */
 export function labelText(doc: FigureDoc, el: Element): string {
-  if (el.type === "text" || el.type === "axes" || !el.label) return "";
+  if (!canHaveLabel(el) || !el.label) return "";
   const m = el.label.measure;
   if (!m) return el.label.text;
   const value = measureNumber(doc, el, m);
@@ -228,7 +241,7 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
 }
 
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
-  if (el.type === "text" || el.type === "axes" || el.type === "grid" || el.type === "numberline" || el.type === "extension") return null;
+  if (!canHaveLabel(el)) return null;
   const label = el.label;
   if (!label || labelText(doc, el) === "") return null;
   const pts = pointMap(doc);
@@ -250,7 +263,8 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       }
       return { anchor: { x: el.x, y: el.y }, offset: scale(dir, label.distance + el.size) };
     }
-    case "segment": {
+    case "segment":
+    case "vector": {
       const a = pts.get(el.a);
       const b = pts.get(el.b);
       if (!a || !b) return null;
@@ -286,6 +300,11 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
     case "polygon": {
       const vs = el.vertices.map((id) => pts.get(id)).filter((p): p is Point => !!p);
       if (vs.length < 3) return null;
+      if (el.universe) {
+        // Inside the top left corner, where a universe's U goes.
+        const corner = { x: Math.min(...vs.map((p) => p.x)), y: Math.max(...vs.map((p) => p.y)) };
+        return { anchor: corner, offset: { x: label.size, y: -label.size } };
+      }
       return { anchor: centroid(vs), offset: fixed ? scale(fixed, label.distance) : { x: 0, y: 0 } };
     }
     case "function": {
@@ -320,12 +339,14 @@ const SYMBOL_TEX: Record<string, string> = {
   "≡": "\\equiv", "∼": "\\sim", "≈": "\\approx", "≠": "\\neq", "≤": "\\leq", "≥": "\\geq",
   "×": "\\times", "·": "\\cdot", "±": "\\pm", "−": "-", "∞": "\\infty", "→": "\\to",
   "∈": "\\in", "∩": "\\cap", "∪": "\\cup", "√": "\\surd",
+  "∉": "\\notin", "⊂": "\\subset", "⊃": "\\supset", "∖": "\\setminus", "∅": "\\emptyset",
+  "∀": "\\forall", "∃": "\\exists", "∄": "\\not\\exists",
 };
 const SYMBOLS = Object.keys(SYMBOL_TEX).join("");
 /** Signs math mode already puts space around. */
-const OPERATORS = "=+-≅≡∼≈≠≤≥×·±−→∈∩∪⊥∥";
+const OPERATORS = "=<>+-≅≡∼≈≠≤≥×·±−→∈∉⊂⊃∖∩∪⊥∥";
 
-const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()/+\\-=\\s${SYMBOLS}]*$`, "u");
+const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()/+\\-=_\\s${SYMBOLS}]*$`, "u");
 
 /**
  * How a label is typeset. Names and numbers (A', A₁, x², 3,5, 60°) are math,
@@ -341,6 +362,8 @@ export function labelMode(text: string, font: LabelFont = "serif"): "math" | "te
 export interface LabelRun {
   text: string;
   italic: boolean;
+  /** Set lower and smaller, like the x of F_x. */
+  sub?: boolean;
 }
 
 /**
@@ -350,13 +373,60 @@ export interface LabelRun {
 export function labelRuns(text: string, font: LabelFont = "serif"): LabelRun[] {
   if (labelMode(text, font) === "text") return [{ text, italic: false }];
   const runs: LabelRun[] = [];
-  for (const ch of Array.from(text)) {
-    const italic = /[A-Za-zα-ω]/u.test(ch);
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const sub = ch === "_" && i + 1 < chars.length;
+    const shown = sub ? chars[++i] : ch;
+    const italic = /[A-Za-zα-ω]/u.test(shown);
     const last = runs[runs.length - 1];
-    if (last && last.italic === italic) last.text += ch;
-    else runs.push({ text: ch, italic });
+    if (last && last.italic === italic && !sub && !last.sub) last.text += shown;
+    else runs.push(sub ? { text: shown, italic, sub: true } : { text: shown, italic });
   }
   return runs;
+}
+
+/** A name in a vector's label: the letters the mark goes over. */
+const VECTOR_NAME = /[A-Za-zα-ωΑ-Ω]+/gu;
+
+/** Width of a label as drawn, in characters: an underscore takes no room, and what it lowers takes less. */
+function drawnChars(text: string): number {
+  const chars = Array.from(text);
+  return chars.reduce((n, ch, i) => n + (ch === "_" ? 0 : chars[i - 1] === "_" ? 0.65 : 1), 0);
+}
+
+/**
+ * Where each name of a vector's label is, as x spans in pt from the center of
+ * the text, so an arrow or a hat can go over it. In "u + v" that is two names.
+ */
+export function vectorNameSpans(text: string, size: number): { from: number; to: number }[] {
+  const unit = size * 0.55;
+  const total = drawnChars(text) * unit;
+  const spans: { from: number; to: number }[] = [];
+  for (const m of text.matchAll(VECTOR_NAME)) {
+    // The letter after an underscore is a subscript: the mark doesn't reach it.
+    if (text[m.index - 1] === "_") continue;
+    const before = drawnChars(text.slice(0, m.index)) * unit;
+    const width = Array.from(m[0]).length * unit;
+    spans.push({ from: before - total / 2, to: before + width - total / 2 });
+  }
+  return spans;
+}
+
+/** LaTeX of a vector's label, with an arrow or a hat over each name. */
+export function vectorLabelToLatex(text: string, notation: VectorNotation, font: LabelFont = "serif"): string {
+  if (notation === "none" || labelMode(text) !== "math") return labelToLatex(text, font);
+  let out = "";
+  let at = 0;
+  for (const m of text.matchAll(VECTOR_NAME)) {
+    if (text[m.index - 1] === "_") continue;
+    out += mathLatex(text.slice(at, m.index));
+    const name = mathLatex(m[0]);
+    const command = notation === "hat" ? "\\hat" : Array.from(m[0]).length > 1 ? "\\overrightarrow" : "\\vec";
+    out += `${command}{${name}}`;
+    at = m.index + m[0].length;
+  }
+  return `$${out}${mathLatex(text.slice(at))}$`;
 }
 
 /** Converts a plain label to LaTeX, in math or text mode as labelMode decides. */
@@ -398,7 +468,7 @@ function scriptDigits(chars: string[], i: number, set: string): string {
   return digits;
 }
 
-function mathLatex(text: string): string {
+export function mathLatex(text: string): string {
   let out = "";
   const chars = Array.from(text);
   for (let i = 0; i < chars.length; i++) {
@@ -416,6 +486,8 @@ function mathLatex(text: string): string {
       out += "^\\circ";
     } else if (ch === "′") {
       out += "'";
+    } else if (ch === "{" || ch === "}") {
+      out += `\\${ch}`;
     } else if (ch === "," || ch === ";" || ch === ":") {
       // Braces stop math from adding its own space after punctuation, so 3,5
       // and (1; 2) are spaced as typed.

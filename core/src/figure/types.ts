@@ -116,7 +116,13 @@ export type PointConstruction =
    * instead, without making the window grow. It goes when the graph has no
    * tangent there, as at a corner.
    */
-  | { kind: "tangent"; graph: Id; point: Id; along: number; fill?: boolean };
+  | { kind: "tangent"; graph: Id; point: Id; along: number; fill?: boolean }
+  /** `point` plus `factor` times the vector from by[0] to by[1]: the tip of a vector moved or scaled. */
+  | { kind: "translate"; point: Id; by: [Id, Id]; factor: number }
+  /** One unit from `from`, in the direction from of[0] to of[1]: the tip of a versor. */
+  | { kind: "unit"; of: [Id, Id]; from: Id }
+  /** At the x of one point and the y of another: the tip of a vector's component along an axis. */
+  | { kind: "corner"; x: Id; y: Id };
 
 export type NotableFeature = "root" | "extremum" | "yAxis";
 
@@ -222,7 +228,103 @@ export interface Polygon {
   vertices: Id[];
   stroke: Stroke | null;
   fill: Fill | null;
+  /** The universe of a Venn diagram: its name goes inside the top left corner. */
+  universe?: true;
   label?: Label;
+}
+
+/** How a vector's name is marked: an arrow over it, a hat for versors, or nothing. */
+export type VectorNotation = "arrow" | "hat" | "none";
+
+/** An arrow from point `a` to point `b`. */
+export interface Vector {
+  id: Id;
+  type: "vector";
+  a: Id;
+  b: Id;
+  stroke: Stroke;
+  /** Length of the arrowhead, in pt. */
+  head: number;
+  notation: VectorNotation;
+  label?: Label;
+}
+
+/** A set of a Venn diagram, by its name in an expression and the circle or polygon that draws it. */
+export interface RegionSet {
+  name: string;
+  shape: Id;
+}
+
+/** The part of the plane an expression like (A∪B)'∩C describes, computed from the shapes of its sets. */
+export interface Region {
+  id: Id;
+  type: "region";
+  /** As typed. */
+  expr: string;
+  sets: RegionSet[];
+  /** The polygon complements are taken in. Null when the figure has no universe. */
+  universe: Id | null;
+  fill: Fill;
+  stroke: Stroke | null;
+  label?: never;
+}
+
+/** What is written in the regions of a Venn diagram. Each item goes where its sets overlap. */
+export interface VennItems {
+  id: Id;
+  type: "vennitems";
+  /** The elements of each set; `set` may be the universe, for those in no other set. */
+  members: { set: Id; items: string[] }[];
+  /** Counts like n(A∩B) = 3: `in` lists exactly the sets of that region. */
+  counts: { in: Id[]; text: string }[];
+  size: number;
+  color: Color;
+  font: LabelFont;
+  label?: never;
+}
+
+/** What a board shows: everything, only the setup to be solved, or some results left as blanks. */
+export type BoardShow = "full" | "blank" | "gaps";
+
+/** What stands where a result was left out: an empty box, nothing, or a text like "?". */
+export type GapStyle = "box" | "blank" | "text";
+
+/**
+ * A worked layout placed on the figure, like a long division, a factorization
+ * or a sign chart. `source` is what the teacher typed, and every renderer lays
+ * it out again from there. Its top left is at (x, y); inside, everything is in pt.
+ */
+export interface Board {
+  id: Id;
+  type: "board";
+  x: number;
+  y: number;
+  source: string;
+  show: BoardShow;
+  /** Picks which results a "gaps" board leaves blank, while `gaps` is null. */
+  seed: number;
+  /** The results left out, by their order on the board; null draws them by `seed`. */
+  gaps: number[] | null;
+  gapStyle: GapStyle;
+  /** Written in each gap when `gapStyle` is "text". */
+  gapText: string;
+  /** Columns: where the sign of the operation goes, left of the numbers or right of them. */
+  signSide: "left" | "right";
+  /** Number lines: a stretch of the set as a thick line or as a wavy one. */
+  intervals: "thick" | "wave";
+  /** Division: "long" writes each subtraction, "short" only the remainders. */
+  method: "long" | "short";
+  /** Division: decimal places to carry the quotient to. */
+  places: number;
+  /** Carries and borrows. */
+  marks: boolean;
+  /** Font size, in pt. */
+  size: number;
+  color: Color;
+  /** Width of its lines, in pt. */
+  width: number;
+  font: LabelFont;
+  label?: never;
 }
 
 /** Text placed anywhere, not attached to an object, like "Figura 1". */
@@ -374,7 +476,11 @@ export type Element =
   | VerticalLine
   | Axes
   | Grid
-  | NumberLine;
+  | NumberLine
+  | Vector
+  | Region
+  | VennItems
+  | Board;
 export type ElementType = Element["type"];
 
 export interface FigureDoc {

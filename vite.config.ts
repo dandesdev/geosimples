@@ -24,6 +24,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: { main: resolve(__dirname, "index.html"), guia: resolve(__dirname, "guia.html") },
       output: {
         // React rarely changes between deploys, so browsers keep it cached while the app chunk updates.
         manualChunks(id) {

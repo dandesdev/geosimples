@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
+import { usePanelStore } from "@/store/panelStore";
 import { ACTION_LABELS, type ActionId } from "@/store/prefsStore";
 
 const HELP_ACTIONS: ActionId[] = [
@@ -19,12 +20,15 @@ const HELP_ACTIONS: ActionId[] = [
   "angle",
   "polygon",
   "export",
+  "insert",
   "focusInput",
   "settings",
 ];
 
 export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const touch = useCoarsePointer();
+  const welcomeHidden = usePanelStore((s) => s.welcomeHidden);
+  const showWelcome = usePanelStore((s) => s.setWelcomeHidden);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
@@ -66,10 +70,10 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             comprimento, o ângulo, o raio, a área ou o perímetro, que muda quando os pontos se movem.
           </li>
           <li>
-            <b>Gráficos.</b> Digite <code>f(x)=x^2-1</code> ou <code>y=2sen(x)</code> na barra de entrada, ou use o botão
-            Gráfico de função. Os eixos entram junto e se ajustam à figura. Vale x², raiz(x), |x|, 1/x, sen, cos, tg, ln, log
+            <b>Gráficos.</b> Digite <code>f(x)=x^2-1</code> ou <code>y=2sen(x)</code> na barra de entrada, ou use Inserir ›
+            Nova função. Os eixos entram junto e se ajustam à figura. Vale x², raiz(x), |x|, 1/x, sen, cos, tg, ln, log
             e decimais com vírgula. Em Propriedades mude a expressão, onde a curva aparece e a janela, as marcas e a malha
-            dos eixos. Eixos e malha quadriculada também entram sozinhos, pelo menu Gráficos. No modo Mover, os
+            dos eixos. Eixos e malha quadriculada também entram sozinhos, por Inserir. No modo Mover, os
             quadradinhos nas pontas dos eixos, da malha e das retas mudam o tamanho deles; a ponta de um gráfico desliza pela curva. Com o ímã ao lado da prévia
             (Encaixar na grade) ligado, a ponta perto de uma marca vai para a marca; desligado, fica onde você soltar.
             Clique com o botão direito numa curva para pôr ali um ponto ou a reta tangente; com um ponto do gráfico
@@ -112,6 +116,16 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </ul>
           <p className="mt-1 text-xs text-muted-foreground">Os atalhos podem ser mudados em Configurações.</p>
         </div>
+        <p className="text-sm">
+          <a href="/guia.html" target="_blank" rel="noopener" className="text-primary underline underline-offset-2">
+            Guia da barra de entrada, com exemplos para experimentar
+          </a>
+        </p>
+        {welcomeHidden && (
+          <button type="button" className="self-start text-xs underline underline-offset-2" onClick={() => showWelcome(false)}>
+            Mostrar de novo o exemplo inicial
+          </button>
+        )}
         <p className="text-xs text-muted-foreground">A figura fica salva neste navegador, mesmo se você fechar a página.</p>
       </DialogContent>
     </Dialog>
