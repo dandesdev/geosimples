@@ -7,6 +7,10 @@ import {
   addVennDiagram,
   applyInput,
   boardLayout,
+  boardSlots,
+  joinRelationSigns,
+  setAllBoardGaps,
+  toggleBoardGap,
   boardError,
   deleteElements,
   emptyDoc,
@@ -39,6 +43,7 @@ import {
 const flat = (n: MathNode): string => {
   if (typeof n === "string") return n;
   if ("word" in n) return n.word;
+  if ("delim" in n) return n.delim;
   if ("row" in n) return n.row.map(flat).join("");
   if ("frac" in n) return `${flat(n.frac[0])}/${flat(n.frac[1])}`;
   if ("sqrt" in n) return `√${flat(n.sqrt)}`;
@@ -568,8 +573,8 @@ describe("number line boards", () => {
     expect(t).toContain("S = {−4/3}");
   });
 
-  it("refuses modules of higher degree", () => {
-    expect(boardError("modular |x²-1|=3")).toMatch(/1º grau/);
+  it("opens modules of any degree", () => {
+    expect(boardError("modular |x²-1|=3")).toBeNull();
   });
 });
 
@@ -623,5 +628,118 @@ describe("boards in the figure", () => {
     expect(parseInput("n(A∩B)=3").counts).toHaveLength(1);
     expect(parseInput("x=2").lines).toHaveLength(1);
     expect(parseInput("+1;2", { points: [{ id: "p1", x: 0, y: 0 }] }).nodes).toHaveLength(1);
+  });
+});
+
+describe("choices for the printed board", () => {
+  it("writes the sign of a column operation on the right when asked", () => {
+    for (const source of ["58+67", "302-5", "12x34"]) {
+      const { el, doc } = board(source, { signSide: "right" });
+      const marks = boardLayout(el, doc)!.marks.flatMap((m) => (m.kind === "text" ? [m] : []));
+      const sign = marks.find((m) => ["+", "−", "×"].includes(flat(m.node)))!;
+      const digits = marks.filter((m) => /^\d$/.test(flat(m.node)));
+      expect(sign.at.x).toBeGreaterThan(Math.max(...digits.map((d) => d.at.x)));
+    }
+  });
+
+  it("leaves out the results picked by hand, as boxes, blanks or a text", () => {
+    const boxes = (patch: Partial<Board>) => {
+      const { el, doc } = board("1234÷5", { show: "gaps", gaps: [0, 2], ...patch });
+      return boardLayout(el, doc)!.marks;
+    };
+    expect(boxes({}).filter((m) => m.kind === "box")).toHaveLength(2);
+    expect(boxes({ gapStyle: "text", gapText: "?" }).filter((m) => m.kind === "text" && m.node === "?")).toHaveLength(2);
+    const full = boxes({ gaps: [] }).length;
+    expect(boxes({ gapStyle: "blank" })).toHaveLength(full - 2);
+  });
+
+  it("toggles a gap from the preview, starting from the ones the seed drew", () => {
+    const { doc, el } = board("1234÷5", { show: "gaps" });
+    const before = boardSlots(el, doc).filter((s) => s.gap).map((s) => s.index);
+    const free = boardSlots(el, doc).find((s) => !s.gap)!.index;
+    const after = toggleBoardGap(doc, el.id, free).doc.elements[0] as Board;
+    expect(after.gaps).toEqual([...before, free].sort((a, b) => a - b));
+    const none = setAllBoardGaps(doc, el.id, false).doc.elements[0] as Board;
+    expect(none.gaps).toEqual([]);
+    const all = setAllBoardGaps(doc, el.id, true).doc.elements[0] as Board;
+    expect(all.gaps).toHaveLength(boardSlots(el, doc).length);
+  });
+
+  it("draws the stretches of a set as waves when asked", () => {
+    const { el, doc } = board("varal [1;3] ∩ ]2;5[", { intervals: "wave" });
+    expect(boardLayout(el, doc)!.marks.some((m) => m.kind === "curve" && m.role === "result")).toBe(true);
+  });
+
+  it("keeps the new choices through a saved file", () => {
+    const { doc } = board("58+67", { signSide: "right", gaps: [1], gapStyle: "text", gapText: "?", intervals: "wave" });
+    expect(normalizeDoc(JSON.parse(JSON.stringify(doc))).elements[0]).toMatchObject({ signSide: "right", gaps: [1], gapStyle: "text", gapText: "?", intervals: "wave" });
+  });
+});
+
+describe("inequalities", () => {
+  it("joins >= and <= into one sign", () => {
+    expect(joinRelationSigns("x >= 2 e x <= 5")).toBe("x ≥ 2 e x ≤ 5");
+  });
+
+  it("sketches the set where an inequality holds", () => {
+    expect(texts("sinal x²-4 >= 0").join(" ")).toContain("S = ]−∞; −2] ∪ [2; +∞[");
+    expect(texts("sinal x²-4 < 0").join(" ")).toContain("S = ]−2; 2[");
+    expect(texts("sinal x² ≤ 0").join(" ")).toContain("S = {0}");
+    expect(texts("sinal x²+1 > 0").join(" ")).toContain("S = ℝ");
+    const { el, doc } = board("sinal x²-4 > 0");
+    const balls = boardLayout(el, doc)!.marks.filter((m) => m.kind === "dot");
+    expect(balls.map((b) => (b.kind === "dot" ? b.open : null))).toEqual([true, true]);
+  });
+
+  it("never takes a pole into the set", () => {
+    expect(texts("quadro (x-1)/(x-3) >= 0").join(" ")).toContain("S = ]−∞; 1] ∪ ]3; +∞[");
+    expect(texts("quadro x-1 ≥ 0").join(" ")).toContain("S");
+  });
+
+  it("asks for 0 on one side of a sign chart", () => {
+    expect(boardError("quadro (x-1)(x+2) >= 3")).toMatch(/deixe 0/);
+  });
+
+  it("draws the x row of a sign chart as an axis with an arrow", () => {
+    const { el, doc } = board("quadro (x-1)(x+2)");
+    expect(boardLayout(el, doc)!.marks.some((m) => m.kind === "head")).toBe(true);
+  });
+
+  it("solves inequalities with modules", () => {
+    expect(texts("modular |x-2| < 3").join(" ")).toContain("S = ]−1; 5[");
+    expect(texts("|x-1|+|x+2| >= 5").join(" ")).toContain("S = ]−∞; −3] ∪ [2; +∞[");
+    expect(texts("|x²-1| <= 3").join(" ")).toContain("S = [−2; 2]");
+  });
+
+  it("opens modules of higher degree and of functions", () => {
+    expect(texts("modular |x²-4|=3").join(" ")).toContain("S = {−√7; −1; 1; √7}");
+    const sine = texts("modular |sen(x)| = 1/2").join(" ");
+    expect(sine).toContain("S = {π/6; 5π/6; 7π/6; 11π/6}");
+    expect(texts("modular |sen(x)| = 1 em [0; pi]").join(" ")).toContain("S = {π/2}");
+  });
+});
+
+describe("sign sketches", () => {
+  /** The steepness of the curve on each side of a root, in pt per pt. */
+  const slopes = (source: string) => {
+    const { el, doc } = board(source);
+    const curves = boardLayout(el, doc)!.marks.flatMap((m) => (m.kind === "curve" ? [m.points] : []));
+    const ends = curves.flatMap((pts) => [
+      { at: pts[0], slope: Math.abs((pts[1].y - pts[0].y) / (pts[1].x - pts[0].x)) },
+      { at: pts[pts.length - 1], slope: Math.abs((pts[pts.length - 1].y - pts[pts.length - 2].y) / (pts[pts.length - 1].x - pts[pts.length - 2].x)) },
+    ]);
+    return ends.filter((e) => Math.abs(e.at.y) < 1e-6);
+  };
+
+  it("crosses a simple root as steeply on both sides, without a bend", () => {
+    for (const source of ["sinal x²-4", "sinal (x-1)(x+1)(x-3)"]) {
+      const atRoots = slopes(source);
+      const byX = new Map<number, number[]>();
+      for (const e of atRoots) byX.set(Math.round(e.at.x), [...(byX.get(Math.round(e.at.x)) ?? []), e.slope]);
+      for (const pair of byX.values()) {
+        expect(pair).toHaveLength(2);
+        expect(Math.abs(pair[0] - pair[1]) / pair[0]).toBeLessThan(0.05);
+      }
+    }
   });
 });

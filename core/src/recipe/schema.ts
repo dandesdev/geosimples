@@ -341,11 +341,16 @@ const step = z.discriminatedUnion("do", [
   z
     .strictObject({
       do: z.literal("board"),
-      source: z.string().min(1).max(200).describe('Like "1234÷5", "12,5+3", "7x8", "fatorar 360", "mmc(12;18)", "mdc(12;18)", "euclides(48;18)", "varal [1;3] ∩ ]2;5[", "sinal x²-4", "quadro (x-1)/(x+2)", "modular |x-1|=3"'),
+      source: z.string().min(1).max(200).describe('Like "1234÷5", "12,5+3", "7x8", "fatorar 360", "mmc(12;18)", "mdc(12;18)", "euclides(48;18)", "varal [1;3] ∩ ]2;5[", "sinal x²-4 ≥ 0", "quadro (x-1)/(x+2) < 0", "modular |x²-1|=3", "|sen(x)| = 1/2 em [0; 2pi]"'),
       show: z.enum(["full", "blank", "gaps"]).optional().describe("blank: only the setup, to solve; gaps: some results as empty boxes"),
       method: z.enum(["long", "short"]).optional().describe("Division: write each subtraction, or only the remainders"),
       places: z.number().int().min(0).max(6).optional().describe("Division: decimal places of the quotient"),
       marks: z.boolean().optional().describe("Carries and borrows; default true"),
+      gaps: z.array(z.number().int().min(0)).max(200).optional().describe("With show gaps: which results, by order, instead of drawn at random"),
+      gapStyle: z.enum(["box", "blank", "text"]).optional(),
+      gapText: z.string().max(12).optional().describe('In each gap with gapStyle text, like "?"'),
+      signSide: z.enum(["left", "right"]).optional().describe("Columns: side of the + − ×"),
+      intervals: z.enum(["thick", "wave"]).optional().describe("Number lines: sets as thick or wavy lines"),
       at: xy.optional().describe("Top left corner; default under what is drawn"),
       size: z.number().min(6).max(40).optional().describe("Font size, pt"),
     })

@@ -251,9 +251,9 @@ On a graph: "pointOnGraph" at x, "notable" for roots (x₁, x₂…), turning po
   },
   boards: {
     title: "Worked layouts",
-    text: `"board" lays out what is taught as a written procedure, from one line of text, and computes every step: columns ("123+45", "1000-37", "12,5x3"), long division with the chave as taught in Brazil ("1234÷5"), "fatorar 360", "mmc(12;18)", "mdc(12;18)", "euclides(48;18)", "varal [1;3] ∩ ]2;5[" (interval operations in aligned lines), "sinal x²-4" (a sketch of the curve over the line, with signs), "quadro (x-1)(x+2)/(x-3)" (sign chart by factor) and "modular |x-1| + |x+2| = 5" (a column for each stretch of the line).
+    text: `"board" lays out what is taught as a written procedure, from one line of text, and computes every step: columns ("123+45", "1000-37", "12,5x3"), long division with the chave as taught in Brazil ("1234÷5"), "fatorar 360", "mmc(12;18)", "mdc(12;18)", "euclides(48;18)", "varal [1;3] ∩ ]2;5[" (interval operations in aligned lines), "sinal x²-4" (a sketch of the curve over the line, with signs), "quadro (x-1)(x+2)/(x-3)" (sign chart by factor) and "modular |x-1| + |x+2| = 5" (a column for each stretch of the line; any degree, and functions like sen with "em [0; 2pi]"). "sinal", "quadro" and "modular" also take inequalities (<, ≤, >, ≥): the set that solves it is drawn on the line, with open and closed balls, and written as S.
 
-For a test, "show": "blank" keeps only the setup and "gaps" leaves some results as empty boxes. In a division, "method" is "long" (each subtraction) or "short" (only remainders), and "places" carries the quotient to that many decimals. Boards go one under the other unless "at" says where.`,
+For a test, "show": "blank" keeps only the setup and "gaps" leaves some results out: "gaps" lists which by order, "gapStyle" is "box", "blank" or "text" (with "gapText", like "?"). "signSide": "right" writes + − × right of the numbers; "intervals": "wave" draws sets as wavy lines. In a division, "method" is "long" (each subtraction) or "short" (only remainders), and "places" carries the quotient to that many decimals. Boards go one under the other unless "at" says where.`,
     examples: [
       {
         request: "A conta 1234 ÷ 5 armada, com todos os passos.",

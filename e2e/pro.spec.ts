@@ -603,3 +603,17 @@ test("pro layout: two full-height panel columns on both sides of the preview sti
   expect(Math.abs(labels.x - after.x)).toBeLessThanOrEqual(1);
   expect(labels.y).toBeGreaterThan(after.y + after.height - 5);
 });
+
+test("pro layout: a toolbar between the preview and the panels doesn't widen the panels at each reload", async ({ page }) => {
+  const width = async () => Math.round((await box(panel(page, "properties"))).width);
+  const p = await box(page.getByRole("region", { name: "Prévia da figura" }));
+  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(p, 0.98, 0.5));
+  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toHaveAttribute("aria-orientation", "vertical");
+  const start = await width();
+  for (let i = 0; i < 2; i++) {
+    await page.reload();
+    await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+    await expect.poll(width).toBe(start);
+  }
+  expect(Math.round((await box(page.getByRole("toolbar", { name: "Ferramentas" }))).width)).toBeLessThanOrEqual(48);
+});

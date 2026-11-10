@@ -29,6 +29,8 @@ import {
   pointOnSelectedGraph,
   toggleGuides,
   addNumberLine,
+  toggleBoardGap,
+  setAllBoardGaps,
   addAxes,
   addGrid,
   markNotable,
@@ -137,6 +139,12 @@ export const actions = {
     if (!perform((doc) => addNumberLine(doc))) return;
     startInput("[");
   },
+
+  /** Leaves a result of the selected board out, or puts it back. */
+  toggleGap: (id: Id, index: number) => perform((doc) => toggleBoardGap(doc, id, index), "keep"),
+
+  /** Every result of the board as a gap, or none. */
+  allGaps: (id: Id, all: boolean) => perform((doc) => setAllBoardGaps(doc, id, all), "keep"),
 
   /** Text that starts something typed in the input bar, like "mmc(". */
   startTyping: (prefill: string) => startInput(prefill),

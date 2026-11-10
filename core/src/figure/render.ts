@@ -22,7 +22,7 @@ import {
   vectorNameSpans,
   type LabelRun,
 } from "./labels";
-import { boardLayout, layoutMath, type MathPart } from "./board";
+import { boardLayout, boardSlots, layoutMath, type MathPart } from "./board";
 import { regionOutline, vennItemSpots, type RegionEdge } from "./sets";
 import { grow, LineIndex, overlap, pathLines, textBox } from "./lines";
 import {
@@ -119,6 +119,19 @@ export interface Scene {
   ky: number;
   /** Where each axis number went, by axes id: TikZ writes them in the same spots. */
   numberSpots: Map<Id, AxisNumberSpots>;
+  /** The results of each "gaps" board, in scene pt, for picking its gaps in the preview. */
+  boardSlots: SceneSlot[];
+}
+
+/** A result a board can leave as a gap, as a rectangle in the scene. */
+export interface SceneSlot {
+  owner: Id;
+  index: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  gap: boolean;
 }
 
 export interface SceneOptions {
@@ -192,6 +205,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     label: [],
   };
   const axisNumbers: { el: Axes; x: AxisNumber[]; y: AxisNumber[] }[] = [];
+  const slots: SceneSlot[] = [];
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
     grid: [],
@@ -425,6 +439,12 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         box.add(c0.x, c0.y, 2);
         box.add(c1.x, c1.y, 2);
         hits.board.push({ owner: el.id, type: "board", d: `M${f(c0.x)} ${f(c0.y)}H${f(c1.x)}V${f(c1.y)}H${f(c0.x)}Z`, area: true });
+        if (el.show === "gaps") {
+          for (const s of boardSlots(el, doc)) {
+            const c = T({ x: s.at.x - s.w / 2, y: s.at.y + s.h / 2 });
+            slots.push({ owner: el.id, index: s.index, x: c.x, y: c.y, w: s.w, h: s.h, gap: s.gap });
+          }
+        }
         break;
       }
       case "extension": {
@@ -787,6 +807,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     kx,
     ky,
     numberSpots,
+    boardSlots: slots,
   };
 }
 

@@ -17,6 +17,8 @@ import {
   type Axes,
   type Board,
   type BoardShow,
+  type GapStyle,
+  MAX_GAP_TEXT,
   type EndMark,
   type FunctionGraph,
   type Grid,
@@ -646,7 +648,13 @@ function VennItemsProperties({ el, doc }: EditorProps<VennItems>) {
 const BOARD_SHOW: { value: BoardShow; label: string; title: string }[] = [
   { value: "full", label: "Resolvido", title: "Com todos os passos, para o gabarito" },
   { value: "blank", label: "Em branco", title: "Só o enunciado armado, para o aluno resolver" },
-  { value: "gaps", label: "Lacunas", title: "Alguns resultados viram quadradinhos para completar" },
+  { value: "gaps", label: "Lacunas", title: "Alguns resultados ficam para completar" },
+];
+
+const GAP_STYLES: { value: GapStyle; label: string; title: string }[] = [
+  { value: "box", label: "Quadradinho", title: "Um quadradinho vazio no lugar do número" },
+  { value: "blank", label: "Em branco", title: "Só o espaço, sem nada" },
+  { value: "text", label: "Texto", title: "Um texto no lugar do número, como ?" },
 ];
 
 function BoardProperties({ el, update, multi }: EditorProps<Board>) {
@@ -685,9 +693,35 @@ function BoardProperties({ el, update, multi }: EditorProps<Board>) {
       <Section title="Para a prova">
         <Choice label="Mostrar" value={el.show} options={BOARD_SHOW} onChange={(show) => update((b) => ({ ...b, show }), "show")} />
         {el.show === "gaps" && (
-          <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => update((b) => ({ ...b, seed: b.seed + 1 }), "seed")}>
-            Sortear outras lacunas
-          </Button>
+          <>
+            {!multi && <Hint>Clique nos números da prévia para escolher as lacunas.</Hint>}
+            <div className="mt-1 grid grid-cols-3 gap-1">
+              <Button size="sm" variant="outline" title="Outras lacunas, escolhidas ao acaso" onClick={() => update((b) => ({ ...b, seed: b.seed + 1, gaps: null }), "seed")}>
+                Sortear
+              </Button>
+              {!multi && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => actions.allGaps(el.id, true)}>
+                    Todas
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => actions.allGaps(el.id, false)}>
+                    Nenhuma
+                  </Button>
+                </>
+              )}
+            </div>
+            <Choice label="Na lacuna" value={el.gapStyle} options={GAP_STYLES} onChange={(gapStyle) => update((b) => ({ ...b, gapStyle }), "gapStyle")} />
+            {el.gapStyle === "text" && (
+              <Field label="Texto">
+                <Input
+                  value={el.gapText}
+                  maxLength={MAX_GAP_TEXT}
+                  aria-label="Texto da lacuna"
+                  onChange={(e) => update((b) => ({ ...b, gapText: e.target.value }), "gapText")}
+                />
+              </Field>
+            )}
+          </>
         )}
       </Section>
       {kind === "div" && (
@@ -709,6 +743,29 @@ function BoardProperties({ el, update, multi }: EditorProps<Board>) {
       {(kind === "add" || kind === "sub" || kind === "mul") && (
         <Section title="Conta">
           <SwitchField label="Vai um e empréstimos" checked={el.marks} onChange={(marks) => update((b) => ({ ...b, marks }), "marks")} />
+          <Choice
+            label="Sinal da conta"
+            value={el.signSide}
+            options={[
+              { value: "left", label: "À esquerda", title: "O +, o − ou o × antes dos números" },
+              { value: "right", label: "À direita", title: "O +, o − ou o × depois dos números" },
+            ]}
+            onChange={(signSide) => update((b) => ({ ...b, signSide }), "signSide")}
+          />
+        </Section>
+      )}
+      {(kind === "varal" || kind === "sign" || kind === "table" || kind === "modulus") && (
+        <Section title="Reta">
+          <Choice
+            label="Intervalos"
+            value={el.intervals}
+            options={[
+              { value: "thick", label: "Linha grossa", title: "Os intervalos como uma linha grossa" },
+              { value: "wave", label: "Ondinhas", title: "Os intervalos como uma linha ondulada" },
+            ]}
+            onChange={(intervals) => update((b) => ({ ...b, intervals }), "intervals")}
+          />
+          {kind !== "varal" && <Hint>Com uma inequação, como x²-4 ≥ 0, o conjunto solução aparece na reta.</Hint>}
         </Section>
       )}
       {!multi && (

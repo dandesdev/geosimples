@@ -12,6 +12,10 @@ export interface LayoutContext {
   method: "long" | "short";
   places: number;
   marks: boolean;
+  /** Where the sign of a column operation goes. */
+  signSide: "left" | "right";
+  /** How the number lines draw a stretch of a set. */
+  intervals: "thick" | "wave";
 }
 
 /** A number as typed, split at its decimal separator. */
@@ -45,13 +49,20 @@ const line = (x0: number, y0: number, x1: number, y1: number, width?: number): M
   ...(width ? { width } : {}),
 });
 
-/** Columns counted from the right, so numbers line up by their last digit. */
+/**
+ * Columns counted from the right, so numbers line up by their last digit.
+ * `width` counts one column for the sign, on the left of the digits or on
+ * their right, as each teacher writes it.
+ */
 function columns(width: number, ctx: LayoutContext) {
   const cell = cellOf(ctx);
+  const last = ctx.signSide === "right" ? width - 2 : width - 1;
   return {
-    x: (p: number) => (width - 1 - p) * cell + cell / 2,
+    x: (p: number) => (last - p) * cell + cell / 2,
     /** The separator sits on the left edge of column `p`. */
-    sep: (p: number) => (width - 1 - p) * cell,
+    sep: (p: number) => (last - p) * cell,
+    /** Where the sign of the operation goes. */
+    sign: ctx.signSide === "right" ? (width - 1) * cell + cell * 0.6 : cell / 2,
     cell,
   };
 }
@@ -73,11 +84,11 @@ export function addition(numbers: Decimal[], ctx: LayoutContext): Mark[] {
   const { frac, digits } = alignDecimals(numbers);
   const total = digits.reduce((acc, d) => acc + BigInt(d), 0n).toString();
   const width = Math.max(total.length, ...digits.map((d) => d.length)) + 1;
-  const { x, sep, cell } = columns(width, ctx);
+  const { x, sep, sign, cell } = columns(width, ctx);
   const row = rowOf(ctx);
   const out: Mark[] = [];
   digits.forEach((d, i) => writeDigits(out, d, frac, x, sep, -(i + 1) * row, ctx));
-  out.push(text(cell / 2, -digits.length * row, "+", ctx.size));
+  out.push(text(sign, -digits.length * row, "+", ctx.size));
   const bottom = -(digits.length + 0.5) * row;
   out.push(line(0, bottom, width * cell, bottom));
   writeDigits(out, total, frac, x, sep, -(digits.length + 1) * row, ctx, "result");
@@ -99,12 +110,12 @@ export function subtraction(a: Decimal, b: Decimal, ctx: LayoutContext): Mark[] 
   if (BigInt(top) < BigInt(bottomDigits)) return "O resultado seria negativo: escreva o número maior primeiro.";
   const result = (BigInt(top) - BigInt(bottomDigits)).toString().padStart(frac + 1, "0");
   const width = Math.max(top.length, bottomDigits.length) + 1;
-  const { x, sep, cell } = columns(width, ctx);
+  const { x, sep, sign, cell } = columns(width, ctx);
   const row = rowOf(ctx);
   const out: Mark[] = [];
   writeDigits(out, top, frac, x, sep, -row, ctx);
   writeDigits(out, bottomDigits, frac, x, sep, -2 * row, ctx);
-  out.push(text(cell / 2, -2 * row, "−", ctx.size));
+  out.push(text(sign, -2 * row, "−", ctx.size));
   const bottom = -2.5 * row;
   out.push(line(0, bottom, width * cell, bottom));
   writeDigits(out, result, frac, x, sep, -3 * row, ctx, "result");
@@ -138,12 +149,12 @@ export function multiplication(a: Decimal, b: Decimal, ctx: LayoutContext): Mark
   const shown = product.toString().padStart(frac + 1, "0");
   const lower = Array.from(x2).reverse();
   const width = Math.max(shown.length, x1.length, x2.length) + 1;
-  const { x, sep, cell } = columns(width, ctx);
+  const { x, sep, sign, cell } = columns(width, ctx);
   const row = rowOf(ctx);
   const out: Mark[] = [];
   writeDigits(out, x1, a.frac.length, x, sep, -row, ctx);
   writeDigits(out, x2, b.frac.length, x, sep, -2 * row, ctx);
-  out.push(text(cell / 2, -2 * row, "×", ctx.size));
+  out.push(text(sign, -2 * row, "×", ctx.size));
   let y = -2.5 * row;
   out.push(line(0, y, width * cell, y));
   if (lower.length === 1) {
@@ -165,7 +176,7 @@ export function multiplication(a: Decimal, b: Decimal, ctx: LayoutContext): Mark
     for (let i = 0; i < digits.length; i++) out.push(text(x(digits.length - 1 - i + shift), -r * row, digits[i], ctx.size, "result"));
     r++;
   });
-  out.push(text(cell / 2, -(r - 1) * row, "+", ctx.size));
+  out.push(text(sign, -(r - 1) * row, "+", ctx.size));
   y = -(r - 0.5) * row;
   out.push(line(0, y, width * cell, y));
   writeDigits(out, shown, frac, x, sep, -r * row, ctx, "result");

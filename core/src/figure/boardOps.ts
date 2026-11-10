@@ -1,4 +1,4 @@
-import { boardError, MAX_BOARD_SOURCE } from "./board";
+import { boardError, boardSlots, MAX_BOARD_SOURCE } from "./board";
 import { DEFAULT_STYLES, LIMITS } from "./defaults";
 import { idMaker, LIMIT_ERROR, roomFor, withElements, type OpOptions, type OpResult } from "./ops";
 import { buildScene } from "./render";
@@ -35,6 +35,11 @@ export function addBoard(doc: FigureDoc, source: string, opts: OpOptions = {}, a
     source: text,
     show: "full",
     seed: 0,
+    gaps: null,
+    gapStyle: "box",
+    gapText: "?",
+    signSide: "left",
+    intervals: "thick",
     method: "long",
     places: 0,
     marks: true,
@@ -44,4 +49,22 @@ export function addBoard(doc: FigureDoc, source: string, opts: OpOptions = {}, a
     font: styles.label.font,
   };
   return { doc: withElements(doc, [...doc.elements, board]), created: [board.id] };
+}
+
+/** Leaves a result of a "gaps" board out, or puts it back. Picking by hand replaces the gaps the seed drew. */
+export function toggleBoardGap(doc: FigureDoc, id: string, index: number): OpResult {
+  const board = doc.elements.find((e): e is Board => e.id === id && e.type === "board");
+  if (!board) return { doc, created: [], error: "Selecione uma conta ou um quadro." };
+  const slots = boardSlots(board, doc);
+  if (!slots[index]) return { doc, created: [], error: "Essa parte não pode virar lacuna." };
+  const gaps = slots.filter((s) => (s.index === index ? !s.gap : s.gap)).map((s) => s.index);
+  return { doc: withElements(doc, doc.elements.map((e) => (e === board ? { ...board, show: "gaps" as const, gaps } : e))), created: [] };
+}
+
+/** Every result of the board as a gap, or none. */
+export function setAllBoardGaps(doc: FigureDoc, id: string, all: boolean): OpResult {
+  const board = doc.elements.find((e): e is Board => e.id === id && e.type === "board");
+  if (!board) return { doc, created: [], error: "Selecione uma conta ou um quadro." };
+  const gaps = all ? boardSlots(board, doc).map((s) => s.index) : [];
+  return { doc: withElements(doc, doc.elements.map((e) => (e === board ? { ...board, show: "gaps" as const, gaps } : e))), created: [] };
 }

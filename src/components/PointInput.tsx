@@ -49,6 +49,13 @@ const SET_SYMBOLS = [
 function symbolsFor(text: string) {
   if (/^\s*(?:regi|n\s*\()/i.test(text)) return [...SET_SYMBOLS, { text: "'", title: "Complementar" }];
   if (/^\s*(?:varal\b|[[\]])/i.test(text)) return [...SET_SYMBOLS, { text: "∞", title: "Infinito (ou digite inf)" }];
+  if (/^\s*(?:sinal|quadro|modular|m[oó]dulo)\b|\|/i.test(text)) {
+    return [
+      { text: "≤", title: "Menor ou igual (ou digite <=)" },
+      { text: "≥", title: "Maior ou igual (ou digite >=)" },
+      { text: "π", title: "Pi (ou digite pi)" },
+    ];
+  }
   return [];
 }
 
@@ -170,7 +177,17 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             id="point-input"
             value={text}
             onChange={(e) => {
-              setText(e.target.value);
+              const input = e.currentTarget;
+              const typed = input.value;
+              // >= and <= become ≥ and ≤ as they are typed: keyboards have no key for them.
+              const joined = typed.replace(/>=/g, "≥").replace(/<=/g, "≤");
+              if (joined !== typed) {
+                // Changed here, with the caret, so the next key lands where it should.
+                const caret = (input.selectionStart ?? typed.length) - (typed.length - joined.length);
+                input.value = joined;
+                input.setSelectionRange(caret, caret);
+              }
+              setText(joined);
               requestAnimationFrame(syncScroll);
             }}
             onScroll={syncScroll}

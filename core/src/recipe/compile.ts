@@ -994,6 +994,11 @@ function runStep(build: Build, step: RecipeStep) {
               method: step.method ?? e.method,
               places: step.places ?? e.places,
               marks: step.marks ?? e.marks,
+              gaps: step.gaps ?? e.gaps,
+              gapStyle: step.gapStyle ?? e.gapStyle,
+              gapText: step.gapText ?? e.gapText,
+              signSide: step.signSide ?? e.signSide,
+              intervals: step.intervals ?? e.intervals,
               size: step.size ?? e.size,
             }
           : e,

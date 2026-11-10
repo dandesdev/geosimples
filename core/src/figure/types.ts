@@ -286,6 +286,9 @@ export interface VennItems {
 /** What a board shows: everything, only the setup to be solved, or some results left as blanks. */
 export type BoardShow = "full" | "blank" | "gaps";
 
+/** What stands where a result was left out: an empty box, nothing, or a text like "?". */
+export type GapStyle = "box" | "blank" | "text";
+
 /**
  * A worked layout placed on the figure, like a long division, a factorization
  * or a sign chart. `source` is what the teacher typed, and every renderer lays
@@ -298,8 +301,17 @@ export interface Board {
   y: number;
   source: string;
   show: BoardShow;
-  /** Picks which results a "gaps" board leaves blank. */
+  /** Picks which results a "gaps" board leaves blank, while `gaps` is null. */
   seed: number;
+  /** The results left out, by their order on the board; null draws them by `seed`. */
+  gaps: number[] | null;
+  gapStyle: GapStyle;
+  /** Written in each gap when `gapStyle` is "text". */
+  gapText: string;
+  /** Columns: where the sign of the operation goes, left of the numbers or right of them. */
+  signSide: "left" | "right";
+  /** Number lines: a stretch of the set as a thick line or as a wavy one. */
+  intervals: "thick" | "wave";
   /** Division: "long" writes each subtraction, "short" only the remainders. */
   method: "long" | "short";
   /** Division: decimal places to carry the quotient to. */

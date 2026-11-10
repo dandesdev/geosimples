@@ -1,12 +1,13 @@
 import { AXES_GRID, DEFAULT_AXES_STROKE, DEFAULT_LABEL, DEFAULT_PLOT_WINDOW, DEFAULT_STROKE, emptyDoc, isValidColor, LIMITS } from "./defaults";
 import { MAX_EXPR_LENGTH } from "../plot";
-import { boardError, MAX_BOARD_SOURCE } from "./board";
+import { boardError, MAX_BOARD_SOURCE, MAX_GAP_TEXT } from "./board";
 import { MEASURES } from "./labels";
 import type {
   Angle,
   Axes,
   Board,
   BoardShow,
+  GapStyle,
   Circle,
   CircleConstruction,
   Dash,
@@ -287,6 +288,13 @@ export function normalizeDoc(input: unknown): FigureDoc {
           source,
           show: oneOf<BoardShow>(r.show, ["full", "blank", "gaps"], "full"),
           seed: Math.round(num(r.seed, 0, 1e6, 0)),
+          gaps: Array.isArray(r.gaps)
+            ? [...new Set(r.gaps.filter((g): g is number => Number.isInteger(g) && g >= 0 && g < 2000))].slice(0, 500)
+            : null,
+          gapStyle: oneOf<GapStyle>(r.gapStyle, ["box", "blank", "text"], "box"),
+          gapText: (str(r.gapText) ?? "?").slice(0, MAX_GAP_TEXT),
+          signSide: r.signSide === "right" ? "right" : "left",
+          intervals: r.intervals === "wave" ? "wave" : "thick",
           method: r.method === "short" ? "short" : "long",
           places: Math.round(num(r.places, 0, 6, 0)),
           marks: r.marks !== false,

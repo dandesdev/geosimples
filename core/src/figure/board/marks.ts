@@ -12,6 +12,8 @@ export type MathNode =
   | string
   /** Upright letters, like the MMC of "MMC = 12". */
   | { word: string }
+  /** A bracket that opens or closes, whichever way it faces, like both ends of ]2; 5[. */
+  | { delim: string; side: "open" | "close" }
   | { row: MathNode[] }
   | { frac: [MathNode, MathNode] }
   | { sqrt: MathNode }
@@ -57,6 +59,7 @@ const shift = (parts: MathPart[], dx: number, dy: number): MathPart[] =>
 
 /** Lays math out from its left end, on its middle line at y = 0. */
 export function layoutMath(node: MathNode, size: number): MathBox {
+  if (typeof node !== "string" && "delim" in node) return layoutMath(node.delim, size);
   if (typeof node === "string" || "word" in node) {
     const text = typeof node === "string" ? node : node.word;
     // Capitals in an upright word are wider than the average letter.
@@ -126,7 +129,10 @@ export function layoutMath(node: MathNode, size: number): MathBox {
 export const mathWidth = (node: MathNode, size: number) => layoutMath(node, size).w;
 
 function inner(node: MathNode): string {
-  if (typeof node === "string") return mathLatex(node);
+  // Math mode drops spaces: "x = 1; x = 2" needs one after the semicolon.
+  if (typeof node === "string") return /; /.test(node) ? mathLatex(node).replace(/\{;\}/g, "{;}\\ ") : mathLatex(node);
+  // As an opening bracket, ] doesn't push the − of −∞ away as if it were a subtraction.
+  if ("delim" in node) return `\\math${node.side}{${mathLatex(node.delim)}}`;
   // \\mbox and not \\mathrm: math mode drops accented letters like the ç of Equação.
   if ("word" in node) return `\\mbox{${node.word}}`;
   if ("row" in node) return node.row.map(inner).join("");

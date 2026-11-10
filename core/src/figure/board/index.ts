@@ -5,9 +5,13 @@ import { layoutOf, mathWidth, type BoardLayout, type Mark } from "./marks";
 import { modulusTable, readVaral, signSketch, signTable, varal, type VaralSpec } from "./number-line";
 
 export * from "./marks";
+export { joinRelationSigns } from "./relation";
 
 /** Longest text a board may be typed from. */
 export const MAX_BOARD_SOURCE = 200;
+
+/** Longest text written in a gap, like "?" or "___". */
+export const MAX_GAP_TEXT = 12;
 
 /** The largest whole number the factoring and MDC devices take. */
 const MAX_DEVICE_NUMBER = 1e9;
@@ -110,7 +114,7 @@ export function parseBoard(source: string, locale: Locale = "pt-BR"): BoardSpec 
       return needsRest(() => ({ kind: "table", expr: rest }), "quadro (x-1)(x+2)/(x-3)");
     case "modular":
     case "modulo":
-      return needsRest(() => ({ kind: "modulus", equation: rest }), "modular |x-1| + |x+2| = 5");
+      return needsRest(() => ({ kind: "modulus", equation: rest }), "modular |x-1| + |x+2| = 5 ou modular |x-2| < 3");
   }
   const arithmetic = readArithmetic(text, false);
   if (arithmetic !== null) return arithmetic;
@@ -118,7 +122,7 @@ export function parseBoard(source: string, locale: Locale = "pt-BR"): BoardSpec 
     const parsed = readVaral(text, locale);
     return parsed === null || typeof parsed === "string" ? parsed : { kind: "varal", spec: parsed };
   }
-  if (/^\|.*=/.test(text) || /\|.*\|.*=/.test(text)) return { kind: "modulus", equation: text };
+  if (/\|.*\|.*[=<>≤≥]/.test(text)) return { kind: "modulus", equation: text };
   return null;
 }
 
@@ -153,16 +157,24 @@ function layoutSpec(spec: BoardSpec, ctx: LayoutContext): Mark[] | string {
   }
 }
 
-type BoardOptions = Pick<Board, "source" | "method" | "places" | "marks" | "size">;
+type BoardOptions = Pick<Board, "source" | "method" | "places" | "marks" | "size" | "signSide" | "intervals">;
 
 function run(board: BoardOptions, locale: Locale): Mark[] | string {
   const spec = parseBoard(board.source, locale);
   if (spec === null) return "Não entendi essa conta ou tabela.";
   if (typeof spec === "string") return spec;
-  return layoutSpec(spec, { size: board.size, locale, method: board.method, places: board.places, marks: board.marks });
+  return layoutSpec(spec, {
+    size: board.size,
+    locale,
+    method: board.method,
+    places: board.places,
+    marks: board.marks,
+    signSide: board.signSide,
+    intervals: board.intervals,
+  });
 }
 
-const NEUTRAL: BoardOptions = { source: "", method: "long", places: 0, marks: true, size: 12 };
+const NEUTRAL: BoardOptions = { source: "", method: "long", places: 0, marks: true, size: 12, signSide: "left", intervals: "thick" };
 
 /** What is wrong with a board's text, or null when it can be drawn. */
 export function boardError(source: string, locale: Locale = "pt-BR"): string | null {
@@ -170,22 +182,39 @@ export function boardError(source: string, locale: Locale = "pt-BR"): string | n
   return typeof out === "string" ? out : null;
 }
 
-/** Results left out of a "gaps" board: about one in three, and always at least one. */
+/** Results left out of a "gaps" board by its seed: about one in three, and always at least one. */
 function isGap(seed: number, index: number): boolean {
   return (seed * 7 + index * 13 + 2) % 3 === 0;
 }
 
-function applyShow(marks: Mark[], board: Pick<Board, "show" | "seed">): Mark[] {
+type TextMark = Extract<Mark, { kind: "text" }>;
+
+/** The results a "gaps" board can leave out, in order: the numbers a student writes. */
+const slotsOf = (marks: Mark[]): TextMark[] => marks.filter((m): m is TextMark => m.kind === "text" && m.role === "result");
+
+/** Which results are left out, by their order: the ones picked by hand, or drawn by the seed. */
+export function gapIndexes(board: Pick<Board, "gaps" | "seed">, count: number): Set<number> {
+  if (board.gaps !== null) return new Set(board.gaps.filter((i) => i < count));
+  const drawn = new Set(Array.from({ length: count }, (_, i) => i).filter((i) => isGap(board.seed, i)));
+  if (drawn.size === 0 && count > 0) drawn.add(0);
+  return drawn;
+}
+
+/** The room a result takes, for its box and for picking it in the preview. */
+const slotSize = (m: TextMark) => ({ w: Math.max(mathWidth(m.node, m.size) + m.size * 0.2, m.size * 0.85), h: m.size * 1.15 });
+
+function applyShow(marks: Mark[], board: Pick<Board, "show" | "seed" | "gaps" | "gapStyle" | "gapText">): Mark[] {
   if (board.show === "full") return marks;
   if (board.show === "blank") return marks.filter((m) => m.kind === "head" || m.kind === "box" || !m.role);
   const without = marks.filter((m) => m.kind === "head" || m.kind === "box" || m.role !== "carry");
-  const results = without.filter((m) => m.kind === "text" && m.role === "result");
-  const gaps = new Set(results.filter((_, i) => isGap(board.seed, i)));
-  if (gaps.size === 0 && results[0]) gaps.add(results[0]);
-  return without.map((m) => {
-    if (!gaps.has(m) || m.kind !== "text") return m;
-    const w = Math.max(mathWidth(m.node, m.size) + m.size * 0.2, m.size * 0.85);
-    return { kind: "box", at: m.at, w, h: m.size * 1.15 };
+  const slots = slotsOf(without);
+  const picked = gapIndexes(board, slots.length);
+  const gaps = new Set(slots.filter((_, i) => picked.has(i)));
+  return without.flatMap((m): Mark[] => {
+    if (m.kind !== "text" || !gaps.has(m)) return [m];
+    if (board.gapStyle === "blank") return [];
+    if (board.gapStyle === "text") return board.gapText.trim() === "" ? [] : [{ kind: "text", at: m.at, node: board.gapText, size: m.size }];
+    return [{ kind: "box", at: m.at, ...slotSize(m) }];
   });
 }
 
@@ -194,4 +223,22 @@ export function boardLayout(board: Board, doc?: Pick<FigureDoc, "locale">): Boar
   const marks = run(board, doc?.locale ?? "pt-BR");
   if (typeof marks === "string") return null;
   return layoutOf(applyShow(marks, board));
+}
+
+/** A result a "gaps" board can leave out, in pt from the board's corner, Y up. */
+export interface BoardSlot {
+  index: number;
+  at: { x: number; y: number };
+  w: number;
+  h: number;
+  gap: boolean;
+}
+
+/** Every result of a board, and whether it is a gap now, for picking the gaps in the preview. */
+export function boardSlots(board: Board, doc?: Pick<FigureDoc, "locale">): BoardSlot[] {
+  const marks = run(board, doc?.locale ?? "pt-BR");
+  if (typeof marks === "string") return [];
+  const slots = slotsOf(marks);
+  const picked = gapIndexes(board, slots.length);
+  return slots.map((m, index) => ({ index, at: m.at, ...slotSize(m), gap: picked.has(index) }));
 }

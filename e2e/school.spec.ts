@@ -149,3 +149,37 @@ test("the input help links to the guide", async ({ page }) => {
   await page.getByRole("button", { name: "Como digitar" }).click();
   await expect(page.getByRole("tooltip").getByRole("link", { name: /Mais explicações/ })).toHaveAttribute("href", "/guia.html");
 });
+
+test("gaps are picked by clicking the numbers, and can hold a text", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("1234÷5");
+  await input.press("Enter");
+  await page.locator('[data-owner="b1"]').click();
+  await page.getByRole("radio", { name: /completar/ }).click();
+  await page.getByRole("button", { name: "Nenhuma", exact: true }).click();
+  await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ show: "gaps", gaps: [] });
+  await page.getByRole("button", { name: "Número 1: virar lacuna" }).click();
+  await page.getByRole("button", { name: "Número 3: virar lacuna" }).click();
+  await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ gaps: [0, 2] });
+  await page.getByRole("button", { name: "Lacuna 1: devolver o número" }).click();
+  await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ gaps: [2] });
+  await page.getByRole("radio", { name: /texto no lugar/ }).click();
+  await page.getByRole("textbox", { name: "Texto da lacuna" }).fill("?");
+  await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ gapStyle: "text", gapText: "?" });
+});
+
+test("the sign of a column operation goes to the right, and >= becomes ≥ as it is typed", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("58+67");
+  await input.press("Enter");
+  await page.locator('[data-owner="b1"]').click();
+  await page.getByRole("radio", { name: /depois dos números/ }).click();
+  await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ signSide: "right" });
+
+  await input.click();
+  await input.fill("");
+  await page.keyboard.type("sinal x^2-4 >= 0");
+  await expect(input).toHaveValue("sinal x^2-4 ≥ 0");
+  await input.press("Enter");
+  await expect.poll(async () => (await counts(page)).board).toBe(2);
+});

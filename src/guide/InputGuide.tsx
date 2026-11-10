@@ -148,14 +148,20 @@ const TOPICS: Topic[] = [
     title: "Varal, sinais e módulos",
     intro: (
       <>
-        Frações e raízes continuam exatas. Entre intervalos, use U, n ou -. Para infinito, escreva <code>inf</code>.
+        Frações e raízes continuam exatas. Entre intervalos, use U, n ou -. Para infinito, escreva <code>inf</code>. Em sinal, quadro
+        e módulos vale inequação: <code>&gt;=</code> vira ≥ e <code>&lt;=</code> vira ≤ enquanto você digita, e o conjunto solução aparece
+        na reta, com bolinhas abertas e fechadas.
       </>
     ),
     samples: [
       { caption: "Varal da interseção de dois intervalos.", lines: ["varal [1/2;3] n ]2;5["] },
       { caption: "A curva sobre a reta, para o estudo de sinal.", lines: ["sinal x^2-4"] },
       { caption: "Quadro de sinais, um fator por linha.", lines: ["quadro (x-1)(x+2)/(x-3)"] },
+      { caption: "Inequação: a solução na reta e o conjunto S.", lines: ["sinal x^2-4 ≥ 0"] },
+      { caption: "Quadro de sinais de uma inequação.", lines: ["quadro (x-1)/(x+2) < 0"] },
       { caption: "Equação modular, em colunas.", lines: ["modular |x-1|+|x+2|=5"] },
+      { caption: "Módulo de qualquer grau, e inequação.", lines: ["|x^2-1| ≤ 3"] },
+      { caption: "Com seno, num intervalo.", lines: ["|sen(x)| = 1/2 em [0; 2pi]"] },
     ],
   },
 ];

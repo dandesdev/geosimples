@@ -223,6 +223,25 @@ export function buildDefaultLayout(target: DockviewApi) {
   requestAnimationFrame(() => requestAnimationFrame(() => fitToolbars(target)));
 }
 
+type SavedNode = { type: "branch"; data: SavedNode[]; size: number } | { type: "leaf"; data: { id: string }; size: number };
+
+/** The width each group was saved with, by group id. */
+function savedWidths(saved: unknown): Map<string, number> {
+  const out = new Map<string, number>();
+  const grid = (saved as { grid?: { root?: SavedNode; orientation?: string; width?: number } }).grid;
+  if (!grid?.root) return out;
+  const walk = (node: SavedNode, across: boolean, width: number) => {
+    if (node.type === "leaf") {
+      out.set(node.data.id, width);
+      return;
+    }
+    // Each level of the grid turns: a row's children share its width, a column's each take their own.
+    for (const child of node.data) walk(child, !across, across ? child.size : width);
+  };
+  walk(grid.root, grid.orientation === "HORIZONTAL", grid.width ?? 0);
+  return out;
+}
+
 /** Restores the saved arrangement, or builds the default one if there is none or it can't be read. */
 export function restoreLayout(target: DockviewApi) {
   const saved = useWorkspaceStore.getState().dock;
@@ -232,6 +251,13 @@ export function restoreLayout(target: DockviewApi) {
       const known = target.panels.every((p) => p.id === PREVIEW_ID || (DOCK_ITEM_IDS as string[]).includes(p.id));
       if (target.getPanel(PREVIEW_ID) && known) {
         prepareGroups(target);
+        // The dock lays toolbars out at its own minimum width first, wider than a toolbar, and
+        // hands what they give back to the last column: the panels grew at every reload.
+        const was = savedWidths(saved);
+        for (const g of target.groups) {
+          const width = was.get(g.id);
+          if (width !== undefined && keepsWidth(target, g) && Math.abs(g.api.width - width) > 1) g.api.setSize({ width });
+        }
         return;
       }
     } catch {
