@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
+import { usePanelStore } from "@/store/panelStore";
 import { ACTION_LABELS, type ActionId } from "@/store/prefsStore";
 
 const HELP_ACTIONS: ActionId[] = [
@@ -25,6 +26,8 @@ const HELP_ACTIONS: ActionId[] = [
 
 export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const touch = useCoarsePointer();
+  const welcomeHidden = usePanelStore((s) => s.welcomeHidden);
+  const showWelcome = usePanelStore((s) => s.setWelcomeHidden);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
@@ -112,6 +115,16 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </ul>
           <p className="mt-1 text-xs text-muted-foreground">Os atalhos podem ser mudados em Configurações.</p>
         </div>
+        <p className="text-sm">
+          <a href="/guia.html" target="_blank" rel="noopener" className="text-primary underline underline-offset-2">
+            Guia da barra de entrada, com exemplos para experimentar
+          </a>
+        </p>
+        {welcomeHidden && (
+          <button type="button" className="self-start text-xs underline underline-offset-2" onClick={() => showWelcome(false)}>
+            Mostrar de novo o exemplo inicial
+          </button>
+        )}
         <p className="text-xs text-muted-foreground">A figura fica salva neste navegador, mesmo se você fechar a página.</p>
       </DialogContent>
     </Dialog>

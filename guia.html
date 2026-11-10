@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Como usar a barra de entrada do GeoSimples, com exemplos para experimentar." />
+    <title>Guia da barra de entrada · GeoSimples</title>
+    <script>
+      // The saved theme, before the first paint, so a dark page doesn't flash white.
+      try {
+        const t = JSON.parse(localStorage.getItem("geosimples-workspace") || "{}").state?.theme;
+        if (t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/guide/main.tsx"></script>
+  </body>
+</html>

@@ -222,7 +222,7 @@ On a graph: "pointOnGraph" at x, "notable" for roots (x₁, x₂…), turning po
   },
   sets: {
     title: "Venn diagrams",
-    text: `"venn" draws 1 to 3 circles inside a rectangle named U; "sets" gives their names. "region" shades what an expression describes: ∪ union, ∩ intersection, − difference, ' complement, parentheses, U for the universe. Give it a "style" with a hatch to print well in black.
+    text: `"venn" draws 1 to 3 circles inside a rectangle named U; "sets" gives their names. "region" shades what an expression describes: ∪ union, ∩ intersection, − difference, ' complement, parentheses, U alone for the universe. Give it a "style" with a hatch to print well in black.
 
 "members" writes a set's elements, and each element lands where its sets overlap: an element of both A and B goes in A∩B. Use "U" for those in no set. "count" writes how many elements one region has: "expr" must be one region of the diagram, like A∩B or A−B.`,
     examples: [

@@ -12,6 +12,7 @@ import {
   emptyDoc,
   layoutMath,
   makeVectors,
+  markSetOperation,
   mathToLatex,
   movePoints,
   normalizeDoc,
@@ -191,6 +192,22 @@ describe("set expressions", () => {
     }
   });
 
+  it("takes letters for ∪ and ∩, which keyboards don't have", () => {
+    const named = (t: string) => {
+      const r = parseSetExpr(t);
+      return r.ok ? r.expr.k : r.error;
+    };
+    expect(named("A U B")).toBe("union");
+    expect(named("A u B")).toBe("union");
+    expect(named("AUB")).toBe("union");
+    expect(named("A n B")).toBe("inter");
+    expect(named("A N B")).toBe("inter");
+    // Where a set can go, U is still the universe.
+    expect(named("U-A")).toBe("diff");
+    expect(named("A n U")).toBe("inter");
+    expect(parseSetExpr("A U").ok).toBe(false);
+  });
+
   it("binds ∩ before ∪", () => {
     const r = parseSetExpr("A∪B∩C");
     expect(r.ok && r.expr.k).toBe("union");
@@ -280,6 +297,32 @@ describe("regions", () => {
     expect(normalizeDoc(JSON.parse(JSON.stringify(doc))).elements).toEqual(doc.elements);
     const circle = doc.elements.find((e) => e.type === "circle")!;
     expect(deleteElements(doc, [circle.id]).doc.elements.some((e) => e.type === "region")).toBe(false);
+  });
+});
+
+describe("set operations from the menu", () => {
+  const expr = (doc: FigureDoc) => regionAt(doc).expr;
+  const circles = (doc: FigureDoc) => doc.elements.filter((e) => e.type === "circle").map((e) => e.id);
+
+  it("uses all the sets when none is selected", () => {
+    expect(expr(markSetOperation(venn(2), [], "union").doc)).toBe("A∪B");
+    expect(expr(markSetOperation(venn(3), [], "inter").doc)).toBe("A∩B∩C");
+    expect(expr(markSetOperation(venn(2), [], "comp").doc)).toBe("(A∪B)'");
+  });
+
+  it("follows the selection, in its order", () => {
+    const doc = venn(3);
+    const [a, b, c] = circles(doc);
+    expect(expr(markSetOperation(doc, [c, a], "inter").doc)).toBe("C∩A");
+    expect(expr(markSetOperation(doc, [b, a], "diff").doc)).toBe("B−A");
+    expect(expr(markSetOperation(doc, [b], "comp").doc)).toBe("B'");
+  });
+
+  it("asks for a selection when the order isn't clear", () => {
+    expect(markSetOperation(venn(3), [], "diff").error).toMatch(/de onde tirar/);
+    const doc = venn(2);
+    expect(markSetOperation(doc, [circles(doc)[0]], "union").error).toMatch(/ao menos dois/);
+    expect(markSetOperation(emptyDoc(), [], "union").error).toMatch(/diagrama/);
   });
 });
 
@@ -447,6 +490,14 @@ describe("number line boards", () => {
     const marks = boardLayout(r.el, r.doc)!.marks.filter((m) => m.kind === "dot" && m.role === "result");
     // ]2; 3]: open at 2, closed at 3.
     expect(marks.map((m) => (m.kind === "dot" ? m.open : null))).toEqual([true, false]);
+  });
+
+  it("takes letters and words between intervals", () => {
+    expect(texts("varal [1;3] U [2;4]")).toContain("A∪B");
+    expect(texts("varal [1;3] n [2;4]")).toContain("A∩B");
+    expect(texts("varal [1;3] inter [2;4]")).toContain("A∩B");
+    expect(texts("varal [1;3] menos [2;4]")).toContain("A−B");
+    expect(parseInput("[1;3] n [2;4]").boards).toHaveLength(1);
   });
 
   it("names the result by the operation", () => {

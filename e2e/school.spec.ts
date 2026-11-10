@@ -63,3 +63,64 @@ test("a Venn diagram takes its elements and a shaded region", async ({ page }) =
   await input.press("Enter");
   await expect.poll(async () => (await counts(page)).region).toBe(1);
 });
+
+test("set operations are buttons, and letters stand in for the symbols when typing", async ({ page }) => {
+  await toolbarButton(page, "Conjuntos").click();
+  await page.getByRole("menuitem", { name: /Diagrama com 2 conjuntos/ }).click();
+  await toolbarButton(page, "Conjuntos").click();
+  await page.getByRole("menuitem", { name: /^Interseção/ }).click();
+  await expect.poll(async () => (await counts(page)).region).toBe(1);
+
+  const input = pointInput(page);
+  await input.fill("região A U B");
+  await expect(page.getByRole("button", { name: /União/ })).toBeVisible();
+  await input.press("Enter");
+  await expect.poll(async () => (await counts(page)).region).toBe(2);
+});
+
+test("the symbol buttons type where the caret is", async ({ page }) => {
+  const input = pointInput(page);
+  await input.fill("região A B");
+  await input.press("ArrowLeft");
+  await page.getByRole("button", { name: /Interseção/ }).click();
+  await expect(input).toHaveValue("região A ∩B");
+});
+
+test("the starting example closes for the visit, or for good", async ({ page }) => {
+  const card = page.getByRole("heading", { name: "Comece pelos pontos" });
+  await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "Fechar", exact: true }).click();
+  await expect(card).toBeHidden();
+  await page.reload();
+  await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "Não mostrar mais" }).click();
+  await expect(card).toBeHidden();
+  await page.reload();
+  await expect(pointInput(page)).toBeVisible();
+  await expect(card).toBeHidden();
+});
+
+test("the guide's examples run as they are edited, and explain mistakes", async ({ page }) => {
+  await page.goto("/guia.html");
+  const line = page.getByRole("textbox", { name: /Uma parábola/ });
+  await expect(line).toHaveValue("f(x)=x^2-1");
+  const figure = page.getByRole("figure").filter({ has: line }).getByTestId("guide-figure");
+  const before = await figure.innerHTML();
+  await line.fill("f(x)=2x+1");
+  await expect.poll(() => figure.innerHTML()).not.toBe(before);
+  await line.fill("f(x)=2 +");
+  await expect(page.getByText(/termina antes da hora/)).toBeVisible();
+  await page.getByRole("figure").filter({ has: line }).getByRole("button", { name: "Voltar ao exemplo" }).click();
+  await expect(line).toHaveValue("f(x)=x^2-1");
+});
+
+test("every example in the guide draws without a mistake", async ({ page }) => {
+  await page.goto("/guia.html");
+  await expect(page.getByRole("heading", { name: "Guia da barra de entrada" })).toBeVisible();
+  await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
+});
+
+test("the input help links to the guide", async ({ page }) => {
+  await page.getByRole("button", { name: "Como digitar" }).click();
+  await expect(page.getByRole("tooltip").getByRole("link", { name: /Mais explicações/ })).toHaveAttribute("href", "/guia.html");
+});

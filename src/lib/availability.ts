@@ -7,7 +7,9 @@ import {
   addTangentAt,
   addVennDiagram,
   makeVectors,
+  markSetOperation,
   vectorOp,
+  type SetOperation,
   addSpot,
   construct,
   connectPoints,
@@ -50,7 +52,8 @@ export type CheckId =
   | "vector"
   | "basis"
   | `vector-${VectorOperation}`
-  | `venn-${1 | 2 | 3}`;
+  | `venn-${1 | 2 | 3}`
+  | `set-${SetOperation}`;
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -62,6 +65,8 @@ export interface Availability {
 const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircle"];
 
 export const NOTABLE_FEATURES: NotableFeature[] = ["root", "extremum", "yAxis"];
+
+export const SET_OPERATIONS: SetOperation[] = ["union", "inter", "diff", "comp"];
 
 export const VECTOR_OPERATIONS: VectorOperation[] = ["sum", "parallelogram", "difference", "projection", "unit", "components", "scale"];
 
@@ -123,6 +128,9 @@ export function useAvailability(): Record<CheckId, Availability> {
     } as Record<CheckId, Availability>;
     for (const op of VECTOR_OPERATIONS) {
       out[`vector-${op}`] = check(doc, vectorOp(doc, selection, op, opts), text);
+    }
+    for (const op of SET_OPERATIONS) {
+      out[`set-${op}`] = check(doc, markSetOperation(doc, selection, op, opts), text);
     }
     for (const n of [1, 2, 3] as const) {
       out[`venn-${n}`] = check(doc, addVennDiagram(doc, n, opts), null);

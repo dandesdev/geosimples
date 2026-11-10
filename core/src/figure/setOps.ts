@@ -186,6 +186,37 @@ export function setRegionExpr(doc: FigureDoc, id: Id, text: string, opts: OpOpti
   return { doc: withElements(doc, doc.elements.map((e) => (e.id === id ? next : e))), created: [id] };
 }
 
+/** The operations of the Conjuntos menu. */
+export type SetOperation = "union" | "inter" | "diff" | "comp";
+
+const joined = (names: string[], sign: string) => names.join(sign);
+
+/**
+ * Marks the union, intersection, difference or complement of the selected
+ * sets, in the order selected. With none selected it uses all the sets; a
+ * difference then needs exactly two, so its order is clear.
+ */
+export function markSetOperation(doc: FigureDoc, selection: Id[], op: SetOperation, opts: OpOptions = {}): OpResult {
+  const { sets } = vennShapes(doc);
+  if (sets.length === 0) return fail(doc, "Crie o diagrama antes, no menu Conjuntos.");
+  const chosen = selection.flatMap((id) => sets.filter((s) => s.id === id).map((s) => s.name));
+  const all = sets.map((s) => s.name);
+  let expr: string;
+  if (op === "comp") {
+    const names = chosen.length > 0 ? chosen : all;
+    expr = names.length === 1 ? `${names[0]}'` : `(${joined(names, "∪")})'`;
+  } else if (op === "diff") {
+    const names = chosen.length >= 2 ? chosen : chosen.length === 0 && all.length === 2 ? all : null;
+    if (!names) return fail(doc, "Selecione primeiro o conjunto de onde tirar, depois o que será tirado.");
+    expr = joined(names, "−");
+  } else {
+    const names = chosen.length >= 2 ? chosen : chosen.length === 0 && all.length >= 2 ? all : null;
+    if (!names) return fail(doc, "Selecione ao menos dois conjuntos, ou nenhum para usar todos.");
+    expr = joined(names, op === "union" ? "∪" : "∩");
+  }
+  return addRegion(doc, expr, opts);
+}
+
 function itemsOf(doc: FigureDoc): VennItems | undefined {
   return doc.elements.find((e): e is VennItems => e.type === "vennitems");
 }

@@ -65,8 +65,15 @@ function tokenize(text: string): Tok[] | string {
         i += word[0].exec(rest)![0].length;
         continue;
       }
+      // Between two sets a lone U or n can only be an operator: keyboards have no ∪ or ∩.
+      const last = out[out.length - 1];
+      if (last && (last.t === "name" || last.t === ")" || last.t === "comp") && /^[uUnN](?![0-9₀-₉])/.test(rest)) {
+        out.push({ t: /^[uU]/.test(rest) ? "union" : "inter" });
+        i++;
+        continue;
+      }
       const name = /^[A-Za-zΑ-Ωα-ω][0-9₀-₉]*/u.exec(rest);
-      if (!name) return `Não entendi "${c}". Use ∪, ∩, − e ' entre os nomes dos conjuntos.`;
+      if (!name) return `Não entendi "${c}". Use U, n, - e ' entre os nomes dos conjuntos.`;
       out.push({ t: "name", v: name[0] });
       i += name[0].length;
     }
@@ -121,7 +128,7 @@ export function parseSetExpr(text: string): SetParse {
   };
   try {
     const expr = sum();
-    if (i < tokens.length) return { ok: false, error: "Não entendi o fim da expressão. Falta ∪, ∩ ou − entre os conjuntos?" };
+    if (i < tokens.length) return { ok: false, error: "Não entendi o fim da expressão. Falta U, n ou - entre os conjuntos?" };
     return { ok: true, expr, names: [...names] };
   } catch (e) {
     if (e instanceof Bad) return { ok: false, error: e.message };

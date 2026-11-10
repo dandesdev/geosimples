@@ -5,7 +5,9 @@ import {
   addText,
   addVennDiagram,
   makeVectors,
+  markSetOperation,
   vectorOp,
+  type SetOperation,
   type VectorOperation,
   autoLabelMany,
   buildScene,
@@ -147,6 +149,9 @@ export const actions = {
 
   /** The versors i and j from the origin. */
   basis: () => perform((doc) => addBasis(doc, opOptions())),
+
+  /** Shades the union, intersection, difference or complement of the selected sets. */
+  setOperation: (op: SetOperation) => perform((doc, sel) => markSetOperation(doc, sel, op, opOptions())),
 
   /** A Venn diagram of 1 to 3 sets. */
   venn: (n: 1 | 2 | 3) => perform((doc) => addVennDiagram(doc, n, opOptions())),

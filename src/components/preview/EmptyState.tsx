@@ -1,6 +1,8 @@
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addFunction, applyInput, makeAngles, makePolygon, parseInput } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
+import { usePanelStore } from "@/store/panelStore";
 import { opOptions } from "@/store/prefsStore";
 
 const EXAMPLE = "A=(0;0)--B=(4;0)--C=(0;3)--";
@@ -24,11 +26,18 @@ function insertGraph() {
 }
 
 export function EmptyState({ pro = false }: { pro?: boolean }) {
+  const away = usePanelStore((s) => s.welcomeClosed || s.welcomeHidden);
+  const close = usePanelStore((s) => s.closeWelcome);
+  const hide = usePanelStore((s) => s.setWelcomeHidden);
+  if (away) return null;
   return (
     <div className="pointer-events-none absolute inset-0 grid place-items-center p-3 sm:p-6">
       {/* A short phone preview can't fit the whole card, so it scrolls instead of being cut. */}
-      <div className="pointer-events-auto max-h-full max-w-sm overflow-y-auto rounded-lg border bg-background/95 p-4 text-sm shadow-sm sm:p-5">
-        <h2 className="mb-2 text-base font-semibold">Comece pelos pontos</h2>
+      <div className="pointer-events-auto relative max-h-full max-w-sm overflow-y-auto rounded-lg border bg-background/95 p-4 text-sm shadow-sm sm:p-5">
+        <Button variant="ghost" size="icon" aria-label="Fechar" title="Fechar" className="absolute right-2 top-2 h-7 w-7" onClick={close}>
+          <X />
+        </Button>
+        <h2 className="mb-2 pr-6 text-base font-semibold">Comece pelos pontos</h2>
         <p className="text-muted-foreground">
           {pro
             ? "Leve o mouse à borda de baixo da prévia (ou tecle /) e digite na barra de entrada."
@@ -49,6 +58,9 @@ export function EmptyState({ pro = false }: { pro?: boolean }) {
             Ou um gráfico: f(x) = x² − 1
           </Button>
         </div>
+        <button type="button" className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground" onClick={() => hide(true)}>
+          Não mostrar mais
+        </button>
       </div>
     </div>
   );

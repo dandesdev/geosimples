@@ -55,6 +55,13 @@ const inInterval = (t: VaralInterval, x: number) => {
   return after && before;
 };
 
+/** Operators between intervals. Letters and words are there because keyboards have no ∪ or ∩. */
+const VARAL_OPERATORS: [RegExp, VaralOp][] = [
+  [/^(?:∪|uni[aã]o|[uU](?!\p{L}))/iu, "∪"],
+  [/^(?:∩|interse[cç][aã]o|inter|[nN](?!\p{L}))/iu, "∩"],
+  [/^(?:[-−\\∖]|menos)/iu, "−"],
+];
+
 /** Reads a chain like [1;3] ∩ ]2;5[. Null when the text isn't one. */
 export function readVaral(text: string, locale: Locale): VaralSpec | string | null {
   const terms: VaralInterval[] = [];
@@ -78,10 +85,13 @@ export function readVaral(text: string, locale: Locale): VaralSpec | string | nu
     terms.push({ from, to });
     rest = rest.slice(whole.length).trim();
     if (rest === "") break;
-    const op = rest[0];
-    if (op !== "∪" && op !== "∩" && !"-−\\∖".includes(op)) return "Entre os intervalos, use ∪, ∩ ou −.";
-    ops.push(op === "∪" || op === "∩" ? op : "−");
-    rest = rest.slice(1).trim();
+    const op = VARAL_OPERATORS.flatMap(([re, name]) => {
+      const hit = re.exec(rest);
+      return hit ? [{ name, length: hit[0].length }] : [];
+    })[0];
+    if (!op) return "Entre os intervalos, use U para união, n para interseção ou - para diferença.";
+    ops.push(op.name);
+    rest = rest.slice(op.length).trim();
   }
   return terms.length >= 2 ? { terms, ops } : null;
 }

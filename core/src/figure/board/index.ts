@@ -102,7 +102,7 @@ export function parseBoard(source: string, locale: Locale = "pt-BR"): BoardSpec 
     }
     case "varal": {
       const parsed = readVaral(rest, locale);
-      return parsed === null ? "Escreva os intervalos com ∪, ∩ ou − entre eles: varal [1;3] ∩ ]2;5[." : typeof parsed === "string" ? parsed : { kind: "varal", spec: parsed };
+      return parsed === null ? "Escreva os intervalos com U, n ou - entre eles: varal [1;3] n ]2;5[." : typeof parsed === "string" ? parsed : { kind: "varal", spec: parsed };
     }
     case "sinal":
       return needsRest(() => ({ kind: "sign", expr: rest }), "sinal x²-4");

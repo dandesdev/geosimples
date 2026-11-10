@@ -1,6 +1,6 @@
 import { Hand, Move, SquareDashedMousePointer } from "lucide-react";
 import type { ComponentType } from "react";
-import type { ConstructionKind, VectorOperation } from "@geosimples/core/figure";
+import type { ConstructionKind, SetOperation, VectorOperation } from "@geosimples/core/figure";
 import {
   AddPointIcon,
   AltitudeIcon,
@@ -15,6 +15,10 @@ import {
   PerpendicularBisectorIcon,
   ProjectionIcon,
   QuickFigureIcon,
+  SetComplementIcon,
+  SetDifferenceIcon,
+  SetIntersectionIcon,
+  SetUnionIcon,
   TangentIcon,
 } from "@/components/icons";
 import type { CanvasMode } from "@/store/figureStore";
@@ -76,6 +80,14 @@ export const VECTOR_ITEMS: { op: VectorOperation; title: string; hint: string }[
   { op: "scale", title: "Múltiplo", hint: "2 vezes o vetor. Mude o fator em Propriedades." },
 ];
 
+/** The operations of the Conjuntos menu, which mark a region of the diagram. */
+export const SET_ITEMS: { op: SetOperation; Icon: ComponentType; title: string; hint: string }[] = [
+  { op: "union", Icon: SetUnionIcon, title: "União", hint: "Dos conjuntos selecionados, ou de todos se nenhum estiver." },
+  { op: "inter", Icon: SetIntersectionIcon, title: "Interseção", hint: "Dos conjuntos selecionados, ou de todos se nenhum estiver." },
+  { op: "diff", Icon: SetDifferenceIcon, title: "Diferença", hint: "O primeiro selecionado menos o segundo." },
+  { op: "comp", Icon: SetComplementIcon, title: "Complementar", hint: "O que está fora dos selecionados, dentro do universo." },
+];
+
 /** What the Contas e quadros menu starts in the input bar. Null is a divider. */
 export const BOARD_ITEMS: ({ title: string; hint: string; prefill: string } | null)[] = [
   { title: "Conta armada…", hint: "1234÷5, 58+67, 302-5, 12x34. Também com vírgula.", prefill: "conta " },
@@ -85,7 +97,7 @@ export const BOARD_ITEMS: ({ title: string; hint: string; prefill: string } | nu
   { title: "MDC…", hint: "mdc(12; 18), com os primos comuns marcados.", prefill: "mdc(" },
   { title: "MDC por divisões sucessivas…", hint: "euclides(48; 18), no jogo da velha.", prefill: "euclides(" },
   null,
-  { title: "Varal de intervalos…", hint: "varal [1;3] ∩ ]2;5[, com ∪, ∩ ou −.", prefill: "varal " },
+  { title: "Varal de intervalos…", hint: "varal [1;3] n ]2;5[, com U (união), n (interseção) ou -.", prefill: "varal " },
   { title: "Esboço de sinal…", hint: "sinal x²-4, a curva sobre a reta.", prefill: "sinal " },
   { title: "Quadro de sinais…", hint: "quadro (x-1)(x+2)/(x-3), um fator por linha.", prefill: "quadro " },
   { title: "Equação modular…", hint: "modular |x-1| + |x+2| = 5, em colunas.", prefill: "modular " },

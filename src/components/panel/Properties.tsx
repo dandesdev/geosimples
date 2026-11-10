@@ -623,7 +623,7 @@ function RegionProperties({ el, multi }: EditorProps<Region>) {
         />
       </Field>
       {!parsed.ok && <p className="mb-1 text-xs text-destructive">{parsed.error}</p>}
-      <Hint>∪ união, ∩ interseção, − diferença e ' complementar. A região acompanha os conjuntos quando eles se movem.</Hint>
+      <Hint>U para união, n para interseção, - para diferença e ' para complementar. A região acompanha os conjuntos quando eles se movem.</Hint>
     </Section>
   );
 }

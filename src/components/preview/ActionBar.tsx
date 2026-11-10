@@ -32,7 +32,7 @@ import {
   VerticalLineIcon,
   YInterceptIcon,
 } from "@/components/icons";
-import { BOARD_ITEMS, CIRCLE_OPTIONS, CONSTRUCTIONS, VECTOR_ITEMS } from "./tools";
+import { BOARD_ITEMS, CIRCLE_OPTIONS, CONSTRUCTIONS, SET_ITEMS, VECTOR_ITEMS } from "./tools";
 import { actions } from "@/lib/actions";
 import {
   CONSTRUCTION_KINDS,
@@ -452,17 +452,28 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
             />
           ))}
           <DropdownMenuSeparator />
+          {SET_ITEMS.map((item) => (
+            <MenuItem
+              key={item.op}
+              icon={<item.Icon />}
+              title={item.title}
+              hint={item.hint}
+              availability={av[`set-${item.op}`]}
+              onSelect={() => actions.setOperation(item.op)}
+            />
+          ))}
+          <DropdownMenuSeparator />
           <MenuItem
             icon={<Blend />}
-            title="Marcar região…"
-            hint="região A∩B, região (A∪B)', região A−B"
+            title="Digitar região…"
+            hint="Para expressões maiores: região (A U B)' n C"
             availability={ALWAYS}
             onSelect={startTyping(() => actions.startTyping("região "))}
           />
           <MenuItem
             icon={<Blend />}
             title="Elementos…"
-            hint="A={1,2,3}. Cada um vai para a região certa. Ou n(A∩B)=3."
+            hint="A={1,2,3}. Cada um vai para a região certa. Ou n(A n B)=3."
             availability={ALWAYS}
             onSelect={startTyping(() => actions.startTyping("A={"))}
           />
