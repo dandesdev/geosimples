@@ -617,3 +617,13 @@ test("pro layout: a toolbar between the preview and the panels doesn't widen the
   }
   expect(Math.round((await box(page.getByRole("toolbar", { name: "Ferramentas" }))).width)).toBeLessThanOrEqual(48);
 });
+
+test("pro layout: back from the classic layout, toolbars are one button wide again", async ({ page }) => {
+  const widths = () => page.locator("[data-toolbar]").evaluateAll((els) => els.map((el) => Math.round(el.closest(".dv-groupview")!.getBoundingClientRect().width)));
+  await expect.poll(widths).toEqual([48, 48, 48]);
+  await page.getByRole("button", { name: "Janelas" }).click();
+  await page.getByRole("menuitem", { name: /layout clássico/ }).click();
+  await page.getByRole("button", { name: "Layout profissional" }).click();
+  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+  await expect.poll(widths).toEqual([48, 48, 48]);
+});

@@ -67,6 +67,9 @@ function columns(width: number, ctx: LayoutContext) {
   };
 }
 
+/** The row the sign goes on: written on the right, it goes by the top number; on the left, by the bottom one. */
+const signRow = (ctx: LayoutContext, top: number, bottom: number) => (ctx.signSide === "right" ? top : bottom);
+
 /** The digits of a number on a row, with its separator after `frac` digits from the right. */
 function writeDigits(out: Mark[], digits: string, frac: number, x: (p: number) => number, sep: (p: number) => number, y: number, ctx: LayoutContext, role?: MarkRole) {
   const n = digits.length;
@@ -88,7 +91,7 @@ export function addition(numbers: Decimal[], ctx: LayoutContext): Mark[] {
   const row = rowOf(ctx);
   const out: Mark[] = [];
   digits.forEach((d, i) => writeDigits(out, d, frac, x, sep, -(i + 1) * row, ctx));
-  out.push(text(sign, -digits.length * row, "+", ctx.size));
+  out.push(text(sign, signRow(ctx, 1, digits.length) * -row, "+", ctx.size));
   const bottom = -(digits.length + 0.5) * row;
   out.push(line(0, bottom, width * cell, bottom));
   writeDigits(out, total, frac, x, sep, -(digits.length + 1) * row, ctx, "result");
@@ -115,7 +118,7 @@ export function subtraction(a: Decimal, b: Decimal, ctx: LayoutContext): Mark[] 
   const out: Mark[] = [];
   writeDigits(out, top, frac, x, sep, -row, ctx);
   writeDigits(out, bottomDigits, frac, x, sep, -2 * row, ctx);
-  out.push(text(sign, -2 * row, "−", ctx.size));
+  out.push(text(sign, signRow(ctx, 1, 2) * -row, "−", ctx.size));
   const bottom = -2.5 * row;
   out.push(line(0, bottom, width * cell, bottom));
   writeDigits(out, result, frac, x, sep, -3 * row, ctx, "result");
@@ -154,7 +157,7 @@ export function multiplication(a: Decimal, b: Decimal, ctx: LayoutContext): Mark
   const out: Mark[] = [];
   writeDigits(out, x1, a.frac.length, x, sep, -row, ctx);
   writeDigits(out, x2, b.frac.length, x, sep, -2 * row, ctx);
-  out.push(text(sign, -2 * row, "×", ctx.size));
+  out.push(text(sign, signRow(ctx, 1, 2) * -row, "×", ctx.size));
   let y = -2.5 * row;
   out.push(line(0, y, width * cell, y));
   if (lower.length === 1) {
@@ -176,7 +179,7 @@ export function multiplication(a: Decimal, b: Decimal, ctx: LayoutContext): Mark
     for (let i = 0; i < digits.length; i++) out.push(text(x(digits.length - 1 - i + shift), -r * row, digits[i], ctx.size, "result"));
     r++;
   });
-  out.push(text(sign, -(r - 1) * row, "+", ctx.size));
+  out.push(text(sign, signRow(ctx, 3, r - 1) * -row, "+", ctx.size));
   y = -(r - 0.5) * row;
   out.push(line(0, y, width * cell, y));
   writeDigits(out, shown, frac, x, sep, -r * row, ctx, "result");

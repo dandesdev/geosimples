@@ -158,10 +158,11 @@ test("gaps are picked by clicking the numbers, and can hold a text", async ({ pa
   await page.getByRole("radio", { name: /completar/ }).click();
   await page.getByRole("button", { name: "Nenhuma", exact: true }).click();
   await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ show: "gaps", gaps: [] });
-  await page.getByRole("button", { name: "Número 1: virar lacuna" }).click();
-  await page.getByRole("button", { name: "Número 3: virar lacuna" }).click();
+  // The statement's digits can be gaps too, as in exercises that give the result.
+  await page.getByRole("button", { name: "Parte 1: virar lacuna" }).click();
+  await page.getByRole("button", { name: "Parte 3: virar lacuna" }).click();
   await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ gaps: [0, 2] });
-  await page.getByRole("button", { name: "Lacuna 1: devolver o número" }).click();
+  await page.getByRole("button", { name: "Lacuna 1: mostrar de novo" }).click();
   await expect.poll(async () => (await savedFigure(page))?.elements[0]).toMatchObject({ gaps: [2] });
   await page.getByRole("radio", { name: /texto no lugar/ }).click();
   await page.getByRole("textbox", { name: "Texto da lacuna" }).fill("?");

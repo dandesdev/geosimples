@@ -648,7 +648,7 @@ function VennItemsProperties({ el, doc }: EditorProps<VennItems>) {
 const BOARD_SHOW: { value: BoardShow; label: string; title: string }[] = [
   { value: "full", label: "Resolvido", title: "Com todos os passos, para o gabarito" },
   { value: "blank", label: "Em branco", title: "Só o enunciado armado, para o aluno resolver" },
-  { value: "gaps", label: "Lacunas", title: "Alguns resultados ficam para completar" },
+  { value: "gaps", label: "Lacunas", title: "Algumas partes ficam para completar" },
 ];
 
 const GAP_STYLES: { value: GapStyle; label: string; title: string }[] = [
@@ -694,7 +694,7 @@ function BoardProperties({ el, update, multi }: EditorProps<Board>) {
         <Choice label="Mostrar" value={el.show} options={BOARD_SHOW} onChange={(show) => update((b) => ({ ...b, show }), "show")} />
         {el.show === "gaps" && (
           <>
-            {!multi && <Hint>Clique nos números da prévia para escolher as lacunas.</Hint>}
+            {!multi && <Hint>Clique na prévia em qualquer algarismo ou sinal, do enunciado também, para torná-lo lacuna. Sortear escolhe só entre os resultados.</Hint>}
             <div className="mt-1 grid grid-cols-3 gap-1">
               <Button size="sm" variant="outline" title="Outras lacunas, escolhidas ao acaso" onClick={() => update((b) => ({ ...b, seed: b.seed + 1, gaps: null }), "seed")}>
                 Sortear

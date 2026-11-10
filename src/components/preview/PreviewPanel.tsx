@@ -904,8 +904,8 @@ function tint(p: Prim): Prim {
 }
 
 /**
- * The results of a selected "gaps" board, outlined: a click leaves one out
- * or puts it back. Drawn over the figure, in the preview only.
+ * Every digit and sign of a selected "gaps" board, outlined: a click leaves
+ * one out or puts it back. Drawn over the figure, in the preview only.
  */
 function GapPicker({ slots, px }: { slots: SceneSlot[]; px: number }) {
   if (slots.length === 0) return null;
@@ -920,7 +920,7 @@ function GapPicker({ slots, px }: { slots: SceneSlot[]; px: number }) {
           height={s.h}
           rx={2 * px}
           role="button"
-          aria-label={s.gap ? `Lacuna ${s.index + 1}: devolver o número` : `Número ${s.index + 1}: virar lacuna`}
+          aria-label={s.gap ? `Lacuna ${s.index + 1}: mostrar de novo` : `Parte ${s.index + 1}: virar lacuna`}
           aria-pressed={s.gap}
           className="cursor-pointer"
           fill={PRIMARY}

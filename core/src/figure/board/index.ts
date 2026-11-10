@@ -189,14 +189,19 @@ function isGap(seed: number, index: number): boolean {
 
 type TextMark = Extract<Mark, { kind: "text" }>;
 
-/** The results a "gaps" board can leave out, in order: the numbers a student writes. */
-const slotsOf = (marks: Mark[]): TextMark[] => marks.filter((m): m is TextMark => m.kind === "text" && m.role === "result");
+/**
+ * What a "gaps" board can leave out, in order: every digit and sign written,
+ * the statement's too, as in exercises that give the result and ask for the
+ * numbers. Carries are never written on a "gaps" board.
+ */
+const slotsOf = (marks: Mark[]): TextMark[] => marks.filter((m): m is TextMark => m.kind === "text" && m.role !== "carry");
 
-/** Which results are left out, by their order: the ones picked by hand, or drawn by the seed. */
-export function gapIndexes(board: Pick<Board, "gaps" | "seed">, count: number): Set<number> {
-  if (board.gaps !== null) return new Set(board.gaps.filter((i) => i < count));
-  const drawn = new Set(Array.from({ length: count }, (_, i) => i).filter((i) => isGap(board.seed, i)));
-  if (drawn.size === 0 && count > 0) drawn.add(0);
+/** What is left out, by order: what was picked by hand, or results drawn by the seed. */
+export function gapIndexes(board: Pick<Board, "gaps" | "seed">, slots: TextMark[]): Set<number> {
+  if (board.gaps !== null) return new Set(board.gaps.filter((i) => i < slots.length));
+  const results = slots.flatMap((m, i) => (m.role === "result" ? [i] : []));
+  const drawn = new Set(results.filter((_, k) => isGap(board.seed, k)));
+  if (drawn.size === 0 && results.length > 0) drawn.add(results[0]);
   return drawn;
 }
 
@@ -208,7 +213,7 @@ function applyShow(marks: Mark[], board: Pick<Board, "show" | "seed" | "gaps" | 
   if (board.show === "blank") return marks.filter((m) => m.kind === "head" || m.kind === "box" || !m.role);
   const without = marks.filter((m) => m.kind === "head" || m.kind === "box" || m.role !== "carry");
   const slots = slotsOf(without);
-  const picked = gapIndexes(board, slots.length);
+  const picked = gapIndexes(board, slots);
   const gaps = new Set(slots.filter((_, i) => picked.has(i)));
   return without.flatMap((m): Mark[] => {
     if (m.kind !== "text" || !gaps.has(m)) return [m];
@@ -225,7 +230,7 @@ export function boardLayout(board: Board, doc?: Pick<FigureDoc, "locale">): Boar
   return layoutOf(applyShow(marks, board));
 }
 
-/** A result a "gaps" board can leave out, in pt from the board's corner, Y up. */
+/** A digit or sign a "gaps" board can leave out, in pt from the board's corner, Y up. */
 export interface BoardSlot {
   index: number;
   at: { x: number; y: number };
@@ -234,11 +239,11 @@ export interface BoardSlot {
   gap: boolean;
 }
 
-/** Every result of a board, and whether it is a gap now, for picking the gaps in the preview. */
+/** Everything written on a board, and whether it is a gap now, for picking the gaps in the preview. */
 export function boardSlots(board: Board, doc?: Pick<FigureDoc, "locale">): BoardSlot[] {
   const marks = run(board, doc?.locale ?? "pt-BR");
   if (typeof marks === "string") return [];
   const slots = slotsOf(marks);
-  const picked = gapIndexes(board, slots.length);
+  const picked = gapIndexes(board, slots);
   return slots.map((m, index) => ({ index, at: m.at, ...slotSize(m), gap: picked.has(index) }));
 }

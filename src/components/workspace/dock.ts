@@ -269,6 +269,11 @@ export function restoreLayout(target: DockviewApi) {
 
 /** The preview's group has no tabs; toolbar groups get a grip instead of tabs and fit their buttons. */
 export function prepareGroups(target: DockviewApi) {
+  // A dock built again (back from the classic layout, or restored) has new groups under the old
+  // ids: what was remembered about them would skip their limits, and toolbars kept the dock's 100 px.
+  shaped.clear();
+  limited.clear();
+  widthTried.clear();
   const preview = target.getPanel(PREVIEW_ID);
   if (preview) preview.group.header.hidden = true;
   orientToolbars(target);

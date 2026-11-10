@@ -446,7 +446,9 @@ function factorsOf(e: Expr, out: Factor[], negative: boolean, locale: Locale): b
   const r = rationalOf(base);
   if (!r || r.den.length !== 1 || qValue(r.den[0]) !== 1) return false;
   const name = polyNode(r.num, locale);
-  const inside: MathNode = base.kind === "bin" && exponent > 1 && r.num.length > 2 ? { row: ["(", name, ")"] } : name;
+  // A power of a sum needs its parentheses: (x − 1)², not x − 1².
+  const terms = r.num.filter((c) => c.n !== 0).length;
+  const inside: MathNode = exponent > 1 && terms > 1 ? { row: ["(", name, ")"] } : name;
   out.push({
     poly: r.num,
     node: exponent > 1 ? { row: [inside, String(exponent).replace(/\d/g, (d) => SUPS[Number(d)])] } : inside,
@@ -458,9 +460,10 @@ function factorsOf(e: Expr, out: Factor[], negative: boolean, locale: Locale): b
 const qValue = (c: Q) => c.n / c.d;
 
 /**
- * The sign chart of a product or quotient: the x axis on top, a row per
- * factor, and the expression's sign at the bottom. With a relation, a last
- * row draws the set where it holds.
+ * The sign chart of a product or quotient: a row per factor and the
+ * expression's sign at the bottom, each over an axis; the critical values sit
+ * on the first one, the x axis. With a relation, each axis shows where its
+ * row satisfies it, the last one the solution.
  */
 export function signTable(source: string, ctx: LineContext): Mark[] | string {
   const sided = splitRelation(source);
@@ -484,47 +487,52 @@ export function signTable(source: string, ctx: LineContext): Mark[] | string {
   const x = (i: number) => nameWidth + gap * (i + 1);
   const width = nameWidth + gap * (crit.length + 1);
   const rowH = size * 1.85;
-  const rows = shown.length + 1 + (solution ? 1 : 0);
+  const rows = shown.length + 1;
   const out: Mark[] = [];
-  // The x row is an axis: an arrow along it, the critical values on it in order.
-  const axisY = -size * 0.35;
-  out.push(text(nameWidth / 2, axisY, "x", size));
-  out.push(line({ x: nameWidth, y: axisY }, { x: width + 4, y: axisY }, { width: 0.6 }));
-  out.push({ kind: "head", tip: { x: width + 10, y: axisY }, dir: { x: 1, y: 0 }, length: 6 });
-  crit.forEach((c, i) => {
-    out.push(text(x(i), axisY + size * 0.95 + Math.max(0, layoutMath(c.node, size).down - size * 0.55), c.node, size));
-    out.push(line({ x: x(i), y: axisY - size * 0.2 }, { x: x(i), y: axisY + size * 0.2 }, { width: 0.6 }));
-  });
-  const headerY = -rowH * 0.55;
-  out.push(line({ x: 0, y: headerY }, { x: width, y: headerY }));
-  out.push(line({ x: nameWidth, y: rowH * 0.55 + size * 0.3 }, { x: nameWidth, y: headerY - rows * rowH }));
-  const rowY = (r: number) => headerY - (r + 0.5) * rowH;
-  for (let r = 1; r < rows; r++) {
-    const y = headerY - r * rowH;
-    out.push(line({ x: 0, y }, { x: width, y }, r === shown.length ? {} : { width: 0.4 }));
-  }
-  out.push(line({ x: 0, y: headerY - rows * rowH }, { x: width, y: headerY - rows * rowH }));
-  const columnCenter = (i: number) => nameWidth + gap * (i + 0.5);
-  // Dashed through the rows only where nothing is written on it: a 0 or ∄ would read struck through.
-  const rowDash = (i: number, r: number) =>
-    out.push(line({ x: x(i), y: headerY - r * rowH }, { x: x(i), y: headerY - (r + 1) * rowH }, { dash: "dashed", width: 0.4 }));
   const factorSign = (f: Factor, at: number) => {
     const v = polyEval(f.poly, at);
     const s = v > 1e-12 ? 1 : v < -1e-12 ? -1 : 0;
     return Math.abs(f.power) % 2 === 0 && s !== 0 ? 1 : s;
   };
+  const isZero = (f: Factor, at: number) => Math.abs(polyEval(f.poly, at)) < 1e-9;
   const signNode = (s: number) => (s > 0 ? "+" : "−");
   const constantSign = factors.filter((f) => f.poly.length === 1).reduce((acc, f) => acc * Math.sign(polyEval(f.poly, 0)), 1);
+
+  // Every line under a row is an axis, the one under x too: the values sit on it, and it ends in an arrow.
+  const headerY = -rowH * 0.55;
+  const lineY = (r: number) => headerY - r * rowH;
+  const rowY = (r: number) => headerY - (r + 0.5) * rowH;
+  const axis = (y: number, strong: boolean) => {
+    out.push(line({ x: 0, y }, { x: width + 4, y }, strong ? {} : { width: 0.5 }));
+    out.push({ kind: "head", tip: { x: width + 10, y }, dir: { x: 1, y: 0 }, length: 6 });
+  };
+  out.push(text(nameWidth / 2, 0, "x", size));
+  crit.forEach((c, i) => out.push(text(x(i), Math.max(0, layoutMath(c.node, size).down - size * 0.55), c.node, size)));
+  axis(headerY, true);
+  for (let r = 1; r <= rows; r++) axis(lineY(r), r >= rows - 1);
+  out.push(line({ x: nameWidth, y: rowH * 0.55 }, { x: nameWidth, y: lineY(rows) }));
+  const columnCenter = (i: number) => nameWidth + gap * (i + 0.5);
+  // Dashed through the rows only where nothing is written on it: a 0 or ∄ would read struck through.
+  const rowDash = (i: number, r: number) => out.push(line({ x: x(i), y: lineY(r) }, { x: x(i), y: lineY(r + 1) }, { dash: "dashed", width: 0.4 }));
+  crit.forEach((_, i) => out.push(line({ x: x(i), y: headerY - size * 0.2 }, { x: x(i), y: headerY + size * 0.2 }, { width: 0.6 })));
+
+  /** With a relation, each row's axis shows where that row satisfies it, as a varal does. */
+  const paint = (r: number, holds: (v: number) => boolean) => {
+    if (!sided) return;
+    drawSet(out, { criticals: crit, holds, x, left: nameWidth, right: width, y: lineY(r + 1), size, style: ctx.intervals, role: "result" });
+  };
   shown.forEach((f, r) => {
     out.push(text(mathWidth(f.node, size) / 2 + size / 2, rowY(r), f.node, size));
     mids.forEach((m, i) => out.push(text(columnCenter(i), rowY(r), signNode(factorSign(f, m)), size, "result")));
     crit.forEach((c, i) => {
-      if (Math.abs(polyEval(f.poly, c.value)) > 1e-9) {
+      if (!isZero(f, c.value)) {
         rowDash(i, r);
         return;
       }
       out.push(text(x(i), rowY(r), f.power < 0 ? "∄" : "0", size * 0.9, "result"));
     });
+    // A factor that divides is never zero in the set: its zero is a hole.
+    paint(r, (v) => (isZero(f, v) ? f.power > 0 && satisfies(sided!.rel, 0) : satisfies(sided!.rel, factorSign(f, v))));
   });
   const last = shown.length;
   out.push(text(mathWidth("f(x)", size) / 2 + size / 2, rowY(last), "f(x)", size));
@@ -533,15 +541,15 @@ export function signTable(source: string, ctx: LineContext): Mark[] | string {
     out.push(text(columnCenter(i), rowY(last), signNode(s), size, "result"));
   });
   crit.forEach((c, i) => {
-    const zero = shown.filter((f) => Math.abs(polyEval(f.poly, c.value)) < 1e-9);
-    if (zero.length === 0) return;
+    const zero = shown.filter((f) => isZero(f, c.value));
+    if (zero.length === 0) {
+      rowDash(i, last);
+      return;
+    }
     out.push(text(x(i), rowY(last), zero.some((f) => f.power < 0) ? "∄" : "0", size * 0.9, "result"));
   });
   if (solution) {
-    const y = rowY(last + 1);
-    out.push(text(mathWidth("S", size) / 2 + size / 2, y, "S", size));
-    crit.forEach((_, i) => rowDash(i, last + 1));
-    drawSet(out, { criticals: crit, holds: (v) => inPieces(solution, v), x, left: nameWidth + size * 0.3, right: width - size * 0.3, y, size, style: ctx.intervals, role: "result" });
+    paint(last, (v) => inPieces(solution, v));
     writeSolution(out, solution, ctx, 1.1);
   }
   return out;

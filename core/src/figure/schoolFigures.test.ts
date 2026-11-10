@@ -743,3 +743,33 @@ describe("sign sketches", () => {
     }
   });
 });
+
+describe("second round of board choices", () => {
+  it("writes a sign on the right by the top number", () => {
+    const { el, doc } = board("302-5", { signSide: "right" });
+    const marks = boardLayout(el, doc)!.marks.flatMap((m) => (m.kind === "text" && !m.role ? [m] : []));
+    const sign = marks.find((m) => flat(m.node) === "−")!;
+    const top = marks.find((m) => flat(m.node) === "3")!;
+    expect(sign.at.y).toBe(top.at.y);
+  });
+
+  it("lets any digit or sign of the statement be a gap, and draws only results by chance", () => {
+    const { el, doc } = board("58+67", { show: "gaps", gaps: [0] });
+    const shown = boardLayout(el, doc)!.marks.flatMap((m) => (m.kind === "text" ? [flat(m.node)] : []));
+    // The 5 of 58 is gone; the 5 of 125 stays.
+    expect(shown.filter((t) => t === "5")).toHaveLength(1);
+    expect(boardSlots(el, doc).some((s) => s.index === 2)).toBe(true);
+    const drawn = board("1234÷5", { show: "gaps" });
+    const marks = boardLayout({ ...drawn.el, show: "full" }, drawn.doc)!.marks.filter((m) => m.kind === "text" && m.role !== "carry");
+    for (const slot of boardSlots(drawn.el, drawn.doc).filter((s) => s.gap)) expect(marks[slot.index]).toMatchObject({ role: "result" });
+  });
+
+  it("draws every line of a sign chart as an axis, and paints each row's set on it", () => {
+    const { el, doc } = board("quadro (x-1)(x+2)/(x-3) <= 0");
+    const marks = boardLayout(el, doc)!.marks;
+    expect(marks.filter((m) => m.kind === "head")).toHaveLength(5);
+    const painted = new Set(marks.flatMap((m) => (m.kind === "line" && m.role === "result" ? [Math.round(m.a.y)] : [])));
+    expect(painted.size).toBe(4);
+    expect(texts("quadro (x-1)^2(x+3)")).toContain("(x − 1)²");
+  });
+});
