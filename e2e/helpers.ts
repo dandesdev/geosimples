@@ -36,6 +36,12 @@ export function toolbarButton(page: Page, name: string) {
   return page.getByRole("toolbar", { name: "Ações da figura" }).getByRole("button", { name, exact: true });
 }
 
+/** Opens Inserir and picks an item from its catalog. */
+export async function insertItem(page: Page, name: RegExp) {
+  await toolbarButton(page, "Inserir").click();
+  await page.getByRole("dialog", { name: "Inserir" }).getByRole("button", { name }).click();
+}
+
 export async function addTriangle(page: Page) {
   const input = pointInput(page);
   await input.fill(TRIANGLE);

@@ -6,6 +6,8 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 
 **Main flow**: type points in the input bar (`A=0;0 B=4;0 +3:90`), select them in the preview, build with the action bar (connect, angle, polygon, circle), style in the side panel, export.
 
+**Toolbar**: the geometry tools are always there. Gráficos, Vetores and Conjuntos appear only while the selection can use them (`availability.ts`). Whatever starts something new without a selection (functions, axes, Venn diagrams, boards) goes in the Inserir catalog (`InsertCatalog.tsx`, shortcut I, with search): a new kind of figure becomes a catalog section, not a toolbar button. The classic row drops its button labels when the preview is narrow, using a container query, instead of wrapping.
+
 ## Architecture
 
 - **Layout**: kept from v1 (tikzgenerator), Adobe-like: a large preview with the action bar on top and zoom on its edge, the point input below it, and a side panel with three accordions: Propriedades (measures, constructions and geometry of the selection), Formatação (looks only) and Rótulos e textos (auto labels, free text). Sections inside them open and close from their titles.

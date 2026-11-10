@@ -91,7 +91,7 @@ const TOPICS: Topic[] = [
     intro: (
       <>
         Comece com <code>vetor</code>. Depois do igual vêm as componentes, ou módulo e ângulo. Com <code>@</code> você escolhe de onde ele
-        sai. Soma, diferença e projeção ficam no menu Vetores.
+        sai. Selecione vetores e o botão Vetores aparece na barra, com soma, diferença e projeção.
       </>
     ),
     samples: [
@@ -105,7 +105,7 @@ const TOPICS: Topic[] = [
     title: "Conjuntos",
     intro: (
       <>
-        Escreva os elementos entre chaves: cada um vai para a região certa do diagrama. As operações ficam no menu Conjuntos. Para digitar,
+        Escreva os elementos entre chaves: cada um vai para a região certa do diagrama. Com um diagrama na figura, o botão Conjuntos aparece na barra, com as operações. Para digitar,
         use U para união, n para interseção, - para diferença e ' para complementar.
       </>
     ),

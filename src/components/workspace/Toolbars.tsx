@@ -1,6 +1,7 @@
 import { CircleHelp, LayoutDashboard, Moon, PanelTop, Settings, Sun } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { DeleteButton, ExportIconButton, History, Tools, type MenuSide } from "@/components/preview/ActionBar";
+import { InsertCatalog } from "@/components/preview/InsertCatalog";
 import { ModeSwitch } from "@/components/preview/ModeSwitch";
 import {
   DropdownMenu,
@@ -125,7 +126,12 @@ export function Toolbar({ id, row, side }: { id: ToolbarId; row: boolean; side: 
           <DeleteButton />
         </>
       )}
-      {id === "tools-build" && <Tools menuSide={side} />}
+      {id === "tools-build" && (
+        <>
+          <InsertCatalog side={side} compact />
+          <Tools menuSide={side} />
+        </>
+      )}
       {id === "tools-mode" && <ModeSwitch vertical={!row} />}
     </div>
   );

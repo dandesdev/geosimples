@@ -3,6 +3,7 @@ import { useEffect } from "react";
 /** Commands that a component carries out, like opening a dialog or zooming. */
 export type UiCommand =
   | "export"
+  | "insert"
   | "help"
   | "settings"
   | "focusInput"

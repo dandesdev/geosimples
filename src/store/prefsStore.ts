@@ -21,6 +21,7 @@ export type ActionId =
   | "angle"
   | "polygon"
   | "export"
+  | "insert"
   | "focusInput"
   | "zoomIn"
   | "zoomOut"
@@ -47,6 +48,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   angle: "Marcar ângulo",
   polygon: "Polígono / preencher",
   export: "Exportar",
+  insert: "Abrir Inserir",
   focusInput: "Ir para a barra de entrada",
   zoomIn: "Aproximar",
   zoomOut: "Afastar",
@@ -74,6 +76,7 @@ export const DEFAULT_SHORTCUTS: Record<ActionId, string[]> = {
   angle: ["A"],
   polygon: ["G"],
   export: ["E"],
+  insert: ["I"],
   focusInput: ["/"],
   zoomIn: ["+", "="],
   zoomOut: ["-"],

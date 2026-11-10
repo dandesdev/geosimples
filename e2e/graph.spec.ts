@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { boxSelectAll, clickAlong, counts, leaveInput, lowestAlong, pointInput, savedFigure, toolbarButton } from "./helpers";
+import { boxSelectAll, clickAlong, counts, leaveInput, lowestAlong, pointInput, insertItem, savedFigure, toolbarButton } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -14,8 +14,7 @@ test("a function typed in the point input draws its graph with axes, and exports
   await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
 
   // The Gráficos menu starts another one, over the same axes.
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /Nova função/ }).click();
+  await insertItem(page, /Nova função/);
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("y = ");
   await page.keyboard.type("2sen(x)");
@@ -118,12 +117,10 @@ test("the Gráficos menu puts a point on the selected graph, with lines to the a
   await input.fill("y=x");
   await input.press("Enter");
   await expect.poll(() => counts(page)).toEqual({ axes: 1, function: 1 });
-  // Without a graph selected, the item says what it needs.
+  // Without a graph selected, the menu isn't there.
   await leaveInput(page);
   await page.keyboard.press("Escape");
-  await toolbarButton(page, "Gráficos").click();
-  await expect(page.getByRole("menuitem", { name: /Ponto sobre o gráfico/ })).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await expect(toolbarButton(page, "Gráficos")).toHaveCount(0);
 
   const line = page.locator('[data-owner="f1"]').first();
   const box = (await line.boundingBox())!;
@@ -204,8 +201,7 @@ test("axes count x in π, and graph ends get open or closed dots", async ({ page
 
 test("Escape leaves the input bar and drops an untouched y = ", async ({ page }) => {
   const input = pointInput(page);
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /Nova função/ }).click();
+  await insertItem(page, /Nova função/);
   await expect(input).toHaveValue("y = ");
   await input.press("Escape");
   await expect(input).not.toBeFocused();
@@ -259,8 +255,7 @@ test("two graphs cross through Construções › Interseção", async ({ page })
 
 test("a number line takes intervals typed in the input bar", async ({ page }) => {
   const input = pointInput(page);
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /Reta numérica/ }).click();
+  await insertItem(page, /Reta numérica/);
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("[");
   await page.keyboard.type("-2; 3[");
@@ -279,8 +274,9 @@ test("a square turns into four functions", async ({ page }) => {
   await expect.poll(() => counts(page)).toEqual({ point: 4, segment: 4 });
   await leaveInput(page);
   await boxSelectAll(page);
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /Transformar em funções/ }).click();
+  // Without axes, a square isn't a graph yet: Transformar em funções is in Inserir.
+  await expect(toolbarButton(page, "Gráficos")).toHaveCount(0);
+  await insertItem(page, /Transformar em funções/);
   await expect.poll(() => counts(page)).toEqual({ axes: 1, point: 4, function: 2, vline: 2 });
   const doc = (await savedFigure(page))!;
   const exprs = (doc.elements as unknown as { type: string; expr?: string; x?: number }[])
@@ -468,15 +464,13 @@ test("axes come in without a graph, fit the figure as it grows, and stop when th
   const input = pointInput(page);
   await input.fill("A=(1;1)--B=(7;1)--C=(1;4)--");
   await input.press("Enter");
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /^Eixos/ }).click();
+  await insertItem(page, /^Eixos/);
   const axes = async () => (await savedFigure(page))?.elements.find((e) => e.type === "axes") as unknown as { x: number[]; y: number[]; fit?: boolean };
   await expect.poll(async () => (await axes())?.x).toEqual([-1, 8]);
   // 4:3 on paper: 9 wide, 6,75 tall.
   expect((await axes()).y).toEqual([-1, 5.75]);
 
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /Malha quadriculada/ }).click();
+  await insertItem(page, /Malha quadriculada/);
   await expect.poll(() => counts(page)).toMatchObject({ axes: 1, grid: 1 });
 
   // A point further right: the axes reach it.
@@ -674,8 +668,7 @@ test("a number line's interval keeps a sine's y scale; a segment blocks it until
   await expect.poll(async () => (await axes())?.fitUnit).toBe(true);
   const stretched = (await axes())!.unit;
 
-  await toolbarButton(page, "Gráficos").click();
-  await page.getByRole("menuitem", { name: /Reta numérica/ }).click();
+  await insertItem(page, /Reta numérica/);
   await page.keyboard.type("0; 3]");
   await input.press("Enter");
   await expect.poll(() => counts(page)).toMatchObject({ numberline: 1, segment: 1 });

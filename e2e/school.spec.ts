@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { boxSelectAll, counts, pointInput, savedFigure, toolbarButton } from "./helpers";
+import { boxSelectAll, counts, insertItem, leaveInput, pointInput, savedFigure, toolbarButton } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -19,14 +19,41 @@ test("a division typed in the bar is worked out, and can be blanked for a test",
 });
 
 test("the Contas menu starts an MMC in the input bar", async ({ page }) => {
-  await toolbarButton(page, "Contas e quadros").click();
-  await page.getByRole("menuitem", { name: /^MMC/ }).click();
+  await insertItem(page, /^MMC/);
   const input = pointInput(page);
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("mmc(");
   await page.keyboard.type("12;18)");
   await input.press("Enter");
   await expect.poll(() => counts(page)).toEqual({ board: 1 });
+});
+
+test("Inserir opens with I, finds an item by search, and Enter starts it", async ({ page }) => {
+  await leaveInput(page);
+  await page.keyboard.press("i");
+  const catalog = page.getByRole("dialog", { name: "Inserir" });
+  await expect(catalog).toBeVisible();
+  await page.keyboard.type("minimo multiplo");
+  await expect(catalog.getByRole("button")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  await expect(catalog).toBeHidden();
+  const input = pointInput(page);
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("mmc(");
+});
+
+test("menus for vectors and sets show only when the selection can use them", async ({ page }) => {
+  const bar = page.getByRole("toolbar", { name: "Ações da figura" });
+  await expect(bar.getByRole("button", { name: "Vetores", exact: true })).toHaveCount(0);
+  await expect(bar.getByRole("button", { name: "Conjuntos", exact: true })).toHaveCount(0);
+  await insertItem(page, /Diagrama com 2 conjuntos/);
+  await expect(toolbarButton(page, "Conjuntos")).toBeVisible();
+
+  const input = pointInput(page);
+  await input.fill("vetor u=(4;1)");
+  await input.press("Enter");
+  await boxSelectAll(page);
+  await expect(toolbarButton(page, "Vetores")).toBeVisible();
 });
 
 test("a mistake in a board is explained instead of drawn", async ({ page }) => {
@@ -50,8 +77,7 @@ test("vectors typed in the bar add up by the parallelogram rule from the menu", 
 });
 
 test("a Venn diagram takes its elements and a shaded region", async ({ page }) => {
-  await toolbarButton(page, "Conjuntos").click();
-  await page.getByRole("menuitem", { name: /Diagrama com 2 conjuntos/ }).click();
+  await insertItem(page, /Diagrama com 2 conjuntos/);
   await expect.poll(async () => (await counts(page)).circle).toBe(2);
 
   const input = pointInput(page);
@@ -65,8 +91,7 @@ test("a Venn diagram takes its elements and a shaded region", async ({ page }) =
 });
 
 test("set operations are buttons, and letters stand in for the symbols when typing", async ({ page }) => {
-  await toolbarButton(page, "Conjuntos").click();
-  await page.getByRole("menuitem", { name: /Diagrama com 2 conjuntos/ }).click();
+  await insertItem(page, /Diagrama com 2 conjuntos/);
   await toolbarButton(page, "Conjuntos").click();
   await page.getByRole("menuitem", { name: /^Interseção/ }).click();
   await expect.poll(async () => (await counts(page)).region).toBe(1);
