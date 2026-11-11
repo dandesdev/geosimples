@@ -1,20 +1,23 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { addTriangle, boxSelectAll, counts, pointInput, toolbarButton } from "./helpers";
 
-/* The phone layout: the preview pinned on top, and the tools as tiles below it. */
+/* The phone layout: one screen with the preview on top, the input and modes pinned, and the tools by kind of figure scrolling. */
 
 const PHONES = [
   { name: "390x844", viewport: { width: 390, height: 844 } },
   { name: "412x915", viewport: { width: 412, height: 915 } },
 ];
 
-const TOOLS = ["Ligar pontos", "Marcar ângulo", "Polígono e preenchimento", "Circunferência", "Construções", "Gráficos", "Vetores", "Conjuntos"];
+const AREAS = ["Geometria", "Gráficos", "Vetores", "Conjuntos", "Circuitos", "Contas"];
 const MODES = ["Selecionar", "Mover a vista", "Mover", "Adicionar pontos", "Seleção múltipla"];
 const REST = ["Desfazer", "Refazer", "Enquadrar automaticamente", "Encaixar na grade", "Exportar"];
 
 const preview = (page: Page) => page.getByRole("region", { name: "Prévia da figura" });
 const insertButton = (page: Page) => page.getByRole("button", { name: "Inserir", exact: true });
 const catalog = (page: Page) => page.getByRole("dialog", { name: "Inserir" });
+const areaTab = (page: Page, name: string) => page.getByRole("tablist", { name: "Ferramentas por área" }).getByRole("tab", { name, exact: true });
+/** A tile of the tools' open tab, by its full name. */
+const tile = (page: Page, name: string) => page.locator("[data-area-scroll]").getByRole("button", { name, exact: true });
 
 async function center(target: Locator) {
   const box = (await target.boundingBox())!;
@@ -48,7 +51,7 @@ for (const phone of PHONES) {
       await page.goto("/");
     });
 
-    test("the preview is flush with the screen and every tool is in view", async ({ page }) => {
+    test("one screen: the preview flush with it, and the input, modes, tabs and corner buttons in view", async ({ page }) => {
       await addTriangle(page);
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
@@ -59,50 +62,105 @@ for (const phone of PHONES) {
 
       await expect(insertButton(page)).toBeInViewport({ ratio: 1 });
       await expect(pointInput(page)).toBeInViewport({ ratio: 1 });
-      for (const name of [...MODES, ...TOOLS, ...REST]) {
+      for (const name of [...MODES, ...REST]) {
         await expect(toolbarButton(page, name), name).toBeInViewport({ ratio: 1 });
       }
+      for (const name of AREAS) await expect(areaTab(page, name), name).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole("button", { name: "Menu" })).toBeInViewport({ ratio: 1 });
 
-      // Nothing to scroll sideways: not the page, and no strip of tools inside it.
+      // The page itself doesn't scroll, and nothing scrolls sideways.
       const sideways = await page.evaluate(() => {
         const wide = (el: Element) => el.scrollWidth > el.clientWidth + 1;
-        const strips = [...document.querySelectorAll('[role="toolbar"], [role="toolbar"] *')].filter(
+        const strips = [...document.querySelectorAll('[role="toolbar"], [role="toolbar"] *, [role="tablist"]')].filter(
           (el) => wide(el) && getComputedStyle(el).overflowX !== "visible" && getComputedStyle(el).overflowX !== "hidden",
         );
-        return { page: wide(document.documentElement), strips: strips.length };
+        return {
+          page: wide(document.documentElement),
+          tall: document.documentElement.scrollHeight > window.innerHeight + 1,
+          strips: strips.length,
+        };
       });
-      expect(sideways).toEqual({ page: false, strips: 0 });
+      expect(sideways).toEqual({ page: false, tall: false, strips: 0 });
     });
 
-    test("a swipe that starts on a tool scrolls the page and taps nothing", async ({ page }) => {
+    test("only the tools scroll: a swipe that starts on a tile taps nothing, and the rest stays put", async ({ page }) => {
       await addTriangle(page);
-      // With a selection the page is longer than the screen: the card that edits it is below the tools.
       await boxSelectAll(page);
-      await expect(page.getByRole("region", { name: "Editar seleção" })).toBeVisible();
-      await swipeUpFrom(page, toolbarButton(page, "Construções"), 260);
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+      await tap(page, areaTab(page, "Geometria"));
+      const input = (await pointInput(page).boundingBox())!;
+      await swipeUpFrom(page, tile(page, "Mediana"), 260);
+      await expect.poll(() => page.locator("[data-area-scroll]").evaluate((el) => el.scrollTop)).toBeGreaterThan(50);
       await expect(page.getByRole("menu")).toHaveCount(0);
-
-      // The modes and the plain buttons too.
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await swipeUpFrom(page, toolbarButton(page, "Adicionar pontos"), 260);
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
-      await expect(toolbarButton(page, "Selecionar")).toHaveAttribute("aria-pressed", "true");
-      await expect(toolbarButton(page, "Adicionar pontos")).toHaveAttribute("aria-pressed", "false");
-
-      // The preview stays where it was, over the page that moved.
+      expect((await counts(page)).segment).toBe(3);
+      // The preview, the input and the modes didn't move.
       expect((await preview(page).boundingBox())!.y).toBe(0);
+      expect((await pointInput(page).boundingBox())!.y).toBe(input.y);
+      await expect(toolbarButton(page, "Selecionar")).toBeInViewport({ ratio: 1 });
     });
 
-    test("a tap on a tool with a menu opens it, and its items run", async ({ page }) => {
+    test("a tile runs its tool, and the circuit pieces are a tab of their own", async ({ page }) => {
       await addTriangle(page);
       await boxSelectAll(page);
-      await tap(page, toolbarButton(page, "Construções"));
-      const menu = page.getByRole("menu");
-      await expect(menu).toBeVisible();
-      await tap(page, menu.getByRole("menuitem", { name: /Mediana/ }));
-      await expect(menu).toHaveCount(0);
+      await tap(page, areaTab(page, "Geometria"));
+      await tap(page, tile(page, "Mediana"));
       await expect.poll(async () => (await counts(page)).segment).toBeGreaterThan(3);
+      await tap(page, areaTab(page, "Circuitos"));
+      await tap(page, tile(page, "Resistor"));
+      await expect.poll(async () => (await counts(page)).component).toBe(1);
+    });
+
+    test("a tool that is typed puts the focus in the input with a balloon saying what to type", async ({ page }) => {
+      await tap(page, areaTab(page, "Gráficos"));
+      await tap(page, tile(page, "Gráfico de função"));
+      await expect(pointInput(page)).toBeFocused();
+      await expect(pointInput(page)).toHaveValue("y = ");
+      const balloon = page.getByRole("status").filter({ hasText: "y = f(x)" });
+      await expect(balloon).toBeInViewport({ ratio: 1 });
+      // No error before anything is typed.
+      await expect(page.locator("#point-input-message")).toHaveText("");
+    });
+
+    test("the preview's bottom edge resizes it, down to a tenth of the screen", async ({ page }) => {
+      const edge = page.getByRole("separator", { name: "Altura da prévia" });
+      const drag = async (y: number) => {
+        const b = (await edge.boundingBox())!;
+        await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(b.x + b.width / 2, y, { steps: 6 });
+        await page.mouse.up();
+      };
+      await drag(5);
+      expect(Math.abs((await preview(page).boundingBox())!.height - phone.viewport.height * 0.1)).toBeLessThan(2);
+      await drag(phone.viewport.height * 0.6);
+      expect(Math.abs((await preview(page).boundingBox())!.height - phone.viewport.height * 0.6)).toBeLessThan(3);
+      // It stays as dragged.
+      await page.reload();
+      await expect(preview(page)).toBeVisible();
+      expect(Math.abs((await preview(page).boundingBox())!.height - phone.viewport.height * 0.6)).toBeLessThan(3);
+    });
+
+    test("the hint folds away and the tools move up, and comes back", async ({ page }) => {
+      await addTriangle(page);
+      const tabs = page.getByRole("tablist", { name: "Ferramentas por área" });
+      const hint = page.locator("p[aria-live=polite]").filter({ hasText: /Toque/ });
+      await expect(hint).toBeVisible();
+      const before = (await tabs.boundingBox())!.y;
+      await tap(page, page.getByRole("button", { name: "Esconder dicas" }));
+      await expect(hint).toHaveCount(0);
+      expect((await tabs.boundingBox())!.y).toBeLessThan(before - 8);
+      await tap(page, page.getByRole("button", { name: "Mostrar dicas" }));
+      await expect(hint).toBeVisible();
+      expect(Math.abs((await tabs.boundingBox())!.y - before)).toBeLessThan(2);
+    });
+
+    test("the menu over the corner holds the title, theme, settings, help, the figure and Prontos", async ({ page }) => {
+      await tap(page, page.getByRole("button", { name: "Menu" }));
+      const menu = page.getByRole("dialog", { name: "Menu" });
+      await expect(menu.getByRole("heading", { name: "GeoSimples" })).toBeVisible();
+      for (const name of ["Tema escuro", "Configurações", "Como usar"]) await expect(menu.getByRole("button", { name }), name).toBeVisible();
+      await tap(page, menu.getByRole("tab", { name: "Prontos" }));
+      await tap(page, menu.getByRole("button", { name: /Circuito em série/ }));
+      await expect.poll(async () => (await counts(page)).component).toBe(3);
     });
 
     test("Inserir opens over the whole screen, without the keyboard", async ({ page }) => {
@@ -124,7 +182,7 @@ for (const phone of PHONES) {
       const inView = await items.evaluateAll(
         (els) => els.filter((el) => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= window.innerHeight).length,
       );
-      expect(inView).toBeGreaterThanOrEqual(9);
+      expect(inView).toBeGreaterThanOrEqual(8);
 
       // The search still works once tapped.
       await tap(page, search);
@@ -143,20 +201,18 @@ for (const phone of PHONES) {
       await expect(pointInput(page)).toBeInViewport({ ratio: 1 });
     });
 
-    test("the selection is edited in a card below the tools, with the figure in view", async ({ page }) => {
+    test("the selection is edited in a card after the tiles, with the figure in view", async ({ page }) => {
       await addTriangle(page);
       await boxSelectAll(page);
       const card = page.getByRole("region", { name: "Editar seleção" });
-      await expect(card).toBeVisible();
-      await expect(card.getByRole("button", { name: "Propriedades" })).toBeVisible();
-      // In the page, not floating over the tools.
-      await expect(card).toHaveCSS("position", "static");
-
-      await card.getByRole("button", { name: "Formatação" }).scrollIntoViewIfNeeded();
-      const top = (await preview(page).boundingBox())!;
-      expect(top.y).toBe(0);
-      // What scrolled into view is below the pinned preview, not under it.
-      expect((await card.getByRole("button", { name: "Formatação" }).boundingBox())!.y).toBeGreaterThan(top.height - 1);
+      await expect(card).toBeAttached();
+      const formatting = card.getByRole("tab", { name: "Formatação" });
+      await formatting.scrollIntoViewIfNeeded();
+      await expect(formatting).toBeInViewport({ ratio: 1 });
+      expect((await preview(page).boundingBox())!.y).toBe(0);
+      // It scrolled into view below the pinned tabs, not under them.
+      const tabs = (await page.getByRole("tablist", { name: "Ferramentas por área" }).boundingBox())!;
+      expect((await formatting.boundingBox())!.y).toBeGreaterThan(tabs.y + tabs.height - 1);
     });
   });
 }

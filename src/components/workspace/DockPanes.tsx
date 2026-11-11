@@ -11,7 +11,11 @@ import { TooltipSide } from "@/components/tooltipSide";
 import { PANEL_TITLES, useWorkspaceStore, type PanelId, type ToolbarId } from "@/store/workspaceStore";
 import { AutoHideInput } from "./AutoHideInput";
 import { dockApi, fitToolbars } from "./dock";
-import { AppButtons, Toolbar } from "./Toolbars";
+import { Toolbar } from "./Toolbars";
+import { InsertCatalog } from "@/components/preview/InsertCatalog";
+import { AreaTools } from "@/components/tools/AreaTools";
+import { ReadyFigures } from "@/components/panel/ReadyFigures";
+import { cn } from "@/lib/utils";
 
 /** The preview, edge to edge, with the point input waiting at its bottom. */
 export function PreviewPane() {
@@ -30,7 +34,10 @@ export function PreviewPane() {
       }}
     >
       <PreviewPanel pro />
-      <AppButtons />
+      {/* Inserir, the first thing to do, floats on the preview's corner. */}
+      <div className="absolute right-3 top-3 z-10">
+        <InsertCatalog variant="floating" side="bottom" />
+      </div>
       <AutoHideInput near={nearBottom} />
     </div>
   );
@@ -88,7 +95,12 @@ export function ToolbarPane(props: IDockviewPanelProps<{ toolbar: ToolbarId }>) 
     <TooltipSide.Provider value={shape.side}>
       <div
         ref={ref}
-        className="h-full w-full overflow-auto bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={cn(
+          "h-full w-full overflow-auto bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // Janelas and help sit at the far end of their line: at the bottom of the column.
+          props.params.toolbar === "tools-app" && "flex justify-end",
+          props.params.toolbar === "tools-app" && !shape.row && "flex-col",
+        )}
       >
         <Toolbar id={props.params.toolbar} row={shape.row} side={shape.side} />
       </div>
@@ -102,6 +114,24 @@ function Pane({ id, className, children }: { id: PanelId; className?: string; ch
     <section aria-label={PANEL_TITLES[id]} data-panel={id} className={className ?? "h-full overflow-y-auto bg-card"}>
       {children}
     </section>
+  );
+}
+
+/** The tools by kind of figure, in tabs. */
+export function ToolsPane() {
+  return (
+    <Pane id="tools" className="flex h-full flex-col overflow-hidden bg-card">
+      <AreaTools className="h-full px-2 pt-2" />
+    </Pane>
+  );
+}
+
+/** Figures ready to use, as the second tab of Figura. */
+export function ReadyPane() {
+  return (
+    <Pane id="ready">
+      <ReadyFigures />
+    </Pane>
   );
 }
 

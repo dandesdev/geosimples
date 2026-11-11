@@ -22,7 +22,7 @@ export function ZoomBar({
   autoFit,
   onToggleAutoFit,
   placement,
-}: ZoomControls & { placement: "overlay" | "row" }) {
+}: ZoomControls & { placement: "overlay" | "row" | "corner" }) {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const snap = useFigureStore((s) => s.settings.snapToGrid);
   const setSetting = useFigureStore((s) => s.setSetting);
@@ -36,7 +36,7 @@ export function ZoomBar({
         placement === "overlay"
           ? "absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
           : // What is on shows in a tint: filled, three of these in a row would outweigh Inserir and Exportar.
-            "flex gap-0.5 *:h-10 *:w-10 *:aria-pressed:bg-primary/15 *:aria-pressed:text-primary"
+            "flex gap-0.5 *:aria-pressed:bg-primary/15 *:aria-pressed:text-primary"
       }
     >
       {placement === "overlay" && (

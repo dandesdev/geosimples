@@ -4,6 +4,9 @@ import {
   addGrid,
   addBasis,
   addComponent,
+  fillShapeOperation,
+  SHAPE_OPERATIONS,
+  type ShapeOperation,
   circuitOf,
   setCircuit,
   COMPONENT_KINDS,
@@ -56,6 +59,7 @@ export type CheckId =
   | "vector"
   | `vector-${VectorOperation}`
   | `set-${SetOperation}`
+  | `shape-${ShapeOperation}`
   | `component-${ComponentKind}`
   | "circuitPower"
   | `current-${CurrentSense}`;
@@ -138,6 +142,9 @@ export function useAvailability(): Record<CheckId, Availability> {
     }
     for (const op of SET_OPERATIONS) {
       out[`set-${op}`] = check(doc, markSetOperation(doc, selection, op, opts), text);
+    }
+    for (const op of SHAPE_OPERATIONS) {
+      out[`shape-${op}`] = check(doc, fillShapeOperation(doc, selection, op, opts), text);
     }
     for (const kind of COMPONENT_KINDS) {
       out[`component-${kind}`] = check(doc, addComponent(doc, selection, kind, opts), text);

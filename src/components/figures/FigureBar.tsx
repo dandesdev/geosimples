@@ -11,12 +11,13 @@ import {
 import { IconButton } from "@/components/IconButton";
 import { currentFigureFile, downloadFigureFile, pickFigureFiles } from "@/lib/figureFiles";
 import { useFigureStore } from "@/store/figureStore";
+import { cn } from "@/lib/utils";
 import { FiguresDialog } from "./FiguresDialog";
 import { NameInput } from "./NameInput";
 import { ShareDialog } from "./ShareFigure";
 
 /** The open figure's name, the library and the file and link options. */
-export function FigureBar() {
+export function FigureBar({ bordered = true }: { bordered?: boolean }) {
   const figureId = useFigureStore((s) => s.figureId);
   const name = useFigureStore((s) => s.figures.find((f) => f.id === s.figureId)?.name ?? "");
   const count = useFigureStore((s) => s.figures.length);
@@ -25,7 +26,7 @@ export function FigureBar() {
   const [shareOpen, setShareOpen] = useState(false);
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
+    <div className={cn("flex shrink-0 items-center gap-1 px-2 py-1.5", bordered && "border-b")}>
       <Button
         variant="ghost"
         size="sm"

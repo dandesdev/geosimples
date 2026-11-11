@@ -810,6 +810,21 @@ describe("free text", () => {
     expect(doc.elements[1]).toMatchObject({ id: "t1", text: "Figura 1", size: 10, color: "ink", font: "serif" });
   });
 
+  it("is typed as texto: Figura 1, under the figure or at a place", () => {
+    const below = parseInput("texto: Figura 1");
+    expect(below.errors).toEqual([]);
+    expect(below.texts).toEqual([{ text: "Figura 1" }]);
+    const square = applyInput(emptyDoc(), parseInput("A=(0;0)--B=(4;0)--C=(4;4)--")).doc;
+    const doc = applyInput(square, below).doc;
+    const text = doc.elements.find((e) => e.type === "text")!;
+    // Centered under the square, its labels included.
+    expect(text.type === "text" && text.x).toBeCloseTo(2, 0);
+    expect(text.type === "text" && text.y).toBeLessThan(0);
+    expect(parseInput('Texto: "não está em escala" @(1;2)').texts).toEqual([{ text: "não está em escala", x: 1, y: 2 }]);
+    expect(parseInput("texto:   ").errors).toEqual([]);
+    expect(parseInput('texto: ""').errors[0].message).toMatch(/Escreva/);
+  });
+
   it("reports text without a place or a closing quote", () => {
     expect(parseInput('"Figura 1"').errors[0].message).toMatch(/onde fica/);
     expect(parseInput('"Figura 1@(1;1)').errors[0].message).toMatch(/aspas/);

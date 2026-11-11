@@ -91,6 +91,9 @@ function MenuItem({
 }
 
 
+/** Items that need no selection. */
+const ALWAYS: Availability = { reason: null, preview: null };
+
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
 /** The Gráficos menu's actions on the selection: the menu shows while one can run. */
@@ -361,7 +364,7 @@ export function Tools({ menuSide, tiles = false }: { menuSide: MenuSide; tiles?:
             <IconButton
               label="Circuito"
               text={text("Circuito")}
-              hint="Ligar o circuito, indicar o sentido da corrente e pôr componentes entre dois pontos."
+              hint="Ligar o circuito, indicar o sentido da corrente e inserir componentes."
               ready={hasCircuit}
               dimmed={!hasCircuit}
               className={tiles ? undefined : APPEAR}
@@ -404,15 +407,15 @@ export function Tools({ menuSide, tiles = false }: { menuSide: MenuSide; tiles?:
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Entre os dois pontos selecionados</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Inserir, para arrastar até as outras pontas</DropdownMenuLabel>
             {COMPONENT_ITEMS.map((item) => (
               <MenuItem
                 key={item.kind}
                 icon={<item.Icon />}
                 title={item.title}
                 hint={item.hint}
-                availability={av[`component-${item.kind}`]}
-                onSelect={() => actions.component(item.kind)}
+                availability={ALWAYS}
+                onSelect={() => actions.placeComponent(item.kind)}
               />
             ))}
           </DropdownMenuContent>

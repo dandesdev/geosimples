@@ -31,13 +31,15 @@ import {
   splitsLine,
   syncDockState,
 } from "./dock";
-import { FigurePane, FormattingPane, LabelsPane, PreviewPane, PropertiesPane, ToolbarPane } from "./DockPanes";
+import { FigurePane, FormattingPane, LabelsPane, PreviewPane, PropertiesPane, ReadyPane, ToolbarPane, ToolsPane } from "./DockPanes";
 import { GripTab, GroupActions, PanelTab } from "./DockParts";
 
 const components = {
   preview: PreviewPane,
   toolbar: ToolbarPane,
+  tools: ToolsPane,
   figure: FigurePane,
+  ready: ReadyPane,
   properties: PropertiesPane,
   formatting: FormattingPane,
   labels: LabelsPane,
@@ -117,7 +119,11 @@ export function ProWorkspace() {
       saveLayout();
       syncDockState();
     });
-    api.onDidActivePanelChange(syncDockState);
+    api.onDidActivePanelChange(() => {
+      syncDockState();
+      // Figura and Prontos share a group as tall as the tab in view.
+      requestAnimationFrame(() => fitFigure(api));
+    });
     // The overlay on a window edge is as big as what is dragged will be there.
     api.onWillDragPanel((e) => api.updateOptions({ dndEdges: edgeOverlay(isToolbar(e.panel.id)) }));
     api.onWillDragGroup((e) => api.updateOptions({ dndEdges: edgeOverlay(isToolbarGroup(e.group)) }));

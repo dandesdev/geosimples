@@ -11,6 +11,7 @@ import { useMediaQuery } from "@/lib/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { useFigureStore } from "@/store/figureStore";
 import { opOptions } from "@/store/prefsStore";
+import { useInputHint } from "@/store/inputHintStore";
 
 const TOKEN_CLASS: Record<InputTokenKind, string> = {
   name: "text-primary",
@@ -101,6 +102,8 @@ export function PointInput({ floating = false, phone = false, extra }: { floatin
   const wide = useMediaQuery("(min-width: 640px)");
 
   const parsed = useMemo(() => parseDraft(text, doc, selection), [text, doc, selection]);
+  const hint = useInputHint((s) => s.hint);
+  const clearHint = () => useInputHint.getState().setHint(null);
   const syncScroll = () => setScroll(inputRef.current?.scrollLeft ?? 0);
   useCommand("focusInput", () => {
     const input = inputRef.current;
@@ -127,9 +130,12 @@ export function PointInput({ floating = false, phone = false, extra }: { floatin
     }
     setText("");
     setScroll(0);
+    clearHint();
   };
 
-  const message = text.trim() === "" ? "" : parsed.errors[0]?.message ?? summary(parsed);
+  // A prefill like "y = " waits for the rest: no error before anything is typed.
+  const waiting = text.trim() === "" || PREFILLS.some((p) => p.trim() === text.trim());
+  const message = waiting ? "" : parsed.errors[0]?.message ?? summary(parsed);
   const symbols = symbolsFor(text);
   const insertSymbol = (symbol: string) => {
     const input = inputRef.current;
@@ -145,7 +151,16 @@ export function PointInput({ floating = false, phone = false, extra }: { floatin
   };
 
   return (
-    <div className="flex shrink-0 flex-col gap-1">
+    <div className="relative flex shrink-0 flex-col gap-1">
+      {hint && (
+        // Said by the tool that put the focus here: what to type, pointing at the bar.
+        <div
+          role="status"
+          className="absolute bottom-full left-2 z-20 mb-2 max-w-[min(26rem,calc(100%-1rem))] rounded-lg bg-foreground px-3 py-2 text-xs text-background shadow-lg after:absolute after:left-5 after:top-full after:border-[6px] after:border-transparent after:border-t-foreground after:content-['']"
+        >
+          {hint}
+        </div>
+      )}
       <form
         className={cn(
           "flex items-center gap-2 rounded-lg border bg-card p-1.5 focus-within:ring-2 focus-within:ring-primary/50",
@@ -194,6 +209,7 @@ export function PointInput({ floating = false, phone = false, extra }: { floatin
             }}
             onScroll={syncScroll}
             onSelect={syncScroll}
+            onBlur={clearHint}
             onKeyDown={(e) => {
               if (e.key !== "Escape") return;
               if (PREFILLS.some((p) => p.trim() === text.trim())) setText("");
@@ -205,7 +221,7 @@ export function PointInput({ floating = false, phone = false, extra }: { floatin
             autoCapitalize="characters"
             enterKeyHint="go"
             spellCheck={false}
-            aria-invalid={parsed.errors.length > 0}
+            aria-invalid={!waiting && parsed.errors.length > 0}
             aria-describedby="point-input-message"
             placeholder={wide ? "Ex.: A=(0;0)--B=(4;0)--C=(0;3)--   ou   (1;1) +(2;0) +(3:90)" : phone ? "A=(0;0)--B=(4;0)" : "Ex.: A=(0;0)--B=(4;0)"}
             // 16px on phones: smaller text makes iOS zoom the page when the input gets focus.

@@ -10,6 +10,8 @@ import {
   parseBoard,
   parseSetExpr,
   setRegionExpr,
+  shapeOperationOf,
+  type ShapeOperation,
   piText,
   piWindow,
   setAxesWindow,
@@ -58,6 +60,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { actions } from "@/lib/actions";
+import { previewProps, useAvailability } from "@/lib/availability";
+import { IconButton } from "@/components/IconButton";
+import { SHAPE_TOOLS } from "@/components/tools/areas";
 import { describeConstruction } from "@/lib/names";
 import { COMPONENT_ITEMS, CURRENT_OPTIONS } from "@/components/preview/circuitItems";
 import { useFigureStore } from "@/store/figureStore";
@@ -77,9 +82,11 @@ export function Properties() {
       </p>
     );
   }
-  const { el, props } = inspected;
+  const { el, props, selected } = inspected;
+  const shapes = selected.filter((e) => e.type === "circle" || (e.type === "polygon" && !e.universe));
   return (
     <div className="space-y-2">
+      {shapes.length >= 2 && <ShapeFills count={shapes.length} />}
       {el.type === "point" && <PointProperties el={el} {...props} />}
       {el.type === "segment" && <SegmentProperties el={el} {...props} />}
       {el.type === "angle" && <AngleProperties el={el} {...props} />}
@@ -734,7 +741,61 @@ function CircuitFields({ circuit, doc }: { circuit: Circuit; doc: FigureDoc }) {
   );
 }
 
-function RegionProperties({ el, multi }: EditorProps<Region>) {
+/** Pathfinder: fills what two or more selected shapes make together. */
+function ShapeFills({ count }: { count: number }) {
+  const av = useAvailability();
+  return (
+    <Section title="Preencher entre as formas">
+      <div className="grid grid-cols-4 gap-1.5">
+        {SHAPE_TOOLS.map((t) => (
+          <IconButton
+            key={t.op}
+            label={t.title}
+            text={t.short}
+            hint={t.hint}
+            hoverTip
+            unavailable={av[`shape-${t.op}`].reason}
+            onClick={() => actions.shapeOperation(t.op)}
+            {...previewProps(av[`shape-${t.op}`])}
+          >
+            <t.Icon />
+          </IconButton>
+        ))}
+      </div>
+      <Hint>
+        {count === 2 ? "As duas formas" : `As ${count} formas`} continuam como estão; o preenchimento acompanha quando elas se movem. Para a
+        diferença, a primeira selecionada é a de onde se tira.
+      </Hint>
+    </Section>
+  );
+}
+
+const SHAPE_OP_OPTIONS: { value: ShapeOperation; label: string }[] = [
+  { value: "union", label: "União" },
+  { value: "inter", label: "Interseção" },
+  { value: "diff", label: "Diferença" },
+  { value: "xor", label: "Exclusão" },
+];
+
+function RegionProperties(props: EditorProps<Region>) {
+  const op = shapeOperationOf(props.el);
+  if (op) return <ShapeRegionProperties el={props.el} op={op} multi={props.multi} />;
+  return <SetRegionProperties {...props} />;
+}
+
+/** A fill between shapes: which operation, kept on the same shapes. */
+function ShapeRegionProperties({ el, op, multi }: { el: Region; op: ShapeOperation; multi: boolean }) {
+  if (multi) return <Hint>Com vários preenchimentos selecionados, a operação muda um por vez.</Hint>;
+  const options = SHAPE_OP_OPTIONS.filter((o) => o.value !== "xor" || el.sets.length === 2);
+  return (
+    <Section title="Preenchimento entre formas">
+      <Choice label="Operação" value={op} options={options} onChange={(next) => actions.setShapeOperation(el.id, next)} />
+      <Hint>Acompanha as formas quando elas se movem. A cor e a textura ficam em Formatação.</Hint>
+    </Section>
+  );
+}
+
+function SetRegionProperties({ el, multi }: EditorProps<Region>) {
   const [draft, setDraft] = useState<string | null>(null);
   const text = draft ?? el.expr;
   const parsed = parseSetExpr(text);

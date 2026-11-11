@@ -21,7 +21,7 @@ export const TOOLBAR_SIZE = 48;
 export const GRIP_SIZE = 12;
 /** A panel's tab strip is this many px tall; a minimized panel keeps only it. */
 export const TAB_STRIP = 30;
-const RIGHT_COLUMN = 340;
+const RIGHT_COLUMN = 372;
 /** A panel dropped on an edge of the window takes this many px across, as its overlay shows. */
 export const EDGE_PANEL = 300;
 /** How close (px) to an edge of the window a drag must come to dock on it: less than a tab strip, so tabs at the top still take drops. */
@@ -151,14 +151,19 @@ export function splitsLine(group: DockviewGroupPanel | undefined, position: stri
   return false;
 }
 
-/** Figura is one row of buttons: stacked with other panels, it keeps just that height. */
+/**
+ * Figura is one row of buttons: stacked with other panels, it keeps just that
+ * height. With Prontos as its second tab, the group is as tall as the tab in view.
+ */
 export function fitFigure(target: DockviewApi) {
   const figure = target.getPanel("figure");
-  if (!figure || figure.group.panels.length !== 1 || figure.group.api.location.type !== "grid") return;
+  if (!figure || figure.group.api.location.type !== "grid") return;
+  if (!isFigureAlone(figure.group)) return;
   const others = stackedWith(figure.group);
   // Alone in its column, or beside a minimized panel that must keep its strip, Figura takes what is left.
   if (others.length === 0 || others.some(isMinimized) || isMinimized(figure.group)) return;
-  const height = TAB_STRIP + 52;
+  const ready = figure.group.activePanel?.id === "ready" ? document.querySelector<HTMLElement>("[data-panel=ready] > *") : null;
+  const height = TAB_STRIP + (ready ? Math.min(ready.scrollHeight + 2, 320) : 52);
   const now = Math.round(figure.group.api.height);
   // One try per height: a column that can't give Figura exactly this height must not loop.
   if (Math.abs(now - height) <= 1) {
@@ -201,20 +206,24 @@ const panelOptions = (id: DockItemId) =>
       { id, component: id, tabComponent: "panel", title: DOCK_ITEM_TITLES[id], minimumHeight: TAB_STRIP, minimumWidth: 200 };
 
 /**
- * The default arrangement: the toolbars down the left, the preview in the
- * middle, and down the right Figura, Propriedades, then Formatação with
- * Rótulos e textos as a second tab.
+ * The default arrangement: the toolbars down the left, with Janelas, the
+ * theme, Configurações and help at the bottom; the preview in the middle,
+ * with Inserir floating on it; and down the right Ferramentas, Figura with
+ * Prontos as a second tab, then Propriedades with Formatação and Rótulos.
  */
 export function buildDefaultLayout(target: DockviewApi) {
   target.clear();
   target.addPanel({ id: PREVIEW_ID, component: PREVIEW_ID, title: "Prévia" });
   target.addPanel({ ...panelOptions("tools-file"), position: { referencePanel: PREVIEW_ID, direction: "left" }, initialWidth: TOOLBAR_SIZE });
-  target.addPanel({ ...panelOptions("tools-build"), position: { referencePanel: "tools-file", direction: "below" } });
-  target.addPanel({ ...panelOptions("tools-mode"), position: { referencePanel: "tools-build", direction: "below" } });
-  target.addPanel({ ...panelOptions("figure"), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: RIGHT_COLUMN });
+  target.addPanel({ ...panelOptions("tools-mode"), position: { referencePanel: "tools-file", direction: "below" } });
+  target.addPanel({ ...panelOptions("tools-app"), position: { referencePanel: "tools-mode", direction: "below" } });
+  target.addPanel({ ...panelOptions("tools"), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: RIGHT_COLUMN });
+  target.addPanel({ ...panelOptions("figure"), position: { referencePanel: "tools", direction: "below" } });
+  target.addPanel({ ...panelOptions("ready"), position: { referencePanel: "figure", direction: "within" }, inactive: true });
   target.addPanel({ ...panelOptions("properties"), position: { referencePanel: "figure", direction: "below" } });
-  target.addPanel({ ...panelOptions("formatting"), position: { referencePanel: "properties", direction: "below" } });
-  target.addPanel({ ...panelOptions("labels"), position: { referencePanel: "formatting", direction: "within" }, inactive: true });
+  target.addPanel({ ...panelOptions("formatting"), position: { referencePanel: "properties", direction: "within" }, inactive: true });
+  target.addPanel({ ...panelOptions("labels"), position: { referencePanel: "properties", direction: "within" }, inactive: true });
+  target.getPanel("tools")?.group.api.setSize({ height: 330 });
   prepareGroups(target);
   // Figura is one row of buttons. The toolbars fit their buttons once they are drawn; the last takes the rest.
   fitFigure(target);
@@ -503,7 +512,10 @@ function inLineWith(group: DockviewGroupPanel, row = false) {
 /** The other groups stacked in the same column as `group`, above and below it. */
 const stackedWith = (group: DockviewGroupPanel) => inLineWith(group);
 
-const isFigureAlone = (group: DockviewGroupPanel) => group.panels.length === 1 && group.panels[0].id === "figure";
+/** Figura alone in its group, or with Prontos: a group that keeps the height of its content. */
+function isFigureAlone(group: DockviewGroupPanel) {
+  return group.panels.every((p) => p.id === "figure" || p.id === "ready");
+}
 
 /**
  * Whether minimizing makes sense: floating, or stacked with another panel that

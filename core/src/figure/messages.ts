@@ -187,6 +187,12 @@ const EN: Record<string, string> = {
   "A figura já tem um diagrama. Digite A={1,2} para mudar os conjuntos dele.": "The figure already has a diagram. Type A={1,2} to change its sets.",
   "O complementar precisa de um universo: crie o diagrama em Conjuntos.": "A complement needs a universe: create the diagram in Conjuntos.",
   "Essa região está vazia na figura.": "This region is empty in the figure.",
+  "Selecione duas ou mais circunferências ou polígonos.": "Select two or more circles or polygons.",
+  "A exclusão é entre duas formas: selecione só duas.": "Exclusion is between two shapes: select only two.",
+  "As formas não se cruzam: a interseção é vazia.": "The shapes don't cross: the intersection is empty.",
+  "Essa região não é um preenchimento entre formas.": "This region isn't a fill between shapes.",
+  "A exclusão é entre duas formas.": "Exclusion is between two shapes.",
+  "Escreva o texto depois de texto:": "Write the text after texto:",
   "Crie o diagrama antes: o complementar precisa do universo.": "Create the diagram first: a complement needs the universe.",
   "Essa expressão ocupa mais de uma região do diagrama. Informe uma região só, como n(A∩B)=3 ou n(A−B)=2.": "This expression covers more than one region of the diagram. Give a single region, like n(A∩B)=3 or n(A−B)=2.",
 

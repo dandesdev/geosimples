@@ -61,14 +61,13 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             </li>
           )}
           <li>
-            <b>Construir.</b> Com pontos selecionados, use {phone ? "os botões abaixo da prévia" : "a barra acima da prévia"}: ligar pontos, marcar ângulo (A, B, C
+            <b>Construir.</b> Com pontos selecionados, use {phone ? "os botões abaixo da prévia, separados por assunto" : "o painel Ferramentas, separado por assunto (ou a barra acima da prévia)"}: ligar pontos, marcar ângulo (A, B, C
             marca o ângulo em B), polígono e circunferência. Em Construções ficam ponto médio, altura, projeção
             ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando você os move.
           </li>
           <li>
             <b>Ajustar.</b> Em Propriedades veja medidas e construção e ajuste posição, raio, arco, setor e
-            mediatriz. Em Formatação mude cor, traço, preenchimento, marcas e rótulos. Cada grupo abre e fecha pelo
-            título. Com vários objetos do mesmo tipo selecionados, a mudança vale para todos. Um rótulo pode ser <b>Medida (atualiza sozinha)</b>: o
+            mediatriz. Em Formatação mude cor, traço, preenchimento, marcas e rótulos; em Rótulos, rotule tudo de uma vez. Com vários objetos do mesmo tipo selecionados, a mudança vale para todos. Um rótulo pode ser <b>Medida (atualiza sozinha)</b>: o
             comprimento, o ângulo, o raio, a área ou o perímetro, que muda quando os pontos se movem.
           </li>
           <li>
@@ -85,7 +84,7 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             No modo Ponto, um clique o adiciona; com o botão direito, Inserir ponto de interseção (ou de máximo, de mínimo).
           </li>
           <li>
-            <b>Texto livre.</b> Em Rótulos e textos › Texto livre, ou na barra de entrada com <code>"Figura 1"@(2;-1)</code>.
+            <b>Texto livre.</b> Em Inserir › Texto livre, ou na barra de entrada com <code>texto: Figura 1</code> (embaixo da figura) ou <code>"Figura 1"@(2;-1)</code>.
             Arraste o texto no modo Mover e mude fonte, tamanho e cor em Formatação.
           </li>
           {!touch && (
@@ -94,8 +93,9 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               prévia ocupa a tela e cada painel vai para onde você quiser: arraste pela aba até a parte de cima ou
               de baixo de outro painel para empilhar, até as abas dele para juntar, até uma borda da janela, ou solte
               sobre a prévia para flutuar. As barras de ferramentas também: arraste pelos pontinhos. Em cima ou
-              embaixo, elas ficam deitadas. O botão direito do mouse na prévia mostra todas as ações; Janelas, no canto
-              de cima da prévia, põe tudo de volta no lugar. Ali também ficam o tema escuro, as configurações e esta ajuda.
+              embaixo, elas ficam deitadas. O botão direito do mouse na prévia mostra todas as ações; Janelas, no pé
+              da barra da esquerda, põe tudo de volta no lugar. Ali também ficam o tema escuro, as configurações e esta ajuda.
+              Inserir flutua no canto de cima da prévia, e as ferramentas de cada assunto ficam no painel Ferramentas.
             </li>
           )}
           <li>

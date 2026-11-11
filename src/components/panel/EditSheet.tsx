@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { IconButton } from "@/components/IconButton";
 import { useFigureStore } from "@/store/figureStore";
-import { usePanelStore } from "@/store/panelStore";
-import { Formatting } from "./Formatting";
-import { Properties } from "./Properties";
+import { EditTabs } from "./EditTabs";
 import { SelectionHeader } from "./SelectionHeader";
 
 /**
@@ -40,30 +37,16 @@ export function SelectionCard() {
           </IconButton>
         </div>
       </div>
-      <EditAccordion />
+      <div className="pb-1">
+        <EditAccordion />
+      </div>
     </section>
   );
 }
 
+/** Propriedades and Formatação as tabs: the selection's name is already above them. */
 function EditAccordion() {
-  const open = usePanelStore((s) => s.open);
-  const setOpen = usePanelStore((s) => s.setOpen);
-  return (
-    <Accordion type="multiple" value={open} onValueChange={setOpen}>
-      <AccordionItem value="properties">
-        <AccordionTrigger>Propriedades</AccordionTrigger>
-        <AccordionContent>
-          <Properties />
-        </AccordionContent>
-      </AccordionItem>
-      <AccordionItem value="formatting" className="border-b-0">
-        <AccordionTrigger>Formatação</AccordionTrigger>
-        <AccordionContent>
-          <Formatting />
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
-  );
+  return <EditTabs header={false} labels={false} />;
 }
 
 function Sheet() {

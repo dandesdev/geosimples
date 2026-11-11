@@ -457,6 +457,7 @@ test("a segment slid past a crossing reaches it with a dashed extension that can
   await page.keyboard.press("V");
   await clickAlong(page, "x1", 0.5);
   await expect(page.getByText(/^Prolongamento de AB até /).first()).toBeVisible();
+  await page.getByRole("tab", { name: "Formatação" }).click();
   await expect(page.getByText("Traço do prolongamento")).toBeVisible();
 });
 

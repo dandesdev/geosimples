@@ -27,12 +27,14 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
    * as its cell: the phone layout's tools, where there is no hover to read a tooltip.
    */
   text?: string;
+  /** A tile that still shows its tooltip on hover: on a desktop panel, where there is a pointer to hover with. */
+  hoverTip?: boolean;
   children: ReactNode;
 }
 
 /** A square toolbar button with a tooltip. The label doubles as its accessible name. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, hint, shortcut, active, unavailable, dimmed, ready, text, className, children, onClick, ...props },
+  { label, hint, shortcut, active, unavailable, dimmed, ready, text, hoverTip, className, children, onClick, ...props },
   ref,
 ) {
   const [hovered, setHovered] = useState(false);
@@ -49,7 +51,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   return (
     // A tile already says what it is, and on a phone a tooltip left open by the focus covers the figure:
     // it shows only to say why the action can't run.
-    <Tooltip open={pinned || (hovered && text === undefined)} onOpenChange={setHovered}>
+    <Tooltip open={pinned || (hovered && (text === undefined || !!hoverTip))} onOpenChange={setHovered}>
       <TooltipTrigger asChild>
         <button
           ref={ref}

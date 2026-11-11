@@ -12,7 +12,7 @@ import {
   signedArea2,
 } from "./geometry";
 import { canHaveLabel, formatNumber, labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
-import { addBoard } from "./boardOps";
+import { addBoard, textSpotBelow } from "./boardOps";
 import { functionValue, nearestOnGraph } from "./plot";
 import { addRegion, setMembers, setRegionCount } from "./setOps";
 import { addVector } from "./vectorOps";
@@ -196,7 +196,8 @@ export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions 
   }
   const texts: Id[] = [];
   for (const t of parsed.texts) {
-    const added = addText(working, t, t.text, opts);
+    const spot = t.x !== undefined && t.y !== undefined ? { x: t.x, y: t.y } : textSpotBelow(working);
+    const added = addText(working, spot, t.text, opts);
     working = added.doc;
     texts.push(...added.created);
   }

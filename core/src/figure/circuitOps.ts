@@ -253,3 +253,147 @@ export function setCircuit(doc: FigureDoc, patch: CircuitPatch, opts: OpOptions 
   }
   return { doc: withElements(withOne, withOne.elements.map((e) => (e.id === circuit.id ? next : e))), created: [] };
 }
+
+/** How long a piece inserted on its own is, end to end, in cm: its symbol with a lead on each side. */
+const FREE_LENGTH = 2;
+
+/** Where a piece inserted on its own goes: under everything drawn, at its left. */
+function spotUnder(doc: FigureDoc): Vec {
+  const { box, kx, ky } = buildScene(doc);
+  if (!box) return { x: 0, y: 0 };
+  const round = (v: number) => Math.round(v * 2) / 2;
+  return { x: round(box.minX / kx), y: round(-box.maxY / ky - 1.5) };
+}
+
+/** Two hidden points, `length` apart across, from `at`: the ends of a piece or a wire. */
+function freeEnds(doc: FigureDoc, opts: OpOptions, at: Vec, length: number): [Point, Point] {
+  const styles = opts.styles ?? DEFAULT_STYLES;
+  const nextId = idMaker(doc);
+  const a: Point = { id: nextId("point"), type: "point", x: at.x, y: at.y, ...styles.point, shape: "none" };
+  const b: Point = { ...a, id: idMaker(withElements(doc, [...doc.elements, a]))("point"), x: at.x + length };
+  return [a, b];
+}
+
+/**
+ * A piece on its own, with no points to pick first: across, under the figure.
+ * It is dragged whole, or by an end, and an end dropped on another joins them.
+ */
+export function placeComponent(doc: FigureDoc, kind: ComponentKind, opts: OpOptions = {}, at?: Vec): OpResult {
+  if (!roomFor(doc, 4)) return { doc, created: [], error: LIMIT_ERROR };
+  const spot = at ?? spotUnder(doc);
+  if (Math.abs(spot.x) + FREE_LENGTH > LIMITS.coordinate || Math.abs(spot.y) > LIMITS.coordinate) {
+    return { doc, created: [], error: "A figura chegou ao limite de espaço." };
+  }
+  const [a, b] = freeEnds(doc, opts, spot, FREE_LENGTH);
+  const withEnds = withElements(doc, [...doc.elements, a, b]);
+  const piece = newComponent(withEnds, idMaker(withEnds)("component"), kind, a.id, b.id, opts);
+  return { doc: tidyJunctions(withCircuit(withElements(withEnds, [...withEnds.elements, piece]), opts)), created: [piece.id] };
+}
+
+/** A wire on its own, between two hidden ends, for joining pieces that are apart. */
+export function placeWire(doc: FigureDoc, opts: OpOptions = {}, at?: Vec): OpResult {
+  if (!roomFor(doc, 3)) return { doc, created: [], error: LIMIT_ERROR };
+  const styles = opts.styles ?? DEFAULT_STYLES;
+  const spot = at ?? spotUnder(doc);
+  const [a, b] = freeEnds(doc, opts, spot, FREE_LENGTH);
+  const withEnds = withElements(doc, [...doc.elements, a, b]);
+  const wire: Segment = { id: idMaker(withEnds)("segment"), type: "segment", a: a.id, b: b.id, stroke: { ...styles.stroke, dash: "solid" }, ticks: 0 };
+  return { doc: tidyJunctions(withElements(withEnds, [...withEnds.elements, wire])), created: [wire.id] };
+}
+
+/**
+ * The points a circuit's ends can join at: free points that only wires and
+ * pieces use, in a circuit or at the ends of a wire of hidden points.
+ */
+export function circuitEnds(doc: FigureDoc): Set<Id> {
+  const wired = wiredPoints(doc);
+  const points = new Map(doc.elements.flatMap((e) => (e.type === "point" ? [[e.id, e] as const] : [])));
+  for (const e of doc.elements) {
+    if (e.type === "segment" && points.get(e.a)?.shape === "none" && points.get(e.b)?.shape === "none") {
+      wired.add(e.a);
+      wired.add(e.b);
+    }
+  }
+  const usedElsewhere = new Set<Id>();
+  for (const e of doc.elements) {
+    if (e.type === "segment" || e.type === "component") continue;
+    // A point built on another (a midpoint, a projection) holds it as geometry.
+    if (e.type === "point" && !e.construction) continue;
+    for (const p of pointsOf(e)) usedElsewhere.add(p);
+  }
+  for (const id of [...wired]) {
+    const p = points.get(id);
+    if (!p || p.construction || usedElsewhere.has(id)) wired.delete(id);
+  }
+  return wired;
+}
+
+/** Every id an element names besides its own: the points it is built on, whatever its kind. */
+function pointsOf(e: Element): Id[] {
+  const out: Id[] = [];
+  const walk = (v: unknown) => {
+    if (typeof v === "string") out.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  for (const [key, value] of Object.entries(e)) if (key !== "id" && key !== "label") walk(value);
+  return out;
+}
+
+/** How close (cm) two ends must be to count as one place. */
+const SAME_SPOT = 1e-6;
+
+/**
+ * Joins each of `moved` that now sits on another circuit end into that end:
+ * wires and pieces that used it use the other, and it goes. A piece never
+ * joins its own two ends, and a wire with no length left goes too.
+ */
+export function joinEnds(doc: FigureDoc, moved: Id[]): FigureDoc {
+  let working = doc;
+  for (const from of moved) {
+    const ends = circuitEnds(working);
+    if (!ends.has(from)) continue;
+    const at = working.elements.find((e): e is Point => e.type === "point" && e.id === from);
+    if (!at) continue;
+    const into = working.elements.find(
+      (e): e is Point => e.type === "point" && e.id !== from && ends.has(e.id) && dist(e, at) < SAME_SPOT,
+    );
+    if (!into) continue;
+    const ownPiece = working.elements.some(
+      (e) => e.type === "component" && ((e.a === from && e.b === into.id) || (e.b === from && e.a === into.id)),
+    );
+    if (ownPiece) continue;
+    const swap = (p: Id) => (p === from ? into.id : p);
+    const elements = working.elements
+      .filter((e) => e.id !== from)
+      .map((e): Element => (e.type === "segment" || e.type === "component" ? { ...e, a: swap(e.a), b: swap(e.b) } : e))
+      .filter((e) => !(e.type === "segment" && e.a === e.b));
+    // Two wires now on the same two ends are one.
+    const seen = new Set<string>();
+    const unique = elements.filter((e) => {
+      if (e.type !== "segment") return true;
+      const key = [e.a, e.b].sort().join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    working = withElements(working, unique);
+  }
+  return working === doc ? doc : tidyJunctions(working);
+}
+
+/** The other circuit end within `reach` (cm) of `at`, not one of `skip`: where a dragged end snaps to. */
+export function endNear(doc: FigureDoc, at: Vec, reach: number, skip: Set<Id>): Point | null {
+  const ends = circuitEnds(doc);
+  let best: Point | null = null;
+  let bestDist = reach;
+  for (const e of doc.elements) {
+    if (e.type !== "point" || skip.has(e.id) || !ends.has(e.id)) continue;
+    const d = dist(e, at);
+    if (d <= bestDist) {
+      best = e;
+      bestDist = d;
+    }
+  }
+  return best;
+}
