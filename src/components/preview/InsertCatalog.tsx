@@ -2,11 +2,13 @@ import { useCallback, useMemo, useRef, useState, type ComponentType } from "reac
 import { Blend, Calculator, ChartSpline, MoveUpRight, Plus, Search } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AddPointIcon, AxesIcon, GridIcon, NumberLineIcon, ToFunctionsIcon, VerticalLineIcon } from "@/components/icons";
 import { actions } from "@/lib/actions";
 import { previewProps, useInsertAvailability, type Availability, type InsertCheckId } from "@/lib/availability";
 import { useCommand } from "@/lib/commands";
+import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { useFigureStore } from "@/store/figureStore";
 import { cn } from "@/lib/utils";
 import { BOARD_ITEMS } from "./tools";
@@ -197,12 +199,26 @@ function moveFocus(list: HTMLElement | null, from: Element | null, step: 1 | -1)
  * selection, in sections, with a search. New kinds of figures become new
  * sections here instead of new toolbar buttons. `compact` is a square
  * button; `wideLabel` shows the word only when the toolbar is wide.
+ * `variant` "screen" is the phone layout: a big button that opens the
+ * catalog over the whole screen, where a popover would be a sliver.
  */
-export function InsertCatalog({ side, compact = false, wideLabel = false }: { side: MenuSide; compact?: boolean; wideLabel?: boolean }) {
+export function InsertCatalog({
+  side = "bottom",
+  compact = false,
+  wideLabel = false,
+  variant = "popover",
+}: {
+  side?: MenuSide;
+  compact?: boolean;
+  wideLabel?: boolean;
+  variant?: "popover" | "screen";
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const items = catalog(useInsertAvailability());
   useCommand("insert", useCallback(() => setOpen(true), []));
+  const content = useRef<HTMLDivElement>(null);
+  const touch = useCoarsePointer();
   const list = useRef<HTMLDivElement>(null);
   /** Set by items that go on in the input bar, so the closing catalog leaves the focus there. */
   const toInput = useRef(false);
@@ -223,6 +239,106 @@ export function InsertCatalog({ side, compact = false, wideLabel = false }: { si
     item.run();
   };
 
+  /** Where the focus goes as the catalog opens and closes. */
+  const focusProps = {
+    onOpenAutoFocus: (e: Event) => {
+      // A finger opened it: focusing the search would bring up the keyboard over half of the options.
+      // The catalog itself takes the focus, and the search is one tap away.
+      if (!touch) return;
+      e.preventDefault();
+      content.current?.focus();
+    },
+    onCloseAutoFocus: (e: Event) => {
+      if (!toInput.current) return;
+      toInput.current = false;
+      // The input bar has the focus now; the trigger would take it back.
+      e.preventDefault();
+    },
+  };
+  const screen = variant === "screen";
+
+  const search = (
+    <label className={cn("flex shrink-0 items-center gap-2 border-b px-3", screen ? "py-3" : "py-2")}>
+      <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            const first = shown.find((item) => !item.availability.reason);
+            if (first) run(first);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            moveFocus(list.current, null, 1);
+          }
+        }}
+        placeholder="Buscar: função, mmc, venn, vetor…"
+        aria-label="Buscar no Inserir"
+        enterKeyHint="search"
+        className={cn(
+          "min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
+          // 16px on phones: smaller text makes iOS zoom the page when the input gets focus.
+          screen ? "text-base" : "text-sm",
+        )}
+      />
+    </label>
+  );
+
+  const sections = (
+    <div
+      ref={list}
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+        e.preventDefault();
+        moveFocus(list.current, document.activeElement, e.key === "ArrowDown" ? 1 : -1);
+      }}
+    >
+      {shown.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">Nada encontrado para “{query}”.</p>}
+      {/* Columns that the sections flow down, so a short one doesn't leave a hole beside a long one. */}
+      <div className={cn("gap-x-3", words.length === 0 && "sm:columns-2 lg:columns-3")}>
+        {SECTIONS.map((section) => {
+          const inSection = shown.filter((item) => item.section === section);
+          if (inSection.length === 0) return null;
+          return (
+            <section key={section} aria-label={section} className="mb-2 flex break-inside-avoid flex-col">
+              <h3 className="px-2 pb-1 pt-1.5 text-xs font-semibold text-muted-foreground">{section}</h3>
+              {inSection.map((item) => (
+                <CatalogButton key={item.title} item={item} roomy={screen} onRun={() => run(item)} />
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  if (screen) {
+    return (
+      <Dialog open={open} onOpenChange={close}>
+        <DialogTrigger asChild>
+          {/* As tall as the input bar beside it, and the one filled button of the row. */}
+          <Button className="h-[3.125rem] shrink-0 rounded-lg px-3.5 [&_svg]:size-5" title="Inserir gráficos, vetores, conjuntos, contas e quadros">
+            <Plus />
+            Inserir
+          </Button>
+        </DialogTrigger>
+        <DialogContent
+          ref={content}
+          data-catalog=""
+          aria-describedby={undefined}
+          // The whole screen, instead of the centered box of the other dialogs.
+          className="left-0 top-0 flex h-dvh max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 bg-popover p-0 outline-none sm:rounded-none"
+          {...focusProps}
+        >
+          <DialogTitle className="shrink-0 border-b px-3 py-3.5 text-base">Inserir</DialogTitle>
+          {search}
+          {sections}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Popover open={open} onOpenChange={close}>
       <PopoverTrigger asChild>
@@ -238,70 +354,22 @@ export function InsertCatalog({ side, compact = false, wideLabel = false }: { si
         )}
       </PopoverTrigger>
       <PopoverContent
+        ref={content}
         side={side}
         align="start"
         data-catalog=""
         aria-label="Inserir"
         className="flex max-h-(--radix-popover-content-available-height) w-[min(60rem,calc(100vw-1rem))] flex-col p-0"
-        onCloseAutoFocus={(e) => {
-          if (!toInput.current) return;
-          toInput.current = false;
-          // The input bar has the focus now; the trigger would take it back.
-          e.preventDefault();
-        }}
+        {...focusProps}
       >
-        <label className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
-          <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const first = shown.find((item) => !item.availability.reason);
-                if (first) run(first);
-              } else if (e.key === "ArrowDown") {
-                e.preventDefault();
-                moveFocus(list.current, null, 1);
-              }
-            }}
-            placeholder="Buscar: função, mmc, venn, vetor…"
-            aria-label="Buscar no Inserir"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </label>
-        <div
-          ref={list}
-          className="min-h-0 flex-1 overflow-y-auto p-2"
-          onKeyDown={(e) => {
-            if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-            e.preventDefault();
-            moveFocus(list.current, document.activeElement, e.key === "ArrowDown" ? 1 : -1);
-          }}
-        >
-          {shown.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">Nada encontrado para “{query}”.</p>}
-          {/* Columns that the sections flow down, so a short one doesn't leave a hole beside a long one. */}
-          <div className={cn("gap-x-3", words.length === 0 && "sm:columns-2 lg:columns-3")}>
-            {SECTIONS.map((section) => {
-              const inSection = shown.filter((item) => item.section === section);
-              if (inSection.length === 0) return null;
-              return (
-                <section key={section} aria-label={section} className="mb-2 flex break-inside-avoid flex-col">
-                  <h3 className="px-2 pb-1 pt-1.5 text-xs font-semibold text-muted-foreground">{section}</h3>
-                  {inSection.map((item) => (
-                    <CatalogButton key={item.title} item={item} onRun={() => run(item)} />
-                  ))}
-                </section>
-              );
-            })}
-          </div>
-        </div>
+        {search}
+        {sections}
       </PopoverContent>
     </Popover>
   );
 }
 
-function CatalogButton({ item, onRun }: { item: CatalogItem; onRun: () => void }) {
+function CatalogButton({ item, roomy, onRun }: { item: CatalogItem; roomy: boolean; onRun: () => void }) {
   const reason = item.availability.reason;
   return (
     <button
@@ -309,7 +377,11 @@ function CatalogButton({ item, onRun }: { item: CatalogItem; onRun: () => void }
       data-catalog-item=""
       disabled={reason !== null}
       onClick={onRun}
-      className="flex items-start gap-3 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 [&_svg]:h-5 [&_svg]:w-5"
+      className={cn(
+        "flex items-start gap-3 rounded-md px-2 text-left text-sm outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 [&_svg]:h-5 [&_svg]:w-5",
+        // More room between the rows for a finger.
+        roomy ? "py-2.5" : "py-1.5",
+      )}
       {...previewProps(item.availability)}
     >
       <span className="mt-0.5 shrink-0">

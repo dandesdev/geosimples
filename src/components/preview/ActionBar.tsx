@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { emitCommand } from "@/lib/commands";
 import { Blend, ChartSpline, Download, MoveUpRight, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
@@ -87,44 +85,6 @@ function MenuItem({
 }
 
 
-/**
- * A row of tools that scrolls sideways, with a fade on the side that has more,
- * so it reads as a strip to swipe rather than a toolbar that ends.
- */
-function ToolStrip({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [more, setMore] = useState({ left: false, right: false });
-  const measure = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    setMore({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 });
-  }, []);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [measure]);
-  return (
-    <div className="relative min-w-0 flex-1">
-      <div
-        ref={ref}
-        onScroll={measure}
-        className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] *:shrink-0 [&::-webkit-scrollbar]:hidden"
-      >
-        {children}
-      </div>
-      {more.left && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background" />
-      )}
-      {more.right && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background" />
-      )}
-    </div>
-  );
-}
-
 const clearPreview = () => useFigureStore.getState().setActionPreview(null);
 
 /** The Gráficos menu's actions on the selection: the menu shows while one can run. */
@@ -147,9 +107,13 @@ export type MenuSide = "top" | "right" | "bottom" | "left";
  * The geometry tools, and the menus for the selection's kind: Gráficos,
  * Vetores and Conjuntos show only while one of their actions can run, so the
  * toolbar holds what the selection allows instead of every domain at once.
- * What needs no selection is in Inserir.
+ * What needs no selection is in Inserir. `tiles`: named tiles, for the phone
+ * layout, where all the menus stay, dimmed like the others when the selection
+ * can't use them: a grid has the room, and a tile that came and went would
+ * move the ones a finger is aiming at.
  */
-export function Tools({ menuSide }: { menuSide: MenuSide }) {
+export function Tools({ menuSide, tiles = false }: { menuSide: MenuSide; tiles?: boolean }) {
+  const text = (short: string) => (tiles ? short : undefined);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const av = useAvailability();
   const anyCircle = CIRCLE_OPTIONS.some((o) => !av[`circle-${o.mode}`].reason);
@@ -169,6 +133,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Ligar pontos"
+            text={text("Ligar")}
             shortcut="connect"
             hint="Cria segmentos entre os pontos selecionados, na ordem da seleção."
             dimmed={!anyConnect}
@@ -198,6 +163,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
 
       <IconButton
         label="Marcar ângulo"
+        text={text("Ângulo")}
         shortcut="angle"
         hint="Selecione A, B, C para marcar o ângulo em B, ou um polígono para marcar todos os seus ângulos."
         unavailable={av.angle.reason}
@@ -210,6 +176,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
 
       <IconButton
         label="Polígono e preenchimento"
+        text={text("Polígono")}
         shortcut="polygon"
         hint="Selecione os vértices em ordem, ou os segmentos de um contorno fechado. Circunferências e polígonos selecionados também são preenchidos."
         unavailable={av.polygon.reason}
@@ -224,6 +191,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Circunferência"
+            text={text("Circunferência")}
             hint="Escolha como construir a partir da seleção."
             dimmed={!anyCircle}
             ready={hasSelection && anyCircle}
@@ -250,6 +218,7 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Construções"
+            text={text("Construções")}
             hint="Ponto médio, altura, projeção ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando eles se movem."
             dimmed={!anyConstruction}
             ready={hasSelection && anyConstruction}
@@ -275,14 +244,16 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {anyGraphTool && (
+      {(tiles || anyGraphTool) && (
         <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
           <DropdownMenuTrigger asChild>
             <IconButton
               label="Gráficos"
+              text={text("Gráficos")}
               hint="Para o gráfico ou o ponto selecionado: pontos notáveis, tangente, linhas até os eixos e formas que viram funções."
-              ready
-              className={APPEAR}
+              ready={anyGraphTool}
+              dimmed={!anyGraphTool}
+              className={tiles ? undefined : APPEAR}
             >
               <ChartSpline />
             </IconButton>
@@ -343,14 +314,16 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         </DropdownMenu>
       )}
 
-      {anyVectorOp && (
+      {(tiles || anyVectorOp) && (
         <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
           <DropdownMenuTrigger asChild>
             <IconButton
               label="Vetores"
+              text={text("Vetores")}
               hint="Com os pontos ou vetores selecionados: seta, soma, diferença, projeção, versor e componentes."
-              ready
-              className={APPEAR}
+              ready={anyVectorOp}
+              dimmed={!anyVectorOp}
+              className={tiles ? undefined : APPEAR}
             >
               <MoveUpRight />
             </IconButton>
@@ -373,10 +346,17 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
         </DropdownMenu>
       )}
 
-      {anySetOp && (
+      {(tiles || anySetOp) && (
         <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
           <DropdownMenuTrigger asChild>
-            <IconButton label="Conjuntos" hint="União, interseção, diferença e complementar, marcadas no diagrama." ready className={APPEAR}>
+            <IconButton
+              label="Conjuntos"
+              text={text("Conjuntos")}
+              hint="União, interseção, diferença e complementar, marcadas no diagrama."
+              ready={anySetOp}
+              dimmed={!anySetOp}
+              className={tiles ? undefined : APPEAR}
+            >
               <Blend />
             </IconButton>
           </DropdownMenuTrigger>
@@ -448,68 +428,45 @@ export function ExportIconButton() {
   );
 }
 
-/**
- * The figure's tools over the preview. `layout` is "row", or "strip" on phones:
- * one row that scrolls sideways, with the zoom controls (`zoom`) that don't
- * fit over the preview.
- */
-export function ActionBar({ layout, zoom = null }: { layout: "row" | "strip"; zoom?: ZoomControls | null }) {
+/** Export with its name, where there is room for it. `label` is the classes that show the word. */
+export function ExportButton({ className, label }: { className?: string; label?: string }) {
   const isEmpty = useFigureStore((s) => s.doc.elements.length === 0);
+  return (
+    <Button
+      size="sm"
+      className={cn("shrink-0", className)}
+      onClick={() => emitCommand("export")}
+      disabled={isEmpty}
+      title="Exportar"
+      aria-label="Exportar"
+    >
+      <Download />
+      <span className={label}>Exportar</span>
+    </Button>
+  );
+}
 
+/** The figure's tools in a row over the preview. Phones have them below it instead (`PhoneTools`). */
+export function ActionBar() {
   return (
     <div
       role="toolbar"
       aria-label="Ações da figura"
-      className={cn(
-        // A container, so labels drop when the preview is narrow rather than the row wrapping.
-        "@container flex shrink-0 items-center gap-0.5 border-b bg-background px-2 py-1.5",
-        layout === "strip" ? "flex-nowrap" : "flex-wrap",
-      )}
+      // A container, so labels drop when the preview is narrow rather than the row wrapping.
+      className="@container flex shrink-0 flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1.5"
     >
-      <Button
-        size="sm"
-        className="mr-1 shrink-0"
-        onClick={() => emitCommand("export")}
-        disabled={isEmpty}
-        title="Exportar"
-        aria-label="Exportar"
-      >
-        <Download />
-        <span className="hidden @[54rem]:inline">Exportar</span>
-      </Button>
+      <ExportButton className="mr-1" label="hidden @[54rem]:inline" />
       <Divider />
       <History />
-      {layout === "strip" ? (
-        // Phones: one row that scrolls sideways, instead of two rows over the small preview.
-        // Inserir stays out of it, always in view.
-        <>
-          <Divider />
-          <InsertCatalog side="bottom" />
-          <Divider />
-          <ToolStrip>
-            {/* Modes first: on a phone, tapping points in is how a figure usually starts. */}
-            <ModeSwitch />
-            <Divider />
-            <Tools menuSide="bottom" />
-            {zoom && <Divider />}
-            {zoom && <ZoomBar {...zoom} placement="toolbar" />}
-            <Divider />
-            <DeleteButton />
-          </ToolStrip>
-        </>
-      ) : (
-        <>
-          <DeleteButton />
-          <Divider />
-          <InsertCatalog side="bottom" wideLabel />
-          <Divider />
-          <Tools menuSide="bottom" />
-          {/* At the far end, so menus that come and go with the selection don't move it. */}
-          <div className="ml-auto flex items-center gap-0.5 pl-1">
-            <ModeSwitch />
-          </div>
-        </>
-      )}
+      <DeleteButton />
+      <Divider />
+      <InsertCatalog side="bottom" wideLabel />
+      <Divider />
+      <Tools menuSide="bottom" />
+      {/* At the far end, so menus that come and go with the selection don't move it. */}
+      <div className="ml-auto flex items-center gap-0.5 pl-1">
+        <ModeSwitch />
+      </div>
     </div>
   );
 }

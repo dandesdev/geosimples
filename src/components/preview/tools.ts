@@ -131,12 +131,13 @@ export const CIRCLE_OPTIONS = [
   },
 ] as const;
 
-/** What a press or drag in the preview does. */
-export const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: string; Icon: ComponentType }[] = [
+/** What a press or drag in the preview does. `short` is the name under the icon in the phone layout. */
+export const MODES: { mode: CanvasMode; action: ActionId; label: string; short: string; hint: string; Icon: ComponentType }[] = [
   {
     mode: "select",
     action: "modeSelect",
     label: "Selecionar",
+    short: "Selecionar",
     hint: "Arraste para selecionar o que estiver dentro da caixa. Shift soma à seleção.",
     Icon: SquareDashedMousePointer,
   },
@@ -144,6 +145,7 @@ export const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: s
     mode: "pan",
     action: "modePan",
     label: "Mover a vista",
+    short: "Vista",
     hint: "Arraste para deslocar a prévia.",
     Icon: Hand,
   },
@@ -151,6 +153,7 @@ export const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: s
     mode: "move",
     action: "modeMove",
     label: "Mover",
+    short: "Mover",
     hint: "Arraste pontos, segmentos, polígonos e circunferências. Os quadradinhos nas pontas dos eixos, da malha e das retas mudam o tamanho delas.",
     Icon: Move,
   },
@@ -158,6 +161,7 @@ export const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: s
     mode: "add",
     action: "modeAdd",
     label: "Adicionar pontos",
+    short: "Ponto",
     hint: "Clique na prévia para criar um ponto ali. Segure o botão para Figura rápida.",
     Icon: AddPointIcon,
   },
@@ -165,6 +169,7 @@ export const MODES: { mode: CanvasMode; action: ActionId; label: string; hint: s
     mode: "figure",
     action: "modeFigure",
     label: "Figura rápida",
+    short: "Figura",
     hint: "Cada clique põe um vértice ligado ao anterior; o terceiro fecha o polígono, com preenchimento e ângulos.",
     Icon: QuickFigureIcon,
   },

@@ -515,7 +515,9 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
 
   const empty = doc.elements.length === 0 && draft.trim() === "";
   const roomy = useRoomyPreview();
-  // Nothing to zoom yet, and on phones the bar would cover the welcome card.
+  /** The phone layout: the preview pinned to the top of the page, with the tools and the hint below it (`PhoneLayout`). */
+  const phone = !pro && !roomy;
+  // Nothing to zoom yet.
   const zoom = empty
     ? null
     : { onZoomIn: () => zoomBy(1 / 1.25), onZoomOut: () => zoomBy(1.25), autoFit, onToggleAutoFit: toggleAutoFit };
@@ -524,13 +526,16 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     <>
       <section
         aria-label="Prévia da figura"
-        // A sideways phone is short: the 18rem floor keeps the figure readable, and the page scrolls.
         className={cn(
-          "relative flex flex-1 flex-col overflow-hidden bg-card",
-          pro ? "h-full min-h-0" : "min-h-[max(55dvh,18rem)] rounded-lg border lg:min-h-0",
+          "relative flex flex-col overflow-hidden bg-card",
+          pro && "h-full min-h-0 flex-1",
+          !pro && !phone && "min-h-[max(55dvh,18rem)] flex-1 rounded-lg border lg:min-h-0",
+          // Flush with the screen's edges, and it stays in view while the page scrolls under it.
+          // A sideways phone is too short for that: there it scrolls away with the page.
+          phone && "z-30 h-(--phone-preview) shrink-0 border-b shadow-sm tall:sticky tall:top-0",
         )}
       >
-        {!pro && <ActionBar layout={roomy ? "row" : "strip"} zoom={roomy ? null : zoom} />}
+        {!pro && !phone && <ActionBar />}
         <PreviewMenu enabled={pro} at={menuAt} graphAt={menuGraphAt} spot={menuSpot} zoom={zoom}>
           <div ref={containerRef} className="relative min-h-0 flex-1" onContextMenu={pro ? onContextMenu : undefined}>
             <svg
@@ -604,8 +609,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
           </div>
         </PreviewMenu>
       </section>
-      {/* Phones have no room to float the hint over the figure, so it goes below the preview. */}
-      {!roomy && <SelectionSummary placement="below" />}
+      {/* A short pro window has no room to float the hint over the figure. On phones it is among the tools. */}
+      {pro && !roomy && <SelectionSummary placement="below" />}
     </>
   );
 }

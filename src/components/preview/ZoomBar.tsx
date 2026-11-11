@@ -12,8 +12,9 @@ export interface ZoomControls {
 
 /**
  * Zoom, auto-fit, grid and snapping. On wider screens a column over the right edge of
- * the preview; on phones, where anything over the small preview covers the
- * figure, a row in the action bar instead.
+ * the preview. On phones, where anything over the small preview covers the
+ * figure, a row among the tools below it ("row"), without the zoom buttons:
+ * there two fingers zoom, and the row has no room for them.
  */
 export function ZoomBar({
   onZoomIn,
@@ -21,7 +22,7 @@ export function ZoomBar({
   autoFit,
   onToggleAutoFit,
   placement,
-}: ZoomControls & { placement: "overlay" | "toolbar" }) {
+}: ZoomControls & { placement: "overlay" | "row" }) {
   const showGrid = useFigureStore((s) => s.settings.showGrid);
   const snap = useFigureStore((s) => s.settings.snapToGrid);
   const setSetting = useFigureStore((s) => s.setSetting);
@@ -34,20 +35,25 @@ export function ZoomBar({
       className={
         placement === "overlay"
           ? "absolute right-2 top-1/2 flex -translate-y-1/2 flex-col gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
-          : "flex gap-0.5"
+          : // What is on shows in a tint: filled, three of these in a row would outweigh Inserir and Exportar.
+            "flex gap-0.5 *:h-10 *:w-10 *:aria-pressed:bg-primary/15 *:aria-pressed:text-primary"
       }
     >
-      <IconButton
-        label="Aproximar"
-        hint={coarse ? "Ou afaste dois dedos na prévia." : "Ou use a roda do mouse."}
-        shortcut="zoomIn"
-        onClick={onZoomIn}
-      >
-        <ZoomIn />
-      </IconButton>
-      <IconButton label="Afastar" shortcut="zoomOut" onClick={onZoomOut}>
-        <ZoomOut />
-      </IconButton>
+      {placement === "overlay" && (
+        <>
+          <IconButton
+            label="Aproximar"
+            hint={coarse ? "Ou afaste dois dedos na prévia." : "Ou use a roda do mouse."}
+            shortcut="zoomIn"
+            onClick={onZoomIn}
+          >
+            <ZoomIn />
+          </IconButton>
+          <IconButton label="Afastar" shortcut="zoomOut" onClick={onZoomOut}>
+            <ZoomOut />
+          </IconButton>
+        </>
+      )}
       <IconButton
         label="Enquadrar automaticamente"
         shortcut="toggleAutoFit"
