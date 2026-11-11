@@ -21,8 +21,9 @@ export type InputNode = ({ kind: "new" } & ParsedPoint) | { kind: "existing"; id
 /** A free text to create. */
 export interface ParsedText {
   text: string;
-  x: number;
-  y: number;
+  /** Where its center goes. Without it (texto: …), the text goes under the figure. */
+  x?: number;
+  y?: number;
 }
 
 /** A function graph to create, written f(x) = … or y = …. */
@@ -89,7 +90,7 @@ export interface ParsedInput {
   nodes: InputNode[];
   /** Pairs of node indices to join with a segment. */
   segments: [number, number][];
-  /** Free texts, written "texto"@(x;y). */
+  /** Free texts, written "texto"@(x;y), or texto: Figura 1 as the whole input. */
   texts: ParsedText[];
   /** Graphs of functions, written f(x) = x^2 or y = 2x + 1. The whole input is then the function. */
   functions: ParsedFunction[];
@@ -139,9 +140,11 @@ const isSpace = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
  *   A `--` at the very end closes the contour.
  * - Spaces without `--` separate independent points or chains.
  * - `"texto"@(X;Y)` places a free text centered at a point; any point form works after `@`.
+ * - `texto: Figura 1` as the whole input is a free text under the figure, or at `@(X;Y)` at its end.
  */
 export function parseInput(text: string, ctx: InputContext = { points: [] }): ParsedInput {
   const whole =
+    parseFreeTextInput(text) ??
     parseSetInput(text) ??
     parseRegionInput(text) ??
     parseVectorInput(text, ctx) ??
@@ -502,6 +505,33 @@ function parseRegionInput(text: string): ParsedInput | null {
   if (!parsed.ok) return inputFailure(text, parsed.error);
   result.regions.push(expr);
   result.tokens.push({ kind: "text", start: text.length - m[1].length, end: text.length });
+  return result;
+}
+
+const FREE_TEXT_INPUT = /^\s*texto\s*:(.*)$/iu;
+
+/** texto: Figura 1, or texto: Figura 1 @(2;-1): the whole input is one free text. */
+function parseFreeTextInput(text: string): ParsedInput | null {
+  const m = FREE_TEXT_INPUT.exec(text);
+  if (!m) return null;
+  const head = text.length - m[1].length;
+  const result = emptyInput();
+  result.tokens.push({ kind: "name", start: 0, end: head });
+  let body = m[1].trim();
+  if (body === "") return result;
+  const at = new RegExp(String.raw`@\s*` + POSITION + String.raw`\s*$`).exec(body);
+  let spot: { x: number; y: number } | undefined;
+  if (at) {
+    const a = num(at[1]);
+    const b = num(at[3]);
+    spot = at[2] === ":" ? { x: a * Math.cos((b * Math.PI) / 180), y: a * Math.sin((b * Math.PI) / 180) } : { x: a, y: b };
+    body = body.slice(0, at.index).trim();
+  }
+  // Quotes around it are allowed, as in "Figura 1"@(2;-1).
+  body = body.replace(/^["“](.*)["”]$/u, "$1").trim();
+  if (body === "") return inputFailure(text, "Escreva o texto depois de texto:");
+  result.texts.push({ text: body.slice(0, LIMITS.labelLength), ...(spot && { x: roundTiny(spot.x), y: roundTiny(spot.y) }) });
+  result.tokens.push({ kind: "text", start: head, end: text.length });
   return result;
 }
 

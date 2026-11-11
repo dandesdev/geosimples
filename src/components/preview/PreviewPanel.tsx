@@ -826,8 +826,12 @@ const HANDLE_NAMES: Record<HandleEnd, string> = {
   y1: "Fim em y",
 };
 
+/** Texts typed with a place; texto: without one goes under the figure, which the ghost can't know yet. */
+const placedTexts = (parsed: ParsedInput) =>
+  parsed.texts.filter((t): t is { text: string; x: number; y: number } => t.x !== undefined && t.y !== undefined);
+
 function ghostBox(parsed: ParsedInput, ppu: PerUnit): Box | null {
-  const spots = [...parsed.nodes, ...parsed.texts];
+  const spots = [...parsed.nodes, ...placedTexts(parsed)];
   if (spots.length === 0) return null;
   const xs = spots.map((n) => n.x * ppu.x);
   const ys = spots.map((n) => -n.y * ppu.y);
@@ -881,7 +885,7 @@ function DraftGhost({ parsed, ppu, px, paper }: { parsed: ParsedInput; ppu: PerU
           </g>
         );
       })}
-      {parsed.texts.map((t, i) => (
+      {placedTexts(parsed).map((t, i) => (
         <text
           key={`text-${i}`}
           x={t.x * ppu.x}

@@ -206,6 +206,7 @@ export function draggedPoints(el: Element, doc?: FigureDoc): Id[] {
     case "polygon":
       return el.vertices;
     case "vector":
+    case "component":
       return [el.a, el.b];
     case "circle": {
       const c = el.construction;

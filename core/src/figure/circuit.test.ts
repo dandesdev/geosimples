@@ -9,6 +9,7 @@ import {
   deleteElements,
   emptyDoc,
   flipComponent,
+  moveElements,
   normalizeDoc,
   setCircuit,
   solveCircuit,
@@ -190,5 +191,66 @@ describe("circuits in recipes", () => {
       ],
     });
     expect(shorted.errors[0]?.message).toMatch(/curto-circuito|short/);
+  });
+});
+
+describe("pieces on their own", () => {
+  it("places a piece with no points picked, and joins an end dropped on another", async () => {
+    const { placeComponent, placeWire, joinEnds, endNear, moveElements } = await import("./index");
+    let doc = placeComponent(emptyDoc(), "source").doc;
+    const source = pieces(doc)[0];
+    doc = placeComponent(doc, "resistor").doc;
+    const resistor = pieces(doc).find((c) => c.kind === "resistor")!;
+    expect(circuitOf(doc)).toBeDefined();
+    // Dragged whole, a piece takes both its ends.
+    const pts = (d: FigureDoc) => new Map(d.elements.flatMap((e) => (e.type === "point" ? [[e.id, e] as const] : [])));
+    const before = pts(doc).get(resistor.a)!;
+    const moved = moveElements(doc, [resistor.id], { x: 1, y: 2 });
+    expect(pts(moved).get(resistor.a)).toMatchObject({ x: before.x + 1, y: before.y + 2 });
+    expect(pts(moved).get(resistor.b)!.x - pts(moved).get(resistor.a)!.x).toBeCloseTo(2);
+    // The resistor's ends onto the source's: one loop.
+    const sa = pts(doc).get(source.a)!;
+    const sb = pts(doc).get(source.b)!;
+    doc = moveElements(doc, [resistor.a], { x: sa.x - pts(doc).get(resistor.a)!.x, y: sa.y - pts(doc).get(resistor.a)!.y });
+    expect(endNear(doc, sb, 0.5, new Set([source.b]))).toBeNull();
+    doc = joinEnds(doc, [resistor.a]);
+    doc = moveElements(doc, [resistor.b], { x: sb.x - pts(doc).get(resistor.b)!.x, y: sb.y - pts(doc).get(resistor.b)!.y });
+    doc = joinEnds(doc, [resistor.b]);
+    const joined = pieces(doc).find((c) => c.kind === "resistor")!;
+    expect(new Set([joined.a, joined.b])).toEqual(new Set([source.a, source.b]));
+    // 12 V over 10 Ω.
+    expect(Math.abs(state(doc, "R₁").current)).toBeCloseTo(1.2);
+    // A piece never joins its own ends.
+    const lone = placeComponent(emptyDoc(), "lamp").doc;
+    const lamp = pieces(lone)[0];
+    const squashed = moveElements(lone, [lamp.b], { x: -2, y: 0 });
+    expect(joinEnds(squashed, [lamp.b])).toBe(squashed);
+    // A wire's ends join too, and geometry points never do.
+    const wired = placeWire(emptyDoc());
+    expect(wired.doc.elements.filter((e) => e.type === "segment")).toHaveLength(1);
+    const tri = addPoints(emptyDoc(), [{ x: 0, y: 0 }, { x: 0, y: 0 }]);
+    expect(joinEnds(tri.doc, [tri.created[0]])).toBe(tri.doc);
+  });
+});
+
+describe("fills between shapes", () => {
+  it("fills the union, intersection, difference or exclusion of the selected shapes, and follows them", async () => {
+    const { fillShapeOperation, setShapeOperation, shapeOperationOf, makeCircle } = await import("./index");
+    const pts = addPoints(emptyDoc(), [{ x: 0, y: 0 }, { x: 1.5, y: 0 }]);
+    let doc = makeCircle(pts.doc, [pts.created[0]], "radius").doc;
+    doc = makeCircle(doc, [pts.created[1]], "radius").doc;
+    const circles = doc.elements.filter((e) => e.type === "circle").map((e) => e.id);
+    expect(fillShapeOperation(doc, [circles[0]], "union").error).toMatch(/duas ou mais/);
+    const inter = fillShapeOperation(doc, circles, "inter");
+    expect(inter.error).toBeUndefined();
+    const region = inter.doc.elements.find((e) => e.type === "region")!;
+    expect(region.type === "region" && shapeOperationOf(region)).toBe("inter");
+    expect(toTikz(inter.doc)).toContain("fill");
+    const xor = setShapeOperation(inter.doc, region.id, "xor");
+    expect(xor.error).toBeUndefined();
+    // Apart, the circles have no intersection.
+    const apart = moveElements(doc, [pts.created[1]], { x: 5, y: 0 });
+    expect(fillShapeOperation(apart, circles, "inter").error).toMatch(/não se cruzam/);
+    expect(fillShapeOperation(apart, circles, "union").error).toBeUndefined();
   });
 });

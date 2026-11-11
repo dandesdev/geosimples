@@ -309,3 +309,70 @@ function spotOf(doc: FigureDoc, wanted: Id[]): Vec | null {
   }
   return null;
 }
+
+/** What filling the selected shapes covers, as in Illustrator's Pathfinder. */
+export type ShapeOperation = "union" | "inter" | "diff" | "xor";
+
+export const SHAPE_OPERATIONS: readonly ShapeOperation[] = ["union", "inter", "diff", "xor"];
+
+const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
+
+/**
+ * Fills the union, intersection, difference (the first selected minus the
+ * others) or exclusive or (two shapes) of the selected circles and polygons:
+ * a region that follows the shapes as they move, like the regions of a Venn
+ * diagram, and is written as one exact path.
+ */
+export function fillShapeOperation(doc: FigureDoc, selection: Id[], op: ShapeOperation, opts: OpOptions = {}): OpResult {
+  const byId = new Map(doc.elements.map((e) => [e.id, e]));
+  const pts = pointMap(doc);
+  const shapes = selection.filter((id) => {
+    const el = byId.get(id);
+    return (el?.type === "circle" || (el?.type === "polygon" && !el.universe)) && shapeOf(el, pts);
+  });
+  if (shapes.length < 2) return fail(doc, "Selecione duas ou mais circunferências ou polígonos.");
+  if (op === "xor" && shapes.length !== 2) return fail(doc, "A exclusão é entre duas formas: selecione só duas.");
+  if (!roomFor(doc, 1)) return fail(doc, LIMIT_ERROR);
+  const names = shapes.map((_, i) => `S${String(i + 1).replace(/\d/g, (d) => SUBSCRIPT_DIGITS[Number(d)])}`);
+  const expr = shapeExpr(names, op);
+  const region: Region = {
+    id: idMaker(doc)("region"),
+    type: "region",
+    expr,
+    sets: shapes.map((shape, i) => ({ name: names[i], shape })),
+    universe: null,
+    fill: { ...stylesOf(opts).fill },
+    stroke: null,
+  };
+  const test = regionTest(doc, region);
+  if (!test || regionLoops(test.shapes, test.inside).length === 0) {
+    return fail(doc, op === "inter" ? "As formas não se cruzam: a interseção é vazia." : "Essa região está vazia na figura.");
+  }
+  // First, so its fill sits under the outlines.
+  return { doc: withElements(doc, [region, ...doc.elements]), created: [region.id] };
+}
+
+function shapeExpr(names: string[], op: ShapeOperation): string {
+  if (op === "union") return names.join("∪");
+  if (op === "inter") return names.join("∩");
+  if (op === "diff") return names.join("−");
+  return `(${names[0]}−${names[1]})∪(${names[1]}−${names[0]})`;
+}
+
+/** Whether a region fills an operation between shapes (from fillShapeOperation), and which one. */
+export function shapeOperationOf(region: Region): ShapeOperation | null {
+  if (region.universe !== null || !region.sets.every((s) => /^S[₀-₉]+$/u.test(s.name))) return null;
+  const names = region.sets.map((s) => s.name);
+  return SHAPE_OPERATIONS.find((op) => (op !== "xor" || names.length === 2) && shapeExpr(names, op) === region.expr) ?? null;
+}
+
+/** Changes what a fill between shapes covers, keeping its shapes and its look. */
+export function setShapeOperation(doc: FigureDoc, id: Id, op: ShapeOperation): OpResult {
+  const region = doc.elements.find((e): e is Region => e.id === id && e.type === "region");
+  if (!region || !shapeOperationOf(region)) return fail(doc, "Essa região não é um preenchimento entre formas.");
+  if (op === "xor" && region.sets.length !== 2) return fail(doc, "A exclusão é entre duas formas.");
+  const next: Region = { ...region, expr: shapeExpr(region.sets.map((s) => s.name), op) };
+  const test = regionTest(doc, next);
+  if (!test || regionLoops(test.shapes, test.inside).length === 0) return fail(doc, "Essa região está vazia na figura.");
+  return { doc: withElements(doc, doc.elements.map((e) => (e.id === id ? next : e))), created: [id] };
+}

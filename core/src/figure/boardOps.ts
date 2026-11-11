@@ -15,6 +15,14 @@ function spotBelow(doc: FigureDoc): { x: number; y: number } {
   return { x: round(box.minX / kx), y: round(-box.maxY / ky - GAP) };
 }
 
+/** Where a new free text goes: centered under everything drawn, about a line of text below it. */
+export function textSpotBelow(doc: FigureDoc): { x: number; y: number } {
+  const { box, kx, ky } = buildScene(doc);
+  if (!box) return { x: 0, y: 0 };
+  const round = (v: number) => Math.round(v * 100) / 100;
+  return { x: round((box.minX + box.maxX) / 2 / kx), y: round(-box.maxY / ky - 16 / ky) };
+}
+
 /** Adds a worked layout from its text, like 1234÷5, mmc(12;18) or varal [1;3] ∩ ]2;5[. */
 export function addBoard(doc: FigureDoc, source: string, opts: OpOptions = {}, at?: { x: number; y: number }): OpResult {
   const text = source.trim();
