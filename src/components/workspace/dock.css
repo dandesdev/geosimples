@@ -66,9 +66,9 @@
   transition: none !important;
 }
 
-/* Only the open tab, and the one under the pointer, show their close button: tabs stay narrow. */
-.dockview-theme-geosimples .dv-tab:not(.dv-active-tab):not(:hover) [data-close] {
-  visibility: hidden;
+/* Only the open tab has a close button, and the others take no room for one: three tabs fit a column. */
+.dockview-theme-geosimples .dv-tab:not(.dv-active-tab) [data-close] {
+  display: none;
 }
 
 /* Toolbars have a thin grip instead of tabs. */

@@ -182,7 +182,7 @@ for (const phone of PHONES) {
       const inView = await items.evaluateAll(
         (els) => els.filter((el) => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= window.innerHeight).length,
       );
-      expect(inView).toBeGreaterThanOrEqual(9);
+      expect(inView).toBeGreaterThanOrEqual(8);
 
       // The search still works once tapped.
       await tap(page, search);

@@ -334,7 +334,7 @@ test("pro layout: a toolbar docks across the top, and the arrangement survives a
 });
 
 test("pro layout: panels close, come back from Janelas, and the layout resets", async ({ page }) => {
-  await tab(page, "Formatação").hover();
+  await tab(page, "Formatação").click();
   await page.getByRole("button", { name: "Fechar Formatação" }).click();
   await expect(panel(page, "formatting")).toHaveCount(0);
   await page.getByRole("button", { name: "Janelas" }).click();
@@ -565,13 +565,8 @@ test("pro layout: a panel alone in its column takes others above and below, and 
 
 test("pro layout: with a toolbar along the bottom, a lone panel group still takes panels above and below", async ({ page }) => {
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), { x: 600, y: page.viewportSize()!.height - 3 });
-  const strip = async () => {
-    const g = await box(group(page, "Propriedades"));
-    return { x: g.x + g.width * 0.6, y: g.y + 15 };
-  };
-  // Every panel but Propriedades joins it as a tab: one group, not as tall as the window, beside the preview.
-  for (const title of ["Figura", "Formatação", "Rótulos"]) await drag(page, tab(page, title), await strip());
-  // Rótulos out again, below it.
+  // Propriedades, Formatação and Rótulos start as one group, not as tall as the window, beside the preview.
+  // Rótulos out of it, below it.
   await drag(page, tab(page, "Rótulos"), at(await box(group(page, "Propriedades")), 0.5, 0.92));
   const lone = await box(group(page, "Propriedades"));
   const labels = await box(panel(page, "labels"));
@@ -582,7 +577,7 @@ test("pro layout: with a toolbar along the bottom, a lone panel group still take
 test("pro layout: two full-height panel columns on both sides of the preview still take panels above and below", async ({ page }) => {
   // Everything but Propriedades and Formatação closed: the right column is one group, as tall as the window.
   for (const title of ["Ferramentas", "Figura", "Prontos", "Rótulos"]) {
-    await tab(page, title).hover();
+    await tab(page, title).click();
     await page.getByRole("button", { name: `Fechar ${title}` }).click();
   }
   const g = await box(group(page, "Propriedades"));
