@@ -95,6 +95,8 @@ const PRIORITY: Record<ElementType, number> = {
   angle: 1,
   segment: 2,
   vector: 2,
+  component: 2,
+  circuit: 9,
   region: 9,
   vennitems: 9,
   board: 9,

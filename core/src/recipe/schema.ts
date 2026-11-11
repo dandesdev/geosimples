@@ -355,6 +355,32 @@ const step = z.discriminatedUnion("do", [
       size: z.number().min(6).max(40).optional().describe("Font size, pt"),
     })
     .describe("A worked layout: columns, long division, factoring, MMC, MDC, sign charts"),
+  z
+    .strictObject({
+      do: z.literal("component"),
+      kind: z.enum(["resistor", "lamp", "source", "switch", "ammeter", "voltmeter", "capacitor"]),
+      from: ref,
+      to: ref.describe("A source's + end"),
+      value: z.number().min(0).max(1e9).optional().describe("Ω, V or μF"),
+      internal: z.number().min(0).max(1e9).optional(),
+      closed: z.boolean().optional(),
+      name: z.string().min(1).max(12).optional(),
+      shape: z.enum(["zigzag", "box"]).optional(),
+      style: styleSchema.optional(),
+      as: asName.optional(),
+    })
+    .describe("A circuit piece between two points. Segments are the wires"),
+  z
+    .strictObject({
+      do: z.literal("circuit"),
+      template: z.enum(["series", "parallel", "mixed", "twoLoops"]).optional().describe("A ready-made circuit to start from"),
+      at: xy.optional(),
+      on: z.boolean().optional().describe("Show currents and voltages"),
+      current: z.enum(["none", "real", "conventional"]).optional(),
+      values: z.strictObject({ current: z.boolean().optional(), voltage: z.boolean().optional(), power: z.boolean().optional() }).optional(),
+      decimals: z.number().int().min(0).max(4).optional(),
+    })
+    .describe("A ready-made circuit, or how the circuit shows"),
 ]);
 
 export const recipeSchema = z.strictObject({

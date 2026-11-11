@@ -18,7 +18,7 @@ export interface GuideTopic {
   examples: GuideExample[];
 }
 
-export const GUIDE_TOPIC_NAMES = ["overview", "geometry", "constructions", "graphs", "labels", "vectors", "sets", "boards"] as const;
+export const GUIDE_TOPIC_NAMES = ["overview", "geometry", "constructions", "graphs", "labels", "vectors", "sets", "boards", "circuits"] as const;
 export type GuideTopicName = (typeof GUIDE_TOPIC_NAMES)[number];
 
 export const GUIDE: Record<GuideTopicName, GuideTopic> = {
@@ -266,6 +266,38 @@ For a test, "show": "blank" keeps only the setup and "gaps" leaves some results 
           steps: [
             { do: "board", source: "quadro (x-1)/(x+2)" },
             { do: "board", source: "mmc(12;18)", show: "gaps" },
+          ],
+        },
+      },
+    ],
+  },
+  circuits: {
+    title: "Electric circuits",
+    text: `Direct-current circuits, solved by nodal analysis. "component" puts a piece between two points: "resistor" and "lamp" ("value" in Ω), "source" ("value" is the emf in V, "internal" its resistance; its positive end, the long plate, is "to"), "switch" ("closed"), ideal "ammeter" and "voltmeter", and "capacitor" (μF, no current once charged). Segments are the wires: pieces connect only where they share a point, directly or through segments. Draw the corners as points, join them with "segment" steps, and put the pieces between them; corners hide and junctions get dots by themselves. Pieces are named R₁, L₁, ε, Ch, A, V, C₁ unless "name" is given, and labeled with their value.
+
+"circuit" with "template" starts from a ready-made one: "series" (ε, R₁, R₂), "parallel", "mixed" (R₁ then R₂ ∥ R₃) or "twoLoops" (a source in each loop). With "on": true the circuit is switched on: each piece shows its current and voltage, meters their readings, and a source the others push current through is marked receptor. "current" draws arrows for the current, "conventional" or "real" (electrons). An impossible circuit, like a wire across an ideal source, is an error that says why.`,
+    examples: [
+      {
+        request: "Circuito com gerador de 12 V e dois resistores em série, de 4 Ω e 2 Ω, com as correntes indicadas no sentido convencional.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "circuit", template: "series" },
+            { do: "circuit", on: true, current: "conventional" },
+          ],
+        },
+      },
+      {
+        request: "Uma lâmpada de 6 Ω ligada a uma pilha de 1,5 V, com um amperímetro em série.",
+        recipe: {
+          v: 1,
+          steps: [
+            { do: "points", points: [{ name: "A", at: [0, 0] }, { name: "B", at: [0, 3] }, { name: "C", at: [4, 3] }, { name: "D", at: [4, 0] }] },
+            { do: "component", kind: "source", from: "A", to: "B", value: 1.5 },
+            { do: "component", kind: "lamp", from: "B", to: "C", value: 6 },
+            { do: "component", kind: "ammeter", from: "C", to: "D" },
+            { do: "segment", points: ["D", "A"] },
+            { do: "label", targets: ["A", "B", "C", "D"], remove: true },
           ],
         },
       },

@@ -327,6 +327,60 @@ export interface Board {
   label?: never;
 }
 
+/** A piece of an electric circuit. A lamp is a resistor with its own symbol; a receptor is a source the current runs through backwards. */
+export type ComponentKind = "resistor" | "lamp" | "source" | "switch" | "ammeter" | "voltmeter" | "capacitor";
+
+/**
+ * A piece of an electric circuit between points `a` and `b`: its symbol in
+ * the middle and a wire to each point. Segments are the wires, so pieces
+ * connect only where they share a point, directly or through segments.
+ */
+export interface Component {
+  id: Id;
+  type: "component";
+  kind: ComponentKind;
+  /** A source's positive terminal, the long plate, is at `b`. */
+  a: Id;
+  b: Id;
+  /** Ω for a resistor or a lamp, the emf in V for a source, μF for a capacitor. The others have none. */
+  value: number;
+  /** A source's internal resistance in Ω, 0 when ideal. */
+  internal: number;
+  /** A switch lets the current through. */
+  closed: boolean;
+  /** A resistor as a zigzag or as a rectangle. */
+  shape: "zigzag" | "box";
+  /** Like R₁ or ε, written with the value beside it. */
+  name: string;
+  /** Length of the symbol along the wire, in pt. */
+  size: number;
+  stroke: Stroke;
+  label?: Label;
+}
+
+/** Arrows for the current: the way electrons go, or the conventional way, from + to −. */
+export type CurrentSense = "none" | "real" | "conventional";
+
+/**
+ * How the figure's circuit shows: as given, or switched on ("Ligar circuito"),
+ * with the current and voltage of each piece and the meters' readings. A
+ * figure has one, made with its first piece; the pieces are all its components.
+ */
+export interface Circuit {
+  id: Id;
+  type: "circuit";
+  on: boolean;
+  current: CurrentSense;
+  /** What a switched-on circuit writes by each piece. */
+  values: { current: boolean; voltage: boolean; power: boolean };
+  decimals: number;
+  /** Font size of the values, in pt. */
+  size: number;
+  color: Color;
+  font: LabelFont;
+  label?: never;
+}
+
 /** Text placed anywhere, not attached to an object, like "Figura 1". */
 export interface FreeText {
   id: Id;
@@ -480,7 +534,9 @@ export type Element =
   | Vector
   | Region
   | VennItems
-  | Board;
+  | Board
+  | Component
+  | Circuit;
 export type ElementType = Element["type"];
 
 export interface FigureDoc {

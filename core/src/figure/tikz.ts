@@ -1,4 +1,4 @@
-import { INK, isValidColor } from "./defaults";
+import { INK, isValidColor, PT_PER_CM } from "./defaults";
 import { gridWindow } from "./fit";
 import {
   angleArc,
@@ -11,7 +11,8 @@ import {
   type OffsetLine,
 } from "./geometry";
 import { canHaveLabel, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex, vectorLabelToLatex } from "./labels";
-import { boardLayout, mathToLatex } from "./board";
+import { boardLayout, mathToLatex, type Mark } from "./board";
+import { circuitDrawings, componentDrawing } from "./circuit";
 import { regionOutline, vennItemSpots } from "./sets";
 import {
   axesOrigin,
@@ -124,6 +125,54 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
     label: [],
   };
 
+  /** Writes board marks, in pt from `base` with Y up: boards and circuit pieces, as the SVG draws them. */
+  const writeMarks = (base: string, marks: Mark[], look: { color: string; width: number; font: LabelFont; opacity: number }, out: string[]) => {
+    const c = color(look.color);
+    const faded = look.opacity < 1 ? [`opacity=${n(look.opacity)}`] : [];
+    const lineOpts = (width?: number, dash?: Dash) => {
+      const o = [`draw=${c}`, `line width=${n(width ?? look.width)}pt`, ...faded];
+      if (dash && dash !== "solid") o.push(dash);
+      return opts(o);
+    };
+    const P = (v: Vec) => shifted(base, v);
+    for (const m of marks) {
+      switch (m.kind) {
+        case "line":
+          out.push(`\\draw${lineOpts(m.width, m.dash)} ${P(m.a)} -- ${P(m.b)};`);
+          break;
+        case "curve":
+          out.push(`\\draw${lineOpts(m.width, m.dash)} ${m.points.map(P).join(" -- ")};`);
+          break;
+        case "text":
+          out.push(`\\node${opts(textOptions(look.color, m.size, look.font, color))} at ${P(m.at)} {${mathToLatex(m.node)}};`);
+          break;
+        case "dot":
+          out.push(
+            m.open
+              ? `\\filldraw[draw=${c}, fill=white, line width=0.7pt] ${P(m.at)} circle[radius=${n(m.r)}pt];`
+              : `\\fill[${c}] ${P(m.at)} circle[radius=${n(m.r)}pt];`,
+          );
+          break;
+        case "ring":
+          out.push(`\\draw${lineOpts(m.width ?? 0.6)} ${P(m.at)} circle[radius=${n(m.r)}pt];`);
+          break;
+        case "head": {
+          const back = { x: m.tip.x - m.dir.x * m.length, y: m.tip.y - m.dir.y * m.length };
+          const half = m.length * 0.4;
+          out.push(
+            `\\fill${opts([c, ...faded])} ${P(m.tip)} -- ${P({ x: back.x - m.dir.y * half, y: back.y + m.dir.x * half })} -- ${P({ x: back.x + m.dir.y * half, y: back.y - m.dir.x * half })} -- cycle;`,
+          );
+          break;
+        }
+        case "box": {
+          const corner = { x: m.at.x - m.w / 2, y: m.at.y - m.h / 2 };
+          out.push(`\\draw${lineOpts(0.5)} ${P(corner)} rectangle ${P({ x: corner.x + m.w, y: corner.y + m.h })};`);
+          break;
+        }
+      }
+    }
+  };
+
   const axes = doc.elements.find((e): e is Axes => e.type === "axes");
 
   for (const p of pts.values()) sections.coords.push(`\\coordinate (${p.id}) at (${at(p)});`);
@@ -204,52 +253,19 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
       case "board": {
         const layout = boardLayout(el, doc);
         if (!layout) break;
-        const base = at(el);
-        const c = color(el.color);
-        const lineOpts = (width?: number, dash?: Dash) => {
-          const o = [`draw=${c}`, `line width=${n(width ?? el.width)}pt`];
-          if (dash && dash !== "solid") o.push(dash);
-          return opts(o);
-        };
-        const P = (v: Vec) => shifted(base, v);
-        for (const m of layout.marks) {
-          switch (m.kind) {
-            case "line":
-              sections.board.push(`\\draw${lineOpts(m.width, m.dash)} ${P(m.a)} -- ${P(m.b)};`);
-              break;
-            case "curve":
-              sections.board.push(`\\draw${lineOpts(m.width, m.dash)} ${m.points.map(P).join(" -- ")};`);
-              break;
-            case "text":
-              sections.board.push(`\\node${opts(textOptions(el.color, m.size, el.font, color))} at ${P(m.at)} {${mathToLatex(m.node)}};`);
-              break;
-            case "dot":
-              sections.board.push(
-                m.open
-                  ? `\\filldraw[draw=${c}, fill=white, line width=0.7pt] ${P(m.at)} circle[radius=${n(m.r)}pt];`
-                  : `\\fill[${c}] ${P(m.at)} circle[radius=${n(m.r)}pt];`,
-              );
-              break;
-            case "ring":
-              sections.board.push(`\\draw${lineOpts(0.6)} ${P(m.at)} circle[radius=${n(m.r)}pt];`);
-              break;
-            case "head": {
-              const back = { x: m.tip.x - m.dir.x * m.length, y: m.tip.y - m.dir.y * m.length };
-              const half = m.length * 0.4;
-              sections.board.push(
-                `\\fill[${c}] ${P(m.tip)} -- ${P({ x: back.x - m.dir.y * half, y: back.y + m.dir.x * half })} -- ${P({ x: back.x + m.dir.y * half, y: back.y - m.dir.x * half })} -- cycle;`,
-              );
-              break;
-            }
-            case "box": {
-              const corner = { x: m.at.x - m.w / 2, y: m.at.y - m.h / 2 };
-              sections.board.push(`\\draw${lineOpts(0.5)} ${P(corner)} rectangle ${P({ x: corner.x + m.w, y: corner.y + m.h })};`);
-              break;
-            }
-          }
-        }
+        writeMarks(at(el), layout.marks, { color: el.color, width: el.width, font: el.font, opacity: 1 }, sections.board);
         break;
       }
+      case "component": {
+        const drawing = componentDrawing(doc, el, PT_PER_CM * scale);
+        if (drawing) writeMarks(at(drawing.mid), drawing.marks, { color: el.stroke.color, width: el.stroke.width, font: el.label?.font ?? "serif", opacity: el.stroke.opacity }, sections.segment);
+        break;
+      }
+      case "circuit":
+        for (const drawing of circuitDrawings(doc, el, PT_PER_CM * scale)) {
+          writeMarks(at(drawing.mid), drawing.marks, { color: el.color, width: 0.6, font: el.font, opacity: 1 }, sections.label);
+        }
+        break;
       case "extension": {
         const ends = extensionEnds(el, pts);
         if (ends) sections.segment.push(`\\draw${opts(strokeOpts(el.stroke))} (${ends[0].id}) -- (${ends[1].id});`);

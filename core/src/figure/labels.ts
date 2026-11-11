@@ -3,6 +3,7 @@ import type { Locale } from "./messages";
 import { figureUnits, functionLines } from "./plot";
 import { angleArc, centroid, pointMap, signedArea2 } from "./geometry";
 import type {
+  Component,
   Element,
   ElementType,
   FigureDoc,
@@ -20,7 +21,7 @@ import { add, dist, len, mid, perp, polar, scale, sub, unit, type Vec } from "./
 type Unlabeled = Extract<Element, { label?: never }>;
 
 export function canHaveLabel(el: Element): el is Exclude<Element, Unlabeled> {
-  return !["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board"].includes(el.type);
+  return !["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board", "circuit"].includes(el.type);
 }
 
 /** Formats a number with no trailing zeros, with the decimal comma (pt-BR) or point (en). */
@@ -140,6 +141,8 @@ export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   region: [],
   vennitems: [],
   board: [],
+  component: [],
+  circuit: [],
 };
 
 /** Value of a measure in world units (degrees for angles), or null when it can't be measured. */
@@ -240,6 +243,42 @@ function neighborsOf(doc: FigureDoc, id: Id, pts: Map<Id, Point>): Vec[] {
   return out;
 }
 
+/** The points of the circuit a piece is in: everything its wires and the other pieces reach. */
+function wiredWith(doc: FigureDoc, el: Component, pts: Map<Id, Point>): Point[] {
+  const links = doc.elements.flatMap((e) => (e.type === "segment" || e.type === "component" ? [[e.a, e.b] as const] : []));
+  const reached = new Set([el.a, el.b]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [a, b] of links) {
+      if (reached.has(a) !== reached.has(b)) {
+        reached.add(a);
+        reached.add(b);
+        grew = true;
+      }
+    }
+  }
+  return [...reached].flatMap((id) => (pts.has(id) ? [pts.get(id)!] : []));
+}
+
+/** Half the room a circuit piece's symbol takes across its wire, in pt: its label and values keep out of it. */
+export function componentReach(c: Component): number {
+  const s = c.size;
+  switch (c.kind) {
+    case "resistor":
+      return s * 0.2;
+    case "lamp":
+    case "capacitor":
+      return s * 0.34;
+    case "ammeter":
+    case "voltmeter":
+      return s * 0.38;
+    case "source":
+      return s * 0.4;
+    case "switch":
+      return s * 0.3;
+  }
+}
+
 export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | null {
   if (!canHaveLabel(el)) return null;
   const label = el.label;
@@ -264,7 +303,8 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       return { anchor: { x: el.x, y: el.y }, offset: scale(dir, label.distance + el.size) };
     }
     case "segment":
-    case "vector": {
+    case "vector":
+    case "component": {
       const a = pts.get(el.a);
       const b = pts.get(el.b);
       if (!a || !b) return null;
@@ -272,11 +312,15 @@ export function labelPlacement(doc: FigureDoc, el: Element): LabelPlacement | nu
       let dir = fixed;
       if (!dir) {
         const normal = unit(perp(sub(S(b), S(a))));
-        const c = centroid(Array.from(pts.values()));
+        // A circuit piece's label goes out of its own circuit, wherever the rest of the figure is.
+        const c = centroid(el.type === "component" ? wiredWith(doc, el, pts) : Array.from(pts.values()));
         const away = sub(S(m), S(c));
         dir = len(away) > 1e-6 && away.x * normal.x + away.y * normal.y < 0 ? scale(normal, -1) : normal;
       }
-      return { anchor: m, offset: scale(dir, label.distance) };
+      if (el.type !== "component") return { anchor: m, offset: scale(dir, label.distance) };
+      // Out past a circuit piece's symbol, and beside an upright one by half its own width, so it doesn't reach back over it.
+      const sideways = Math.abs(dir.x) * (estimateTextWidth(labelText(doc, el), label.size) / 2);
+      return { anchor: m, offset: scale(dir, label.distance + componentReach(el) + sideways) };
     }
     case "angle": {
       const a = pts.get(el.a);

@@ -145,6 +145,16 @@ const EN: Record<string, string> = {
   "Selecione ao menos dois pontos: a origem e depois a extremidade.": "Select at least two points: the tail, then the tip.",
   "Os pontos coincidem.": "The points are the same point.",
   "Esse vetor já existe.": "This vector already exists.",
+  // Circuits
+  "Há um gerador ideal em curto-circuito: um fio liga os seus dois polos.": "An ideal source is short-circuited: a wire joins its two terminals.",
+  "O circuito não tem solução única: há um laço só de geradores ideais, amperímetros e chaves fechadas, ou geradores ideais diferentes em paralelo.":
+    "The circuit has no single solution: a loop has only ideal sources, ammeters and closed switches, or different ideal sources are in parallel.",
+  "Selecione dois pontos: o componente fica entre eles.": "Select two points: the component goes between them.",
+  "Use um valor entre 0 e 1 000 000 000.": "Use a value from 0 to 1 000 000 000.",
+  "Use uma resistência interna entre 0 e 1 000 000 000.": "Use an internal resistance from 0 to 1 000 000 000.",
+  "A resistência precisa ser maior que zero. Para um fio, ligue os pontos com um segmento.":
+    "The resistance must be greater than zero. For a wire, join the points with a segment.",
+  "A figura não tem circuito: insira um componente primeiro.": "The figure has no circuit: insert a component first.",
   "A origem e a extremidade coincidem: esse vetor não tem direção.": "The tail and the tip are the same point, so this vector has no direction.",
   "Selecione ao menos dois vetores, na ordem da soma.": "Select at least two vectors, in the order of the sum.",
   "A soma desses vetores é nula: não há seta para desenhar.": "These vectors add up to zero, so there is no arrow to draw.",

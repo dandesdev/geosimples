@@ -1,6 +1,11 @@
 import {
   addBasis,
   addBoard,
+  addCircuitTemplate,
+  addComponent,
+  setCircuit,
+  tidyJunctions,
+  updateComponent,
   addRegion,
   addVector,
   addVennDiagram,
@@ -163,6 +168,8 @@ export function compileRecipe(input: unknown, options: CompileOptions = {}): Com
     build.step = null;
     for (const finish of build.finishers) finish();
     build.restoreSpans();
+    // Wires drawn after the pieces join them too: their corners hide, and junctions get dots.
+    if (build.doc.elements.some((e) => e.type === "component")) build.doc = tidyJunctions(build.doc);
     build.unclutter();
   }
   return {
@@ -477,8 +484,10 @@ function styleElements(build: Build, ids: Id[], p: StylePatch) {
       case "vennitems":
         return { ...el, color: p.color ? color(p.color) : el.color, size: p.size ?? el.size };
       case "board":
+      case "circuit":
         return { ...el, color: p.color ? color(p.color) : el.color };
       case "vector":
+      case "component":
       case "extension":
       case "function":
       case "vline":
@@ -490,7 +499,7 @@ function styleElements(build: Build, ids: Id[], p: StylePatch) {
   });
 }
 
-const UNLABELED: ElementType[] = ["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board"];
+const UNLABELED: ElementType[] = ["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board", "circuit"];
 
 function labelElement(build: Build, id: Id, spec: LabelSpec) {
   const el = build.el(id);
@@ -983,6 +992,34 @@ function runStep(build: Build, step: RecipeStep) {
     case "count":
       build.take(setRegionCount(build.doc, step.expr, step.value, build.opts));
       return;
+    case "component": {
+      const [a, b] = [build.point(step.from).id, build.point(step.to).id];
+      const [id] = build.take(addComponent(build.doc, [a, b], step.kind, build.opts));
+      const patch = { value: step.value, internal: step.internal, closed: step.closed, name: step.name, shape: step.shape };
+      const given = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+      if (Object.keys(given).length > 0) build.take(updateComponent(build.doc, id, given));
+      if (step.style) styleElements(build, [id], step.style);
+      const piece = build.el(id);
+      build.registerQuietly(piece.type === "component" ? piece.name : undefined, [id]);
+      build.register(step.as, [id]);
+      return;
+    }
+    case "circuit": {
+      if (step.template) {
+        const at = step.at ? { x: step.at[0], y: step.at[1] } : undefined;
+        for (const id of build.take(addCircuitTemplate(build.doc, step.template, build.opts, at))) {
+          const piece = build.el(id);
+          if (piece.type === "component") build.registerQuietly(piece.name, [id]);
+        }
+      }
+      const { on, current, values, decimals } = step;
+      if (on !== undefined || current !== undefined || values !== undefined || decimals !== undefined) {
+        const was = build.doc.elements.find((e) => e.type === "circuit");
+        const base = was?.type === "circuit" ? was.values : { current: true, voltage: true, power: false };
+        build.take(setCircuit(build.doc, { on, current, decimals, ...(values ? { values: { ...base, ...values } } : {}) }, build.opts));
+      }
+      return;
+    }
     case "board": {
       const at = step.at ? { x: step.at[0], y: step.at[1] } : undefined;
       const [id] = build.take(addBoard(build.doc, step.source, build.opts, at));

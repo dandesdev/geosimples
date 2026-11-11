@@ -27,7 +27,8 @@ export type Mark =
   | { kind: "curve"; points: Vec[]; width?: number; dash?: Dash; role?: MarkRole }
   | { kind: "text"; at: Vec; node: MathNode; size: number; role?: MarkRole }
   | { kind: "dot"; at: Vec; r: number; open: boolean; role?: MarkRole }
-  | { kind: "ring"; at: Vec; r: number; role?: MarkRole }
+  /** A circle drawn as a line, 0.6 pt wide unless `width` says. */
+  | { kind: "ring"; at: Vec; r: number; width?: number; role?: MarkRole }
   /** An arrowhead with its tip at `tip`, along `dir`. */
   | { kind: "head"; tip: Vec; dir: Vec; length: number }
   /** An empty square where a result was left out. */
@@ -61,10 +62,15 @@ const shift = (parts: MathPart[], dx: number, dy: number): MathPart[] =>
 export function layoutMath(node: MathNode, size: number): MathBox {
   if (typeof node !== "string" && "delim" in node) return layoutMath(node.delim, size);
   if (typeof node === "string" || "word" in node) {
-    const text = typeof node === "string" ? node : node.word;
+    const typed = typeof node === "string" ? node : node.word;
+    // Leading spaces are room, not text: a drawn text would drop them.
+    const lead = typed.length - typed.trimStart().length;
+    const text = typed.trimStart();
+    // A word's space, like the one before a unit, is a whole one; signs take thin ones.
+    const room = lead * size * (typeof node === "string" ? 0.24 : 0.4);
     // Capitals in an upright word are wider than the average letter.
     const w = typeof node === "string" ? textWidth(text, size) : Array.from(text).reduce((acc, c) => acc + size * (/[A-Z]/.test(c) ? 0.75 : 0.5), 0);
-    return { w, up: size * 0.55, down: size * 0.55, parts: [{ kind: "text", x: w / 2, y: 0, text, size, word: typeof node !== "string" }] };
+    return { w: room + w, up: size * 0.55, down: size * 0.55, parts: [{ kind: "text", x: room + w / 2, y: 0, text, size, word: typeof node !== "string" }] };
   }
   if ("row" in node) {
     let w = 0;

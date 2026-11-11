@@ -3,6 +3,12 @@ import {
   addAxes,
   addGrid,
   addBasis,
+  addComponent,
+  circuitOf,
+  setCircuit,
+  COMPONENT_KINDS,
+  type CurrentSense,
+  type ComponentKind,
   addPointOnGraph,
   addTangentAt,
   addVennDiagram,
@@ -49,10 +55,13 @@ export type CheckId =
   | "toFunctions"
   | "vector"
   | `vector-${VectorOperation}`
-  | `set-${SetOperation}`;
+  | `set-${SetOperation}`
+  | `component-${ComponentKind}`
+  | "circuitPower"
+  | `current-${CurrentSense}`;
 
 /** What Inserir adds that can't always run: axes only once, a vector only from two points. */
-export type InsertCheckId = "axes" | "grid" | "basis" | `venn-${1 | 2 | 3}` | "vector" | "toFunctions";
+export type InsertCheckId = "axes" | "grid" | "basis" | `venn-${1 | 2 | 3}` | "vector" | "toFunctions" | `component-${ComponentKind}`;
 
 export interface Availability {
   /** Why the action can't run now, or null when it can. */
@@ -66,6 +75,8 @@ const CIRCLE_MODES: CircleMode[] = ["radius", "through", "tangent", "circumcircl
 export const NOTABLE_FEATURES: NotableFeature[] = ["root", "extremum", "yAxis"];
 
 export const SET_OPERATIONS: SetOperation[] = ["union", "inter", "diff", "comp"];
+
+const CURRENT_SENSES: CurrentSense[] = ["none", "real", "conventional"];
 
 export const VECTOR_OPERATIONS: VectorOperation[] = ["sum", "parallelogram", "difference", "projection", "unit", "components", "scale"];
 
@@ -128,6 +139,13 @@ export function useAvailability(): Record<CheckId, Availability> {
     for (const op of SET_OPERATIONS) {
       out[`set-${op}`] = check(doc, markSetOperation(doc, selection, op, opts), text);
     }
+    for (const kind of COMPONENT_KINDS) {
+      out[`component-${kind}`] = check(doc, addComponent(doc, selection, kind, opts), text);
+    }
+    // Switching on solves the circuit: an impossible one says why before the click.
+    const circuit = circuitOf(doc);
+    out.circuitPower = check(doc, setCircuit(doc, { on: !circuit?.on }, opts), null);
+    for (const current of CURRENT_SENSES) out[`current-${current}`] = check(doc, setCircuit(doc, { current }, opts), null);
     for (const feature of NOTABLE_FEATURES) {
       out[`notable-${feature}`] = check(doc, markNotable(doc, selection, feature, opts), text);
     }
@@ -149,7 +167,11 @@ export function useInsertAvailability(): Record<InsertCheckId, Availability> {
   return useMemo(() => {
     const opts = prefs && opOptions();
     const text = describeSelection(doc, selection);
+    const components = Object.fromEntries(
+      COMPONENT_KINDS.map((kind) => [`component-${kind}`, check(doc, addComponent(doc, selection, kind, opts), text)]),
+    ) as Record<`component-${ComponentKind}`, Availability>;
     return {
+      ...components,
       vector: check(doc, makeVectors(doc, selection, opts), text),
       toFunctions: check(doc, toFunctions(doc, selection, opts), text),
       axes: check(doc, addAxes(doc), null),

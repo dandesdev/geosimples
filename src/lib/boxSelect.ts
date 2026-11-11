@@ -32,7 +32,11 @@ export function elementsInBox(doc: FigureDoc, ppu: { x: number; y: number }, box
         return pointInside(el.id);
       case "segment":
       case "vector":
+      case "component":
         return pointInside(el.a) && pointInside(el.b);
+      case "circuit":
+        // Its values go with the pieces: picked by clicking them.
+        return false;
       case "board":
         return inside(el.x * kx, -el.y * ky);
       case "region":

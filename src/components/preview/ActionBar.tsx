@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ZoomBar, type ZoomControls } from "./ZoomBar";
 import { emitCommand } from "@/lib/commands";
-import { Blend, ChartSpline, Download, MoveUpRight, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Blend, ChartSpline, Download, MoveUpRight, Power, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,20 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { circuitOf } from "@geosimples/core/figure";
+import { COMPONENT_ITEMS } from "./circuitItems";
 import {
   AngleIcon,
   CircleThroughIcon,
   CloseLoopIcon,
   ConnectIcon,
   ConstructionsIcon,
+  CircuitIcon,
   ExtremumIcon,
   GraphPointIcon,
   TangentIcon,
@@ -162,6 +168,9 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
   const anyGraphTool = GRAPH_CHECKS.some((id) => !av[id].reason) || (hasGraph && !av.toFunctions.reason);
   const anyVectorOp = VECTOR_OPERATIONS.some((op) => !av[`vector-${op}`].reason) || (hasVector && !av.vector.reason);
   const anySetOp = SET_OPERATIONS.some((op) => !av[`set-${op}`].reason);
+  // A figure with a circuit keeps its menu: switching it on needs no selection.
+  const circuitOn = useFigureStore((s) => circuitOf(s.doc)?.on);
+  const hasCircuit = circuitOn !== undefined;
   const menu = { side: menuSide, align: "start" } as const;
   return (
     <>
@@ -367,6 +376,63 @@ export function Tools({ menuSide }: { menuSide: MenuSide }) {
                 hint={item.hint}
                 availability={av[`vector-${item.op}`]}
                 onSelect={() => actions.vectorOp(item.op)}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {hasCircuit && (
+        <DropdownMenu onOpenChange={(open) => !open && clearPreview()}>
+          <DropdownMenuTrigger asChild>
+            <IconButton label="Circuito" hint="Ligar o circuito, indicar o sentido da corrente e pôr componentes entre dois pontos." ready className={APPEAR}>
+              <CircuitIcon />
+            </IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent {...menu} className="w-80">
+            <DropdownMenuLabel>Circuito</DropdownMenuLabel>
+            <MenuItem
+              icon={<Power />}
+              title={circuitOn ? "Desligar circuito" : "Ligar circuito"}
+              hint={circuitOn ? "Volta ao enunciado, sem os valores." : "Escreve a corrente e a tensão de cada componente, e o que os medidores marcam."}
+              availability={av.circuitPower}
+              onSelect={() => actions.circuit({ on: !circuitOn })}
+            />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-3 py-2">
+                <span className="[&_svg]:h-5 [&_svg]:w-5">
+                  <MoveUpRight />
+                </span>
+                <span className="font-medium">Indicar sentido da corrente</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-72">
+                <MenuItem
+                  icon={<MoveUpRight />}
+                  title="Sentido real (elétrons)"
+                  hint="Do polo negativo ao positivo, por fora do gerador."
+                  availability={av["current-real"]}
+                  onSelect={() => actions.circuit({ current: "real" })}
+                />
+                <MenuItem
+                  icon={<MoveUpRight />}
+                  title="Sentido convencional"
+                  hint="Do polo positivo ao negativo, por fora do gerador."
+                  availability={av["current-conventional"]}
+                  onSelect={() => actions.circuit({ current: "conventional" })}
+                />
+                <MenuItem icon={<MoveUpRight />} title="Não indicar" hint="Sem setas." availability={av["current-none"]} onSelect={() => actions.circuit({ current: "none" })} />
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Entre os dois pontos selecionados</DropdownMenuLabel>
+            {COMPONENT_ITEMS.map((item) => (
+              <MenuItem
+                key={item.kind}
+                icon={<item.Icon />}
+                title={item.title}
+                hint={item.hint}
+                availability={av[`component-${item.kind}`]}
+                onSelect={() => actions.component(item.kind)}
               />
             ))}
           </DropdownMenuContent>

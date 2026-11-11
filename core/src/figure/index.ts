@@ -24,3 +24,5 @@ export * from "./sets";
 export * from "./setOps";
 export * from "./board";
 export * from "./boardOps";
+export * from "./circuit";
+export * from "./circuitOps";

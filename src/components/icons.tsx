@@ -326,3 +326,59 @@ export const FitIcon = (p: IconProps) => (
     <path d="M8 15 C10 9 14 9 16 15" />
   </Icon>
 );
+
+/* Circuit pieces, as their symbols on a wire. */
+
+export const ResistorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h4l1.5-4 3 8 3-8 3 8 1.5-4h4" />
+  </Icon>
+);
+
+export const LampIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h4.5M17.5 12H22" />
+    <circle cx={12} cy={12} r={5.5} />
+    <path d="M8.1 8.1l7.8 7.8M15.9 8.1l-7.8 7.8" />
+  </Icon>
+);
+
+export const SourceIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h8.5M13.5 12H22M13.5 5v14" />
+    <path d="M10.5 8.5v7" strokeWidth={3} />
+  </Icon>
+);
+
+export const SwitchIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h4.5M17.5 12H22M7 12l9.5-5" />
+    <circle cx={6.5} cy={12} r={1.2} />
+    <circle cx={17.5} cy={12} r={1.2} />
+  </Icon>
+);
+
+/** An ammeter or a voltmeter: a circle with its letter. */
+export const MeterIcon = ({ letter, ...p }: IconProps & { letter: "A" | "V" }) => (
+  <Icon {...p}>
+    <path d="M2 12h4M18 12h4" />
+    <circle cx={12} cy={12} r={6} />
+    <text x={12} y={15.2} textAnchor="middle" fontSize={9} fill="currentColor" stroke="none" fontFamily="serif">
+      {letter}
+    </text>
+  </Icon>
+);
+
+export const CapacitorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h8.5M13.5 12H22M10.5 6v12M13.5 6v12" />
+  </Icon>
+);
+
+/** A loop with a source and a resistor: a whole circuit. */
+export const CircuitIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 9V5h4l1-2 2 4 2-4 2 4 1-2h4v14H4v-6" />
+    <path d="M2 9h4M3 11h2" />
+  </Icon>
+);
