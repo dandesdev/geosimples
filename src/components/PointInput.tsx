@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { CircleHelp, Plus } from "lucide-react";
+import { CircleHelp, CornerDownLeft, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { applyInput, type InputTokenKind, type ParsedInput } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
@@ -85,8 +85,9 @@ function summary(parsed: ParsedInput): string {
  * preview, in the pro layout, where the message line shows only when there
  * is one. Escape leaves the input (so the pro one can hide again) and drops
  * a "y = " the teacher didn't go on with. `extra` goes before the Adicionar button.
+ * `phone`: the phone layout, where the bar shares its row with Inserir.
  */
-export function PointInput({ floating = false, extra }: { floating?: boolean; extra?: ReactNode }) {
+export function PointInput({ floating = false, phone = false, extra }: { floating?: boolean; phone?: boolean; extra?: ReactNode }) {
   const text = useFigureStore((s) => s.inputDraft);
   const setText = useFigureStore((s) => s.setInputDraft);
   const doc = useFigureStore((s) => s.doc);
@@ -105,8 +106,9 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
     const input = inputRef.current;
     if (!input) return;
     // The pro layout keeps the input slid out of view until it has focus: scrolling
-    // to it would move the preview up, and back when it slides in.
-    input.focus({ preventScroll: true });
+    // to it would move the preview up, and back when it slides in. Elsewhere the page
+    // may be scrolled away from the input, as on a phone.
+    input.focus({ preventScroll: floating });
     // After a prefill like "f(x) = ", typing goes on at the end.
     input.setSelectionRange(input.value.length, input.value.length);
   });
@@ -205,7 +207,7 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
             spellCheck={false}
             aria-invalid={parsed.errors.length > 0}
             aria-describedby="point-input-message"
-            placeholder={wide ? "Ex.: A=(0;0)--B=(4;0)--C=(0;3)--   ou   (1;1) +(2;0) +(3:90)" : "Ex.: A=(0;0)--B=(4;0)"}
+            placeholder={wide ? "Ex.: A=(0;0)--B=(4;0)--C=(0;3)--   ou   (1;1) +(2;0) +(3:90)" : phone ? "A=(0;0)--B=(4;0)" : "Ex.: A=(0;0)--B=(4;0)"}
             // 16px on phones: smaller text makes iOS zoom the page when the input gets focus.
             className="relative w-full bg-transparent px-2 py-1.5 font-mono text-base text-transparent caret-foreground outline-none selection:bg-primary/25 selection:text-transparent placeholder:font-sans placeholder:text-muted-foreground sm:text-sm"
           />
@@ -257,7 +259,8 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
           aria-label="Adicionar"
           disabled={text.trim() === "" || parsed.errors.length > 0}
         >
-          <Plus />
+          {/* Beside Inserir, which is a plus too, this one is the Enter key. */}
+          {phone ? <CornerDownLeft /> : <Plus />}
           <span className="hidden sm:inline">Adicionar</span>
         </Button>
       </form>
@@ -286,7 +289,7 @@ export function PointInput({ floating = false, extra }: { floating?: boolean; ex
         aria-live="polite"
         className={cn(
           "px-2 text-xs",
-          floating ? (message ? "self-start rounded bg-card/95 py-0.5 shadow-sm" : "sr-only") : "min-h-4",
+          floating ? (message ? "self-start rounded bg-card/95 py-0.5 shadow-sm" : "sr-only") : phone ? !message && "sr-only" : "min-h-4",
           parsed.errors.length > 0 ? "text-destructive" : "text-muted-foreground",
         )}
       >

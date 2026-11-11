@@ -10,7 +10,7 @@ import { SelectionHeader } from "./SelectionHeader";
 
 /**
  * Propriedades and Formatação in a sheet over the bottom of the screen, for
- * layouts where the side panel sits below the page fold. It opens while
+ * tablet-sized layouts, where the side panel sits below the page fold. It opens while
  * something is selected, so the figure stays in view while it is edited.
  */
 export function EditSheet() {
@@ -19,10 +19,55 @@ export function EditSheet() {
   return hasSelection ? <Sheet /> : null;
 }
 
-function Sheet() {
-  const [minimized, setMinimized] = useState(false);
+/**
+ * The same on a phone, as a card in the page below the tools: the preview
+ * stays pinned on top there, so nothing has to float over the tools to keep
+ * the figure in view.
+ */
+export function SelectionCard() {
+  const hasSelection = useFigureStore((s) => s.selection.length > 0);
+  const clear = useFigureStore((s) => s.clearSelection);
+  if (!hasSelection) return null;
+  return (
+    <section aria-label="Editar seleção" className="rounded-lg border bg-card px-3">
+      <div className="flex items-start gap-1">
+        <div className="min-w-0 flex-1">
+          <SelectionHeader bordered={false} />
+        </div>
+        <div className="shrink-0 pt-1.5">
+          <IconButton label="Limpar seleção" shortcut="clearSelection" onClick={clear}>
+            <X />
+          </IconButton>
+        </div>
+      </div>
+      <EditAccordion />
+    </section>
+  );
+}
+
+function EditAccordion() {
   const open = usePanelStore((s) => s.open);
   const setOpen = usePanelStore((s) => s.setOpen);
+  return (
+    <Accordion type="multiple" value={open} onValueChange={setOpen}>
+      <AccordionItem value="properties">
+        <AccordionTrigger>Propriedades</AccordionTrigger>
+        <AccordionContent>
+          <Properties />
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="formatting" className="border-b-0">
+        <AccordionTrigger>Formatação</AccordionTrigger>
+        <AccordionContent>
+          <Formatting />
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
+function Sheet() {
+  const [minimized, setMinimized] = useState(false);
   const clear = useFigureStore((s) => s.clearSelection);
   const ref = useRef<HTMLElement>(null);
   const [height, setHeight] = useState(0);
@@ -62,20 +107,7 @@ function Sheet() {
         </div>
         {!minimized && (
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
-            <Accordion type="multiple" value={open} onValueChange={setOpen}>
-              <AccordionItem value="properties">
-                <AccordionTrigger>Propriedades</AccordionTrigger>
-                <AccordionContent>
-                  <Properties />
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="formatting" className="border-b-0">
-                <AccordionTrigger>Formatação</AccordionTrigger>
-                <AccordionContent>
-                  <Formatting />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+            <EditAccordion />
           </div>
         )}
       </section>
