@@ -15,6 +15,8 @@ import boardIndex from "./board/index.ts?raw";
 import boardArithmetic from "./board/arithmetic.ts?raw";
 import boardLine from "./board/number-line.ts?raw";
 import boardRelation from "./board/relation.ts?raw";
+import circuit from "./circuit.ts?raw";
+import circuitOps from "./circuitOps.ts?raw";
 import { emptyDoc } from "./defaults";
 
 /** Sentences in quotes: the messages the user or an agent reads. */
@@ -23,7 +25,7 @@ function messages(source: string): string[] {
 }
 
 describe("English messages", () => {
-  const sources = { ops, constructions, graphOps, parse, file, normalize, vectorOps, sets, setOps, boardOps, boardIndex, boardArithmetic, boardLine, boardRelation };
+  const sources = { ops, constructions, graphOps, parse, file, normalize, vectorOps, sets, setOps, boardOps, boardIndex, boardArithmetic, boardLine, boardRelation, circuit, circuitOps };
 
   it("has every message of the operations, the input bar and files", () => {
     expect(messages(ops).length).toBeGreaterThan(30);

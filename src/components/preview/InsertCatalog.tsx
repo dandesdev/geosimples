@@ -12,6 +12,7 @@ import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { useFigureStore } from "@/store/figureStore";
 import { cn } from "@/lib/utils";
 import { BOARD_ITEMS } from "./tools";
+import { COMPONENT_ITEMS, TEMPLATE_ITEMS } from "./circuitItems";
 import type { MenuSide } from "./ActionBar";
 
 interface CatalogItem {
@@ -30,7 +31,7 @@ interface CatalogItem {
 /** Things that need no selection. */
 const ALWAYS: Availability = { reason: null, preview: null };
 
-const SECTIONS = ["Pontos", "Gráficos", "Vetores", "Conjuntos", "Contas e quadros"];
+const SECTIONS = ["Pontos", "Gráficos", "Vetores", "Conjuntos", "Circuitos", "Contas e quadros"];
 
 /** Lowercase and without accents, so "funcao" finds "função". */
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -159,6 +160,28 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
       run: typing("A={"),
       typing: true,
     },
+    ...TEMPLATE_ITEMS.map(
+      (item): CatalogItem => ({
+        section: "Circuitos",
+        Icon: item.Icon,
+        title: item.title,
+        hint: item.hint,
+        words: "eletrico eletricidade fisica resistor gerador corrente tensao",
+        availability: ALWAYS,
+        run: () => actions.circuitTemplate(item.template),
+      }),
+    ),
+    ...COMPONENT_ITEMS.map(
+      (item): CatalogItem => ({
+        section: "Circuitos",
+        Icon: item.Icon,
+        title: `${item.title} entre pontos`,
+        hint: `Selecione dois pontos. ${item.hint}`,
+        words: "eletrico eletricidade fisica componente",
+        availability: av[`component-${item.kind}`],
+        run: () => actions.component(item.kind),
+      }),
+    ),
     ...BOARD_ITEMS.flatMap((item): CatalogItem[] =>
       item === null
         ? []

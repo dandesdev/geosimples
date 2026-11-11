@@ -10,6 +10,10 @@ import type {
   GapStyle,
   Circle,
   CircleConstruction,
+  Circuit,
+  Component,
+  ComponentKind,
+  CurrentSense,
   Dash,
   Element,
   EndMark,
@@ -272,6 +276,47 @@ export function normalizeDoc(input: unknown): FigureDoc {
           notation: oneOf<VectorNotation>(r.notation, ["arrow", "hat", "none"], "arrow"),
         };
         out.push(withLabel(v, r));
+        break;
+      }
+      case "component": {
+        if (ids.has(id) || !points.has(r.a as string) || !points.has(r.b as string) || r.a === r.b) break;
+        const kind = oneOf<ComponentKind>(r.kind, ["resistor", "lamp", "source", "switch", "ammeter", "voltmeter", "capacitor"], "resistor");
+        const value = num(r.value, 0, 1e9, 10);
+        // A resistance of zero would be a wire: a piece keeps a little.
+        if ((kind === "resistor" || kind === "lamp") && value <= 0) break;
+        ids.add(id);
+        const c: Component = {
+          id,
+          type: "component",
+          kind,
+          a: r.a as string,
+          b: r.b as string,
+          value,
+          internal: num(r.internal, 0, 1e9, 0),
+          closed: r.closed !== false,
+          shape: r.shape === "box" ? "box" : "zigzag",
+          name: (str(r.name) ?? "").slice(0, LIMITS.labelLength),
+          size: num(r.size, 8, 80, 24),
+          stroke: stroke(r.stroke),
+        };
+        out.push(withLabel(c, r));
+        break;
+      }
+      case "circuit": {
+        if (ids.has(id) || out.some((e) => e.type === "circuit")) break;
+        ids.add(id);
+        const v = isObj(r.values) ? r.values : {};
+        out.push({
+          id,
+          type: "circuit",
+          on: r.on === true,
+          current: oneOf<CurrentSense>(r.current, ["none", "real", "conventional"], "none"),
+          values: { current: v.current !== false, voltage: v.voltage !== false, power: v.power === true },
+          decimals: Math.round(num(r.decimals, 0, 4, 2)),
+          size: num(r.size, 4, 72, DEFAULT_LABEL.size),
+          color: color(r.color, DEFAULT_LABEL.color),
+          font: r.font === "sans" ? "sans" : "serif",
+        } satisfies Circuit);
         break;
       }
       case "board": {

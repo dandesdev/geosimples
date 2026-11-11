@@ -25,6 +25,8 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   region: { one: "região", many: "regiões", title: "Região" },
   vennitems: { one: "conteúdo do diagrama", many: "conteúdos do diagrama", title: "Conteúdo do diagrama" },
   board: { one: "conta ou quadro", many: "contas e quadros", title: "Conta ou quadro" },
+  component: { one: "componente", many: "componentes", title: "Componente" },
+  circuit: { one: "valor do circuito", many: "valores do circuito", title: "Valores do circuito" },
 };
 
 /** What the preview calls a point it could add under the pointer, and the menu item that adds it. */
@@ -52,6 +54,7 @@ export function describeSelection(doc: FigureDoc, selection: Id[]): string | nul
 function elementName(byId: Map<Id, Element>, id: Id): string {
   const el = byId.get(id);
   if (!el) return "?";
+  if (el.type === "component" && el.name) return el.name;
   if (el.label?.text) return el.label.text;
   if (el.type === "segment") return `${elementName(byId, el.a)}${elementName(byId, el.b)}`;
   if (el.type === "circle") return `a circunferência de centro ${elementName(byId, el.center)}`;

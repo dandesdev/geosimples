@@ -22,7 +22,8 @@ import {
   vectorNameSpans,
   type LabelRun,
 } from "./labels";
-import { boardLayout, boardSlots, layoutMath, type MathPart } from "./board";
+import { boardLayout, boardSlots, layoutMath, type Mark, type MathPart } from "./board";
+import { circuitDrawings, componentDrawing } from "./circuit";
 import { regionOutline, vennItemSpots, type RegionEdge } from "./sets";
 import { grow, LineIndex, overlap, pathLines, textBox } from "./lines";
 import {
@@ -52,7 +53,7 @@ import type {
   Point,
   Stroke,
 } from "./types";
-import { add, mid, polar, type Vec } from "./vec";
+import { add, mid, polar, scale, type Vec } from "./vec";
 
 /**
  * A scene is the figure laid out on paper: coordinates in pt with Y pointing
@@ -221,6 +222,8 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     extension: [],
     board: [],
     vennitems: [],
+    component: [],
+    circuit: [],
     point: [],
     text: [],
   };
@@ -263,6 +266,81 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         return `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`;
       })
       .join("");
+
+  /**
+   * Draws board marks, given in pt with Y up, through T onto paper. Boards
+   * and circuit pieces both draw this way, as their TikZ does.
+   */
+  const drawMarks = (owner: Id, marks: Mark[], T: (o: Vec) => Vec, look: MarkLook, layer: Prim[], bounds: boolean) => {
+    const color = resolveColor(look.color);
+    const lineStroke = (width?: number, dash?: Dash): PaintStroke => ({ color, width: width ?? look.width, dash: dash ?? "solid", opacity: look.opacity });
+    const solidFill: PaintFill = { color, opacity: look.opacity, pattern: "solid", angle: 0 };
+    const path = (d: string, stroke: PaintStroke | null, fillWith: PaintFill | null) => layer.push({ kind: "path", owner, d, stroke, fill: fillWith });
+    const reach = (p: Vec, pad = 0) => {
+      if (bounds) box.add(p.x, p.y, pad);
+    };
+    const writePart = (part: MathPart, origin: Vec) => {
+      if (part.kind === "line") {
+        const [a, b] = [T({ x: origin.x + part.a.x, y: origin.y + part.a.y }), T({ x: origin.x + part.b.x, y: origin.y + part.b.y })];
+        path(`M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, lineStroke(Math.min(look.width, 0.6)), null);
+        return;
+      }
+      const at = T({ x: origin.x + part.x, y: origin.y + part.y });
+      // Words stay upright; inside math, letters go italic as in LaTeX.
+      const runs = part.word ? [{ text: part.text, italic: false }] : labelRuns(part.text, look.font);
+      textRect(layer, owner, at, part.text, runs, part.size, look.color, look.font, bounds ? box : new BoxBuilder());
+    };
+    for (const m of marks) {
+      switch (m.kind) {
+        case "line": {
+          const [a, b] = [T(m.a), T(m.b)];
+          path(`M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, lineStroke(m.width, m.dash), null);
+          reach(a, (m.width ?? look.width) / 2);
+          reach(b, (m.width ?? look.width) / 2);
+          break;
+        }
+        case "curve": {
+          const d = m.points.map((p, i) => `${i === 0 ? "M" : "L"}${f(T(p).x)} ${f(T(p).y)}`).join("");
+          path(d, lineStroke(m.width, m.dash), null);
+          for (const p of m.points) reach(T(p), (m.width ?? look.width) / 2);
+          break;
+        }
+        case "text": {
+          const b = layoutMath(m.node, m.size);
+          for (const part of b.parts) writePart(part, { x: m.at.x - b.w / 2, y: m.at.y });
+          break;
+        }
+        case "dot": {
+          const c = T(m.at);
+          path(circlePath(c.x, c.y, m.r), m.open ? lineStroke(0.7) : null, m.open ? { ...solidFill, color: "#ffffff" } : solidFill);
+          reach(c, m.r + 0.4);
+          break;
+        }
+        case "ring": {
+          const c = T(m.at);
+          path(circlePath(c.x, c.y, m.r), lineStroke(m.width ?? 0.6), null);
+          reach(c, m.r + (m.width ?? 0.6) / 2);
+          break;
+        }
+        case "head": {
+          const c = T(m.tip);
+          const dir = { x: m.dir.x, y: -m.dir.y };
+          const back = { x: c.x - dir.x * m.length, y: c.y - dir.y * m.length };
+          const half = m.length * 0.4;
+          path(`M${f(c.x)} ${f(c.y)}L${f(back.x - dir.y * half)} ${f(back.y + dir.x * half)}L${f(back.x + dir.y * half)} ${f(back.y - dir.x * half)}Z`, null, solidFill);
+          reach(c, half);
+          break;
+        }
+        case "box": {
+          const a = T({ x: m.at.x - m.w / 2, y: m.at.y + m.h / 2 });
+          path(`M${f(a.x)} ${f(a.y)}h${f(m.w)}v${f(m.h)}h${f(-m.w)}Z`, lineStroke(0.5), null);
+          reach(a);
+          reach({ x: a.x + m.w, y: a.y + m.h });
+          break;
+        }
+      }
+    }
+  };
 
   const solid = (s: PaintStroke): PaintStroke => ({ ...s, dash: "solid" });
   const axes = doc.elements.find((e): e is Axes => e.type === "axes");
@@ -377,64 +455,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         if (!layout) break;
         const base = P(el);
         const T = (o: Vec): Vec => ({ x: base.x + o.x, y: base.y - o.y });
-        const color = resolveColor(el.color);
-        const lineStroke = (width?: number, dash?: Dash): PaintStroke => ({ color, width: width ?? el.width, dash: dash ?? "solid", opacity: 1 });
-        const solidFill: PaintFill = { color, opacity: 1, pattern: "solid", angle: 0 };
-        const path = (d: string, stroke: PaintStroke | null, fillWith: PaintFill | null) =>
-          layers.board.push({ kind: "path", owner: el.id, d, stroke, fill: fillWith });
-        const writePart = (part: MathPart, origin: Vec) => {
-          if (part.kind === "line") {
-            const [a, b] = [T({ x: origin.x + part.a.x, y: origin.y + part.a.y }), T({ x: origin.x + part.b.x, y: origin.y + part.b.y })];
-            path(`M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, lineStroke(Math.min(el.width, 0.6)), null);
-            return;
-          }
-          const at = T({ x: origin.x + part.x, y: origin.y + part.y });
-          // Words stay upright; inside math, letters go italic as in LaTeX.
-          const runs = part.word ? [{ text: part.text, italic: false }] : labelRuns(part.text, el.font);
-          textRect(layers.board, el.id, at, part.text, runs, part.size, el.color, el.font, box);
-        };
-        for (const m of layout.marks) {
-          switch (m.kind) {
-            case "line": {
-              const [a, b] = [T(m.a), T(m.b)];
-              path(`M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, lineStroke(m.width, m.dash), null);
-              break;
-            }
-            case "curve": {
-              const d = m.points.map((p, i) => `${i === 0 ? "M" : "L"}${f(T(p).x)} ${f(T(p).y)}`).join("");
-              path(d, lineStroke(m.width, m.dash), null);
-              break;
-            }
-            case "text": {
-              const b = layoutMath(m.node, m.size);
-              for (const part of b.parts) writePart(part, { x: m.at.x - b.w / 2, y: m.at.y });
-              break;
-            }
-            case "dot": {
-              const c = T(m.at);
-              path(circlePath(c.x, c.y, m.r), m.open ? lineStroke(0.7) : null, m.open ? { ...solidFill, color: "#ffffff" } : solidFill);
-              break;
-            }
-            case "ring": {
-              const c = T(m.at);
-              path(circlePath(c.x, c.y, m.r), lineStroke(0.6), null);
-              break;
-            }
-            case "head": {
-              const c = T(m.tip);
-              const dir = { x: m.dir.x, y: -m.dir.y };
-              const back = { x: c.x - dir.x * m.length, y: c.y - dir.y * m.length };
-              const half = m.length * 0.4;
-              path(`M${f(c.x)} ${f(c.y)}L${f(back.x - dir.y * half)} ${f(back.y + dir.x * half)}L${f(back.x + dir.y * half)} ${f(back.y - dir.x * half)}Z`, null, solidFill);
-              break;
-            }
-            case "box": {
-              const a = T({ x: m.at.x - m.w / 2, y: m.at.y + m.h / 2 });
-              path(`M${f(a.x)} ${f(a.y)}h${f(m.w)}v${f(m.h)}h${f(-m.w)}Z`, lineStroke(0.5), null);
-              break;
-            }
-          }
-        }
+        drawMarks(el.id, layout.marks, T, { color: el.color, width: el.width, font: el.font, opacity: 1 }, layers.board, true);
         const [c0, c1] = [T({ x: layout.box.minX, y: layout.box.maxY }), T({ x: layout.box.maxX, y: layout.box.minY })];
         box.add(c0.x, c0.y, 2);
         box.add(c1.x, c1.y, 2);
@@ -443,6 +464,28 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           for (const s of boardSlots(el, doc)) {
             const c = T({ x: s.at.x - s.w / 2, y: s.at.y + s.h / 2 });
             slots.push({ owner: el.id, index: s.index, x: c.x, y: c.y, w: s.w, h: s.h, gap: s.gap });
+          }
+        }
+        break;
+      }
+      case "component": {
+        const drawing = componentDrawing(doc, el, k);
+        if (!drawing) break;
+        const base = P(drawing.mid);
+        const T = (o: Vec): Vec => ({ x: base.x + o.x, y: base.y - o.y });
+        drawMarks(el.id, drawing.marks, T, { color: el.stroke.color, width: el.stroke.width, font: el.label?.font ?? "serif", opacity: el.stroke.opacity }, layers.segment, true);
+        const [pa, pb] = [T(scale(drawing.dir, -drawing.length / 2)), T(scale(drawing.dir, drawing.length / 2))];
+        hits.component.push({ owner: el.id, type: "component", d: `M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`, area: false });
+        break;
+      }
+      case "circuit": {
+        for (const drawing of circuitDrawings(doc, el, k)) {
+          const base = P(drawing.mid);
+          const T = (o: Vec): Vec => ({ x: base.x + o.x, y: base.y - o.y });
+          const before = layers.label.length;
+          drawMarks(el.id, drawing.marks, T, { color: el.color, width: 0.6, font: el.font, opacity: 1 }, layers.label, true);
+          for (const prim of layers.label.slice(before)) {
+            if (prim.kind === "text") hits.circuit.push({ owner: el.id, type: "circuit", d: textHitPath(prim), area: true });
           }
         }
         break;
@@ -797,7 +840,9 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...hits.extension,
       ...hits.segment,
       ...hits.vector,
+      ...hits.component,
       ...hits.board,
+      ...hits.circuit,
       ...hits.vennitems,
       ...hits.text,
       ...hits.point,
@@ -934,6 +979,21 @@ function addLabel(
   const at = O(placement.anchor, placement.offset);
   textRect(out, el.id, at, text, runs, size, color, font, box);
   if (!measure) vectorMark(el, at, text, size, color, out);
+}
+
+/** How board and circuit marks look: they take one color, width and font. */
+interface MarkLook {
+  color: string;
+  width: number;
+  font: LabelFont;
+  opacity: number;
+}
+
+/** A rectangle around a drawn text, to pick it with the mouse. */
+function textHitPath(t: Extract<Prim, { kind: "text" }>): string {
+  const w = estimateTextWidth(t.text, t.size) / 2;
+  const h = t.size * 0.6;
+  return `M${f(t.x - w)} ${f(t.y - h)}H${f(t.x + w)}V${f(t.y + h)}H${f(t.x - w)}Z`;
 }
 
 /** Draws text centered on a paper point and returns the box it takes. */

@@ -104,6 +104,8 @@ const PREFIX: Record<ElementType, string> = {
   region: "z",
   vennitems: "i",
   board: "b",
+  component: "k",
+  circuit: "q",
 };
 
 /** Next free id like p1, p2. Ids double as TikZ coordinate names. */
@@ -492,11 +494,13 @@ function referencedPoints(el: Element): Id[] {
     case "numberline":
     case "vennitems":
     case "board":
+    case "circuit":
       return [];
     case "region":
       return [...el.sets.map((s) => s.shape), ...(el.universe ? [el.universe] : [])];
     case "segment":
     case "vector":
+    case "component":
       return [el.a, el.b];
     case "extension":
       return [...el.line, el.point];
@@ -516,6 +520,10 @@ function referencedPoints(el: Element): Id[] {
 export function deleteElements(doc: FigureDoc, ids: Id[]): OpResult {
   if (ids.length === 0) return ok(doc);
   const gone = withOrphanHelpers(doc, cascadeIds(doc, withLostHelpers(doc, ids)));
+  // A circuit's settings go with its last piece.
+  if (!doc.elements.some((el) => el.type === "component" && !gone.has(el.id))) {
+    for (const el of doc.elements) if (el.type === "circuit") gone.add(el.id);
+  }
   const elements = doc.elements
     .filter((el) => !gone.has(el.id))
     .map((el): Element => {

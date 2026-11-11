@@ -504,8 +504,8 @@ describe("compileRecipe: labels and base figures", () => {
     expect(schema.properties).toHaveProperty("steps");
     // Shared parts are written once and referred to.
     expect(Object.keys(schema.$defs ?? {})).toEqual(expect.arrayContaining(["style", "label", "target", "color"]));
-    // About 6k tokens. Grow it on purpose, not by accident.
-    expect(JSON.stringify(schema).length).toBeLessThan(24_500);
+    // About 6,5k tokens. Grow it on purpose, not by accident: circuits took it past 24 500.
+    expect(JSON.stringify(schema).length).toBeLessThan(26_000);
   });
 });
 

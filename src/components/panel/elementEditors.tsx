@@ -5,6 +5,8 @@ import {
   type Axes,
   type Board,
   type Circle,
+  type Circuit,
+  type Component,
   type Extension,
   type FreeText,
   type FunctionGraph,
@@ -213,6 +215,40 @@ export function VectorEditor({ el, update, updateLabel, multi }: EditorProps<Vec
         <Choice label="Sobre o nome" value={el.notation} options={NOTATIONS} onChange={(notation) => update((v) => ({ ...v, notation }), "notation")} />
       </Section>
       <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.vector} placeholder="Ex.: u, F₁, u + v, F_x" />
+    </div>
+  );
+}
+
+export function ComponentEditor({ el, update, updateLabel, multi }: EditorProps<Component>) {
+  return (
+    <div className="space-y-2">
+      <StrokeEditor stroke={el.stroke} onChange={(stroke, key) => update((c) => ({ ...c, stroke }), key)} />
+      <Section title="Símbolo">
+        <RangeField label="Tamanho" value={el.size} min={12} max={48} step={1} format={pt} onChange={(size) => update((c) => ({ ...c, size }), "size")} />
+        {el.kind === "resistor" && (
+          <Choice
+            label="Resistor"
+            value={el.shape}
+            options={[
+              { value: "zigzag", label: "Zigue-zague" },
+              { value: "box", label: "Retângulo" },
+            ]}
+            onChange={(shape) => update((c) => ({ ...c, shape }), "shape")}
+          />
+        )}
+      </Section>
+      <LabelEditor multi={multi} label={el.label} onChange={updateLabel} measures={MEASURES.component} placeholder="Ex.: R₁ = 10 Ω" />
+    </div>
+  );
+}
+
+/** The values a switched-on circuit writes: their look. */
+export function CircuitEditor({ el, update }: EditorProps<Circuit>) {
+  return (
+    <div className="space-y-2">
+      <Section title="Valores do circuito">
+        <TextStyleFields value={el} onChange={(patch, key) => update((c) => ({ ...c, ...patch }), key)} />
+      </Section>
     </div>
   );
 }

@@ -1,6 +1,15 @@
 import { toast } from "sonner";
 import {
   addBasis,
+  addCircuitTemplate,
+  addComponent,
+  flipComponent,
+  setCircuit,
+  updateComponent,
+  type CircuitPatch,
+  type CircuitTemplate,
+  type ComponentKind,
+  type ComponentPatch,
   addPoints,
   addText,
   addVennDiagram,
@@ -154,6 +163,26 @@ export const actions = {
 
   /** Builds on the selected vectors: sum, difference, projection and the rest. */
   vectorOp: (op: VectorOperation) => perform((doc, sel) => vectorOp(doc, sel, op, opOptions())),
+
+  /** A circuit piece between the two selected points. */
+  component: (kind: ComponentKind) => perform((doc, sel) => addComponent(doc, sel, kind, opOptions())),
+
+  /** A ready-made circuit, right of the figure. */
+  circuitTemplate: (template: CircuitTemplate) => perform((doc) => addCircuitTemplate(doc, template, opOptions())),
+
+  /** Switches the circuit on or off, and picks its current arrows and what it writes. */
+  circuit: (patch: CircuitPatch) => perform((doc) => setCircuit(doc, patch, opOptions()), "keep"),
+
+  /** Changes a piece's kind, value or switch; typing a value stays one undo step. */
+  updateComponent: (id: Id, patch: ComponentPatch, key: string) => {
+    const store = useFigureStore.getState();
+    const result = updateComponent(store.doc, id, patch);
+    if (result.error) toast.error(result.error);
+    else store.commit(result.doc, `${id}:${key}`);
+  },
+
+  /** Turns a piece around, as a source's poles. */
+  flipComponent: (id: Id) => perform((doc) => flipComponent(doc, id), "keep"),
 
   /** The versors i and j from the origin. */
   basis: () => perform((doc) => addBasis(doc, opOptions())),

@@ -16,6 +16,11 @@ import {
   updateElements,
   type Axes,
   type Board,
+  circuitOf,
+  solveCircuit,
+  type Circuit,
+  type Component,
+  type ComponentKind,
   type BoardShow,
   type GapStyle,
   MAX_GAP_TEXT,
@@ -51,8 +56,10 @@ import {
 } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { actions } from "@/lib/actions";
 import { describeConstruction } from "@/lib/names";
+import { COMPONENT_ITEMS, CURRENT_OPTIONS } from "@/components/preview/circuitItems";
 import { useFigureStore } from "@/store/figureStore";
 import { Choice, Field, NumberInput, Section, SwitchField } from "./controls";
 import { useInspected, type EditorProps } from "./inspected";
@@ -90,6 +97,8 @@ export function Properties() {
       {el.type === "region" && <RegionProperties key={el.id} el={el} {...props} />}
       {el.type === "vennitems" && <VennItemsProperties el={el} {...props} />}
       {el.type === "board" && <BoardProperties key={el.id} el={el} {...props} />}
+      {el.type === "component" && <ComponentProperties el={el} {...props} />}
+      {el.type === "circuit" && <CircuitFields circuit={el} doc={props.doc} />}
     </div>
   );
 }
@@ -590,6 +599,137 @@ function VectorProperties({ el, doc, multi }: EditorProps<Vector>) {
         </Field>
       )}
       <Hint>Soma, diferença, projeção, versor e componentes ficam no menu Vetores, e acompanham o vetor quando ele se move.</Hint>
+    </Section>
+  );
+}
+
+/** What each kind's value is, and in what unit. */
+const VALUE_FIELD: Partial<Record<ComponentKind, { label: string; unit: string }>> = {
+  resistor: { label: "Resistência", unit: "Ω" },
+  lamp: { label: "Resistência", unit: "Ω" },
+  source: { label: "Força eletromotriz", unit: "V" },
+  capacitor: { label: "Capacitância", unit: "μF" },
+};
+
+function ComponentProperties({ el, doc, multi }: EditorProps<Component>) {
+  const field = VALUE_FIELD[el.kind];
+  const circuit = circuitOf(doc);
+  return (
+    <>
+      {!multi && (
+        <Section title="Componente">
+          <Field label="Tipo">
+            <Select value={el.kind} onValueChange={(kind) => actions.updateComponent(el.id, { kind: kind as ComponentKind }, "kind")}>
+              <SelectTrigger aria-label="Tipo do componente" className="h-8 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COMPONENT_ITEMS.map((item) => (
+                  <SelectItem key={item.kind} value={item.kind}>
+                    {item.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Nome">
+            <Input
+              value={el.name}
+              aria-label="Nome do componente"
+              maxLength={12}
+              onChange={(e) => actions.updateComponent(el.id, { name: e.target.value }, "name")}
+            />
+          </Field>
+          {field && (
+            <Field label={field.label}>
+              <NumberInput
+                ariaLabel={field.label}
+                value={el.value}
+                min={0}
+                max={1e9}
+                decimals={3}
+                suffix={field.unit}
+                onChange={(value) => actions.updateComponent(el.id, { value }, "value")}
+              />
+            </Field>
+          )}
+          {el.kind === "source" && (
+            <>
+              <Field label="Resistência interna">
+                <NumberInput
+                  ariaLabel="Resistência interna"
+                  value={el.internal}
+                  min={0}
+                  max={1e9}
+                  decimals={3}
+                  suffix="Ω"
+                  onChange={(internal) => actions.updateComponent(el.id, { internal }, "internal")}
+                />
+              </Field>
+              <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => actions.flipComponent(el.id)}>
+                Inverter os polos
+              </Button>
+              <Hint>Ligado ao contrário de geradores mais fortes, ele passa a ser receptor.</Hint>
+            </>
+          )}
+          {el.kind === "switch" && (
+            <SwitchField label="Fechada" checked={el.closed} onChange={(closed) => actions.updateComponent(el.id, { closed }, "closed")} />
+          )}
+          {el.kind === "lamp" && <Hint>A lâmpada é tratada como um resistor. Para a nominal, R = U² / P.</Hint>}
+        </Section>
+      )}
+      {!multi && circuit && <PieceReadout el={el} doc={doc} decimals={circuit.decimals} />}
+      {circuit && <CircuitFields circuit={circuit} doc={doc} />}
+    </>
+  );
+}
+
+/** The current, voltage and power of one piece, as the switched-on circuit has them. */
+function PieceReadout({ el, doc, decimals }: { el: Component; doc: FigureDoc; decimals: number }) {
+  const solution = solveCircuit(doc);
+  if (!solution.ok) {
+    return (
+      <Section title="Medidas">
+        <p className="mb-1 text-xs text-destructive">{solution.error}</p>
+      </Section>
+    );
+  }
+  const state = solution.pieces.get(el.id);
+  if (!state) return null;
+  const n = (v: number) => formatNumber(v, decimals);
+  const i = Math.abs(state.current);
+  const u = state.voltage === null ? null : Math.abs(state.voltage);
+  const role = el.kind === "source" ? (state.current < -1e-9 ? "Receptor" : i > 1e-9 ? "Gerador" : "Sem corrente") : null;
+  return (
+    <Section title="Medidas">
+      <Readout label="Corrente" value={`${n(i)} A`} />
+      <Readout label="Tensão" value={u === null ? "—" : `${n(u)} V`} />
+      {(el.kind === "resistor" || el.kind === "lamp" || el.kind === "source") && u !== null && <Readout label="Potência" value={`${n(u * i)} W`} />}
+      {el.kind === "capacitor" && u !== null && <Readout label="Carga" value={`${n(el.value * u)} μC`} />}
+      {role && <Readout label="Funciona como" value={role} />}
+    </Section>
+  );
+}
+
+/** Switching the circuit on, its current arrows and what it writes: for the whole figure. */
+function CircuitFields({ circuit, doc }: { circuit: Circuit; doc: FigureDoc }) {
+  const solution = solveCircuit(doc);
+  return (
+    <Section title="Circuito">
+      <SwitchField label="Ligado" checked={circuit.on} onChange={(on) => actions.circuit({ on })} />
+      <Choice label="Sentido da corrente" value={circuit.current} options={CURRENT_OPTIONS} onChange={(current) => actions.circuit({ current })} />
+      {circuit.on && (
+        <>
+          <SwitchField label="Corrente" checked={circuit.values.current} onChange={(current) => actions.circuit({ values: { ...circuit.values, current } })} />
+          <SwitchField label="Tensão" checked={circuit.values.voltage} onChange={(voltage) => actions.circuit({ values: { ...circuit.values, voltage } })} />
+          <SwitchField label="Potência" checked={circuit.values.power} onChange={(power) => actions.circuit({ values: { ...circuit.values, power } })} />
+          <Field label="Casas decimais">
+            <NumberInput ariaLabel="Casas decimais dos valores" value={circuit.decimals} min={0} max={4} decimals={0} onChange={(d) => actions.circuit({ decimals: Math.round(d) })} />
+          </Field>
+        </>
+      )}
+      {!solution.ok && <p className="mb-1 text-xs text-destructive">{solution.error}</p>}
+      <Hint>Fios são segmentos: os componentes se ligam onde dividem um ponto. Medidores e geradores são ideais, a não ser pela resistência interna.</Hint>
     </Section>
   );
 }
