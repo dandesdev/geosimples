@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addFunction,
   buildScene,
-  darkColor,
   dragHandle,
   draggedPoints,
   circuitEnds,
@@ -13,7 +12,6 @@ import {
   formatNumber,
   isDraggable,
   moveElements,
-  paddedBox,
   paintScene,
   paperColor,
   pointMap,
@@ -42,6 +40,8 @@ import { PreviewMenu, type GraphSpot } from "./PreviewMenu";
 import { boxFrom, elementsInBox } from "@/lib/boxSelect";
 import { cn } from "@/lib/utils";
 import { usePreviewPaper } from "@/lib/theme";
+import { fitView, onPaper, type PerUnit } from "@/lib/previewView";
+import { PreviewGrid } from "./PreviewGrid";
 import { parseDraft } from "@/lib/inputContext";
 import { useCommand } from "@/lib/commands";
 import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camera";
@@ -50,22 +50,12 @@ import { SPOT_NAMES } from "@/lib/names";
 
 const PRIMARY = "#10b981";
 
-/** Paper pt per world unit along x and y: they differ when the axes count x and y at different scales. */
-type PerUnit = { x: number; y: number };
-/** View shown for an empty figure: about x ∈ [-1, 6], y ∈ [-1, 4]. */
-const EMPTY_WORLD = { minX: -1, minY: -1, maxX: 6, maxY: 4 };
-
 /** Hit target sizes in screen px: a finger needs more room than a mouse. */
 const HIT_FINE = { point: 7, stroke: 14 };
 const HIT_COARSE = { point: 16, stroke: 28 };
 /** How near a crossing or turning point (screen px) the pointer must come for it to show. */
 const SPOT_REACH_FINE = 10;
 const SPOT_REACH_COARSE = 18;
-
-/** A helper color of the preview as it shows on its paper. */
-function onPaper(color: string, paper: Paper): string {
-  return paper === "dark" ? darkColor(color) : color;
-}
 
 type Gesture =
   | { kind: "none" }
@@ -130,15 +120,6 @@ function handleCursor(doc: FigureDoc, owner: Id, end: HandleEnd, dragging = fals
   const along = doc.elements.some((e) => e.id === owner && (e.type === "function" || e.type === "segment"));
   if (along) return dragging ? "cursor-grabbing" : "cursor-grab";
   return end[0] === "x" ? "cursor-ew-resize" : "cursor-ns-resize";
-}
-
-function fitView(box: Box | null, k: number): View {
-  const b =
-    box ??
-    { minX: EMPTY_WORLD.minX * k, minY: -EMPTY_WORLD.maxY * k, maxX: EMPTY_WORLD.maxX * k, maxY: -EMPTY_WORLD.minY * k };
-  const size = Math.max(b.maxX - b.minX, b.maxY - b.minY, k);
-  const p = paddedBox(b, Math.max(14, size * 0.08));
-  return { x: p.minX, y: p.minY, w: p.maxX - p.minX, h: p.maxY - p.minY };
 }
 
 /** The view a reload starts from when auto-fit is off: the figure as it was saved. */
@@ -609,7 +590,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               onMouseDown={(e) => e.button === 1 && e.preventDefault()}
               onAuxClick={(e) => e.preventDefault()}
             >
-              {showGrid && <Grid ppu={ppu} vb={vb} unitsPerPx={unitsPerPx} paper={paper} />}
+              {showGrid && <PreviewGrid ppu={ppu} vb={vb} unitsPerPx={unitsPerPx} paper={paper} />}
               <g dangerouslySetInnerHTML={{ __html: markup }} />
               {actionMarkup && <g pointerEvents="none" dangerouslySetInnerHTML={{ __html: actionMarkup }} />}
               <Overlay
@@ -750,29 +731,6 @@ function toUser(svg: SVGSVGElement, clientX: number, clientY: number) {
   if (!ctm) return { x: 0, y: 0 };
   const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
   return { x: p.x, y: p.y };
-}
-
-function Grid({ ppu, vb, unitsPerPx, paper }: { ppu: PerUnit; vb: View; unitsPerPx: number; paper: Paper }) {
-  // One line per world unit, or every 5 or 10 units when zoomed far out.
-  const k = Math.min(ppu.x, ppu.y);
-  const step = k / unitsPerPx < 8 ? (k * 5) / unitsPerPx < 8 ? 10 : 5 : 1;
-  const sx = ppu.x * step;
-  const sy = ppu.y * step;
-  return (
-    <g pointerEvents="none">
-      <defs>
-        <pattern id="gs-preview-grid" patternUnits="userSpaceOnUse" width={sx} height={sy} x={0} y={0}>
-          <path d={`M${sx} 0H0V${sy}`} fill="none" stroke={onPaper("#e5e7eb", paper)} strokeWidth={unitsPerPx} />
-        </pattern>
-      </defs>
-      <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#gs-preview-grid)" />
-      <path
-        d={`M${vb.x} 0H${vb.x + vb.w}M0 ${vb.y}V${vb.y + vb.h}`}
-        stroke={onPaper("#cbd5e1", paper)}
-        strokeWidth={unitsPerPx * 1.2}
-      />
-    </g>
-  );
 }
 
 function Overlay({

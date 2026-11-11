@@ -113,9 +113,12 @@ const OWN_ESCAPE = "data-own-escape";
 export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Fills the window, so the dialog never resizes between tabs: the tab content scrolls instead. */}
+      {/*
+        Fills the window, so the dialog never resizes between tabs: the tab content scrolls instead.
+        On a phone it is the whole screen, as the menu it opens from.
+      */}
       <DialogContent
-        className="flex h-[calc(100dvh-2rem)] max-h-none w-[calc(100vw-2rem)] max-w-none flex-col gap-3 overflow-hidden sm:h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)]"
+        className="left-0 top-0 flex h-dvh max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-3 overflow-hidden rounded-none border-0 p-4 sm:left-[50%] sm:top-[50%] sm:h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:p-6"
         onEscapeKeyDown={(e) => {
           if (document.activeElement?.hasAttribute(OWN_ESCAPE)) e.preventDefault();
         }}

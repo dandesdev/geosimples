@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Menu } from "lucide-react";
+import { ChevronDown, ChevronUp, Menu, X } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { PointInput } from "@/components/PointInput";
 import { SelectionCard } from "@/components/panel/EditSheet";
@@ -9,7 +9,8 @@ import { ModeSwitch } from "@/components/preview/ModeSwitch";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { SelectionSummary } from "@/components/preview/SelectionSummary";
 import { AreaTools } from "@/components/tools/AreaTools";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogPortal, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { usePanelStore } from "@/store/panelStore";
 import { cn } from "@/lib/utils";
 
@@ -62,33 +63,38 @@ export function PhoneLayout() {
   );
 }
 
-/** The modes, apart from Vários, and the hint under them, which folds away for room. */
+/** The modes, apart from Vários, with the hint's switch beside them, and the hint under them. */
 function PhoneNav() {
   const hidden = usePanelStore((s) => s.hintsHidden);
   const setHidden = usePanelStore((s) => s.setHintsHidden);
   return (
     <div role="toolbar" aria-label="Ações da figura" className="flex flex-col gap-1">
-      <div className="flex gap-1.5">
+      <div className="flex items-center gap-1">
         <ModeSwitch tiles />
-      </div>
-      <div className="flex items-start gap-1">
-        <div className="min-w-0 flex-1">{!hidden && <SelectionSummary placement="tools" />}</div>
         <IconButton
           label={hidden ? "Mostrar dicas" : "Esconder dicas"}
-          hint={hidden ? "A dica do modo e o que está selecionado voltam para cá." : "Esconde a dica e sobe o que está embaixo."}
+          hint={hidden ? "A dica do modo e o que está selecionado voltam para baixo dos modos." : "Esconde a dica e sobe o que está embaixo."}
           aria-expanded={!hidden}
-          // Folded, only this is left: a slim row, so what is below moves up.
-          className={cn("w-7 shrink-0 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4", hidden ? "h-5" : "h-7")}
+          className="h-12 w-8 shrink-0 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4"
           onClick={() => setHidden(!hidden)}
         >
           {hidden ? <ChevronDown /> : <ChevronUp />}
         </IconButton>
       </div>
+      {!hidden && <SelectionSummary placement="tools" />}
     </div>
   );
 }
 
-/** The menu over the preview's corner: the title, theme, Configurações, help, the figure and Prontos. */
+/** The menu's round button over the preview's top right corner. */
+const MENU_BUTTON =
+  "absolute right-2 top-2 z-40 grid h-10 w-10 place-items-center rounded-full border bg-background/95 text-foreground shadow-md [&_svg]:h-5 [&_svg]:w-5";
+
+/**
+ * The menu over the preview's corner: the title, theme, Configurações, help,
+ * the figure and Prontos, in a sheet that slides in from the right. Its button
+ * seems to stay where it is and turn into an X while the sheet is open.
+ */
 function PhoneMenu() {
   const [open, setOpen] = useState(false);
   return (
@@ -98,24 +104,34 @@ function PhoneMenu() {
           type="button"
           aria-label="Menu"
           title="Figura, Prontos, tema, configurações e ajuda"
-          className="absolute right-2 top-2 z-40 grid h-10 w-10 place-items-center rounded-full border bg-background/95 text-foreground shadow-md [&_svg]:h-5 [&_svg]:w-5"
+          className={MENU_BUTTON}
         >
           <Menu />
         </button>
       </DialogTrigger>
-      <DialogContent
-        aria-describedby={undefined}
-        // The whole screen, so the panels have room; it closes with its X.
-        className="left-0 top-0 flex h-dvh max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 bg-background p-2 pt-12 outline-none sm:rounded-none"
-        // A focused button would open its tooltip over the menu.
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          (e.currentTarget as HTMLElement | null)?.focus();
-        }}
-      >
-        <DialogTitle className="sr-only">Menu</DialogTitle>
-        <SidePanel phone />
-      </DialogContent>
+      <DialogPortal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed inset-y-0 right-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-background p-2 pt-14 shadow-lg outline-none duration-200 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=open]:slide-in-from-right"
+          // A focused button would open its tooltip over the menu.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement | null)?.focus();
+          }}
+        >
+          <DialogTitle className="sr-only">Menu</DialogTitle>
+          <DialogClose className="sr-only">Fechar o menu</DialogClose>
+          <SidePanel phone />
+        </DialogPrimitive.Content>
+        {/*
+          The menu button turned into an X, on the same spot: outside the sheet so it doesn't slide in with it,
+          and in the sheet's layer so a dialog opened from the menu still covers it. The X inside the sheet is the keyboard's.
+        */}
+        <DialogClose aria-hidden="true" tabIndex={-1} title="Fechar o menu" className={cn(MENU_BUTTON, "pointer-events-auto fixed z-50")}>
+          <X />
+        </DialogClose>
+      </DialogPortal>
     </Dialog>
   );
 }
@@ -148,9 +164,12 @@ function PreviewResizer() {
       onKeyDown={(e) => {
         if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
         e.preventDefault();
-        const now = usePanelStore.getState().phonePreview ?? 0.4;
+        // Not dragged yet: from the height it has now.
+        const box = e.currentTarget.parentElement?.getBoundingClientRect();
+        const now = usePanelStore.getState().phonePreview ?? (box ? box.height / window.innerHeight : 0.33);
         setShare(Math.min(MAX_SHARE, Math.max(MIN_SHARE, now + (e.key === "ArrowDown" ? 0.05 : -0.05))));
       }}
+      // Back to the height a first visit has.
       onDoubleClick={() => setShare(null)}
     >
       <span aria-hidden="true" className="h-1.5 w-12 rounded-full bg-muted-foreground/40" />

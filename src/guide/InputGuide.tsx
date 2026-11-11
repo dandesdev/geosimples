@@ -1,18 +1,26 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ExternalLink, RotateCcw } from "lucide-react";
 import {
+  addAxes,
   addNumberLine,
   applyInput,
+  buildScene,
   emptyDoc,
   encodeShareToken,
+  paintScene,
+  paperColor,
   parseInput,
+  sceneMarkup,
   shareUrl,
-  toSvg,
   type FigureDoc,
   type InputContext,
 } from "@geosimples/core/figure";
+import { PreviewGrid } from "@/components/preview/PreviewGrid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { fitView } from "@/lib/previewView";
+import { useApplyTheme, usePreviewPaper } from "@/lib/theme";
+import { useActivePrefs } from "@/store/useActivePrefs";
 
 /** One live example: lines typed in the bar, one after the other, over an optional starting figure. */
 interface Sample {
@@ -20,6 +28,8 @@ interface Sample {
   lines: string[];
   /** A number line already in the figure, which intervals need. */
   numberLine?: boolean;
+  /** Numbered axes already in the figure, so a point's coordinates can be read off them. */
+  axes?: boolean;
 }
 
 interface Topic {
@@ -40,9 +50,9 @@ const TOPICS: Topic[] = [
       </>
     ),
     samples: [
-      { caption: "Um ponto com nome. Mude os números e veja o ponto andar.", lines: ["A=(2;3)"] },
-      { caption: "Coordenadas polares: 3 unidades a 60 graus.", lines: ["P=(3:60)"] },
-      { caption: "O sinal + anda a partir do ponto anterior.", lines: ["A=(0;0) B=+(4;0) C=+(0;3)"] },
+      { caption: "Um ponto com nome. Mude os números e veja o ponto andar nos eixos.", lines: ["A=(2;3)"], axes: true },
+      { caption: "Coordenadas polares: 3 unidades a 60 graus.", lines: ["P=(3:60)"], axes: true },
+      { caption: "O sinal + anda a partir do ponto anterior.", lines: ["A=(0;0) B=+(4;0) C=+(0;3)"], axes: true },
     ],
   },
   {
@@ -195,8 +205,10 @@ function contextOf(doc: FigureDoc): InputContext {
 }
 
 /** Runs the lines as the bar would, one after the other, and says what is wrong with each. */
-function run(lines: string[], numberLine: boolean) {
-  let doc = numberLine ? addNumberLine(emptyDoc()).doc : emptyDoc();
+function run(lines: string[], sample: Sample) {
+  let doc = emptyDoc();
+  if (sample.numberLine) doc = addNumberLine(doc).doc;
+  if (sample.axes) doc = addAxes(doc).doc;
   const errors = lines.map((line) => {
     if (line.trim() === "") return null;
     const parsed = parseInput(line, contextOf(doc));
@@ -210,7 +222,7 @@ function run(lines: string[], numberLine: boolean) {
 
 function Example({ sample }: { sample: Sample }) {
   const [lines, setLines] = useState(sample.lines);
-  const { doc, errors } = run(lines, !!sample.numberLine);
+  const { doc, errors } = run(lines, sample);
   const changed = lines.some((l, i) => l !== sample.lines[i]);
   const open = async () => {
     const token = await encodeShareToken({ name: "Exemplo do guia", doc });
@@ -234,14 +246,7 @@ function Example({ sample }: { sample: Sample }) {
           </div>
         ))}
       </div>
-      {doc.elements.length > 0 && (
-        <div
-          data-testid="guide-figure"
-          className="grid place-items-center bg-white p-3 [&_svg]:h-auto [&_svg]:max-h-72 [&_svg]:max-w-full"
-          // The same markup the export writes, built by core from what was typed.
-          dangerouslySetInnerHTML={{ __html: toSvg(doc, { background: "#ffffff" }) }}
-        />
-      )}
+      {doc.elements.length > 0 && <GuideFigure doc={doc} />}
       <div className="flex justify-end gap-1 border-t p-1.5">
         {changed && (
           <Button variant="ghost" size="sm" onClick={() => setLines(sample.lines)}>
@@ -258,8 +263,52 @@ function Example({ sample }: { sample: Sample }) {
   );
 }
 
+/** The figure's shape in the guide: a little wider than tall, as a preview usually is. */
+const ASPECT = 3 / 2;
+
+/**
+ * The figure as the editor's preview shows it, not as it is exported: on the
+ * theme's paper, over the grid when the profile shows it, fitted the same way.
+ */
+function GuideFigure({ doc }: { doc: FigureDoc }) {
+  const paper = usePreviewPaper();
+  const showGrid = useActivePrefs().behavior.showGrid;
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(480);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(1, entry.contentRect.width)));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const scene = useMemo(() => buildScene(doc), [doc]);
+  const markup = useMemo(() => sceneMarkup(paintScene(scene, paper)), [scene, paper]);
+  // The fitted view, widened or heightened to the box's shape so the grid reaches every edge.
+  const fit = fitView(scene.box, scene.k);
+  const w = Math.max(fit.w, fit.h * ASPECT);
+  const h = w / ASPECT;
+  const vb = { x: fit.x - (w - fit.w) / 2, y: fit.y - (h - fit.h) / 2, w, h };
+  return (
+    <div ref={ref} data-testid="guide-figure" className="aspect-[3/2] w-full border-t">
+      <svg
+        className="block h-full w-full"
+        // The paper's color comes from core, which also colors the figure on it.
+        style={{ backgroundColor: paperColor(paper) }}
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+        role="img"
+        aria-label="Figura do exemplo"
+      >
+        {showGrid && <PreviewGrid ppu={{ x: scene.kx, y: scene.ky }} vb={vb} unitsPerPx={vb.w / width} paper={paper} />}
+        <g dangerouslySetInnerHTML={{ __html: markup }} />
+      </svg>
+    </div>
+  );
+}
+
 /** The page behind "Mais explicações": the input bar, topic by topic, with examples that run for real. */
 export function InputGuide() {
+  useApplyTheme();
   // The page is drawn after the browser looks for the #topic of the link, so it goes there now.
   useEffect(() => {
     if (window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();

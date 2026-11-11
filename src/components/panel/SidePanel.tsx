@@ -75,7 +75,14 @@ export function SidePanel({ phone = false }: { phone?: boolean }) {
             <AreaTools />
           </section>
         )}
-        {beside ? <EditTabs /> : <LabelTools />}
+        {beside ? (
+          <EditTabs />
+        ) : (
+          // Room under its buttons, as each tab of EditTabs has.
+          <div className="pb-3">
+            <LabelTools />
+          </div>
+        )}
       </div>
     </aside>
   );
