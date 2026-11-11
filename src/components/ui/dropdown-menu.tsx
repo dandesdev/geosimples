@@ -4,9 +4,61 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+/** Opens or closes the menu the trigger belongs to. */
+const ToggleContext = React.createContext<(() => void) | null>(null)
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
+/**
+ * Radix opens a menu when its trigger is pressed. Under a finger that is too
+ * soon: a swipe that scrolls the page starts with a press, and it opened the
+ * menu of whatever button it began on. So a touch opens the menu on the tap
+ * (the click) instead, which a scroll never becomes. The root keeps the open
+ * state here so the trigger can do that.
+ */
+function DropdownMenu({
+  open: controlled,
+  defaultOpen = false,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  const [own, setOwn] = React.useState(defaultOpen)
+  const open = controlled ?? own
+  const change = (next: boolean) => {
+    setOwn(next)
+    onOpenChange?.(next)
+  }
+  return (
+    <ToggleContext.Provider value={() => change(!open)}>
+      <DropdownMenuPrimitive.Root open={open} onOpenChange={change} {...props} />
+    </ToggleContext.Provider>
+  )
+}
+
+const DropdownMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(({ onPointerDown, onClick, ...props }, ref) => {
+  const toggle = React.useContext(ToggleContext)
+  const touched = React.useRef(false)
+  return (
+    <DropdownMenuPrimitive.Trigger
+      ref={ref}
+      onPointerDown={(e) => {
+        onPointerDown?.(e)
+        touched.current = e.pointerType === "touch"
+        // Radix skips its own handler, which would open the menu now.
+        if (touched.current) e.preventDefault()
+      }}
+      onClick={(e) => {
+        onClick?.(e)
+        if (!touched.current) return
+        touched.current = false
+        if (!e.defaultPrevented) toggle?.()
+      }}
+      {...props}
+    />
+  )
+})
+DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 

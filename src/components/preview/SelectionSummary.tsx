@@ -25,9 +25,10 @@ const TOUCH_HINTS = {
 
 /**
  * What is selected, or how to select. Over the bottom of the preview on wider
- * screens; below it on phones, where it would cover the figure.
+ * screens; below it on phones, where it would cover the figure ("tools": under
+ * the phone layout's modes, which it explains).
  */
-export function SelectionSummary({ placement }: { placement: "overlay" | "overlay-top" | "below" }) {
+export function SelectionSummary({ placement }: { placement: "overlay" | "overlay-top" | "below" | "tools" }) {
   const doc = useFigureStore((s) => s.doc);
   const selection = useFigureStore((s) => s.selection);
   const mode = useFigureStore((s) => s.mode);
@@ -53,10 +54,13 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "overla
     <p
       aria-live="polite"
       className={cn(
-        placement === "below"
-          ? "-mt-1.5 px-1 text-xs text-muted-foreground"
+        placement === "below" || placement === "tools"
+          ? "px-1 text-xs text-muted-foreground"
           : "pointer-events-none absolute left-2 right-14 truncate rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground",
         // The pro layout's point input slides up from the bottom, so the hint goes on top.
+        placement === "below" && "-mt-1.5",
+        // Two lines always, so the tools below don't jump when the hint changes.
+        placement === "tools" && "min-h-8",
         placement === "overlay" && "bottom-2",
         // On top, it stops short of the pro layout's buttons at the top right.
         placement === "overlay-top" && "right-44 top-2",

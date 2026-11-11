@@ -22,12 +22,17 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
   dimmed?: boolean;
   /** The action can run with the current selection: a small dot says so. */
   ready?: boolean;
+  /**
+   * A short name shown under the icon, which makes the button a tile as wide
+   * as its cell: the phone layout's tools, where there is no hover to read a tooltip.
+   */
+  text?: string;
   children: ReactNode;
 }
 
 /** A square toolbar button with a tooltip. The label doubles as its accessible name. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, hint, shortcut, active, unavailable, dimmed, ready, className, children, onClick, ...props },
+  { label, hint, shortcut, active, unavailable, dimmed, ready, text, className, children, onClick, ...props },
   ref,
 ) {
   const [hovered, setHovered] = useState(false);
@@ -42,7 +47,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   };
 
   return (
-    <Tooltip open={hovered || pinned} onOpenChange={setHovered}>
+    // A tile already says what it is, and on a phone a tooltip left open by the focus covers the figure:
+    // it shows only to say why the action can't run.
+    <Tooltip open={pinned || (hovered && text === undefined)} onOpenChange={setHovered}>
       <TooltipTrigger asChild>
         <button
           ref={ref}
@@ -51,7 +58,10 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
           aria-pressed={active}
           aria-disabled={unavailable ? true : undefined}
           className={cn(
-            "relative grid h-9 w-9 shrink-0 place-items-center rounded-md text-foreground transition-colors hover:bg-muted hover:text-primary disabled:pointer-events-none disabled:opacity-35 [&_svg]:h-5 [&_svg]:w-5",
+            "relative text-foreground transition-colors hover:bg-muted hover:text-primary disabled:pointer-events-none disabled:opacity-35 [&_svg]:h-5 [&_svg]:w-5",
+            text === undefined
+              ? "grid h-9 w-9 shrink-0 place-items-center rounded-md"
+              : "flex h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-lg border bg-card px-1 text-[11px] font-medium leading-none [&_svg]:shrink-0",
             active && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
             (unavailable || dimmed) && "text-muted-foreground/60 hover:text-muted-foreground",
             className,
@@ -67,8 +77,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
           {...props}
         >
           {children}
+          {text !== undefined && <span className="max-w-full truncate">{text}</span>}
           {ready && !unavailable && (
-            <span aria-hidden="true" className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" />
+            <span
+              aria-hidden="true"
+              className={cn("absolute h-1.5 w-1.5 rounded-full bg-primary", text === undefined ? "bottom-1 right-1" : "right-1.5 top-1.5")}
+            />
           )}
         </button>
       </TooltipTrigger>

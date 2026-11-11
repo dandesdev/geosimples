@@ -13,9 +13,10 @@ const HOLD_MS = 500;
 /**
  * What pressing and dragging in the preview does, and whether clicks add to
  * the selection. Figura rápida shows when the profile turns it on, or while
- * it is in use after holding Adicionar pontos.
+ * it is in use after holding Adicionar pontos. `tiles`: the phone layout,
+ * a row of named tiles as wide as the screen.
  */
-export function ModeSwitch({ vertical = false }: { vertical?: boolean }) {
+export function ModeSwitch({ vertical = false, tiles = false }: { vertical?: boolean; tiles?: boolean }) {
   const mode = useFigureStore((s) => s.mode);
   const setMode = useFigureStore((s) => s.setMode);
   const multiSelect = useFigureStore((s) => s.multiSelect);
@@ -40,12 +41,17 @@ export function ModeSwitch({ vertical = false }: { vertical?: boolean }) {
       <div
         role="group"
         aria-label="Ao clicar ou arrastar na prévia"
-        className={cn("flex shrink-0 gap-0.5 rounded-md bg-muted/60 p-0.5", vertical && "flex-col")}
+        className={cn(
+          "flex gap-0.5",
+          tiles ? "min-w-0 flex-1 gap-1.5" : "shrink-0 rounded-md bg-muted/60 p-0.5",
+          vertical && "flex-col",
+        )}
       >
         {shown.map((m) => (
           <IconButton
             key={m.mode}
             label={m.label}
+            text={tiles ? m.short : undefined}
             hint={m.hint}
             shortcut={m.action}
             active={mode === m.mode}
@@ -76,6 +82,9 @@ export function ModeSwitch({ vertical = false }: { vertical?: boolean }) {
         hint="Cliques e toques somam à seleção em vez de trocá-la, como segurar Shift."
         shortcut="toggleMultiSelect"
         active={multiSelect}
+        text={tiles ? "Vários" : undefined}
+        // As wide as one of the modes beside it.
+        className={tiles ? "w-1/5 shrink-0" : undefined}
         onClick={() => setMultiSelect(!multiSelect)}
       >
         <CheckCheck />

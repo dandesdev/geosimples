@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useCoarsePointer } from "@/lib/useMediaQuery";
+import { useCoarsePointer, useRoomyPreview } from "@/lib/useMediaQuery";
 import { ShortcutKeys } from "@/components/ShortcutKeys";
 import { usePanelStore } from "@/store/panelStore";
 import { ACTION_LABELS, type ActionId } from "@/store/prefsStore";
@@ -27,6 +27,8 @@ const HELP_ACTIONS: ActionId[] = [
 
 export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const touch = useCoarsePointer();
+  /** The phone layout has the tools below the preview. */
+  const phone = !useRoomyPreview();
   const welcomeHidden = usePanelStore((s) => s.welcomeHidden);
   const showWelcome = usePanelStore((s) => s.setWelcomeHidden);
   return (
@@ -48,7 +50,7 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           {touch ? (
             <li>
               <b>Seleção.</b> Toque num objeto da prévia, ou arraste uma caixa em volta deles. Para somar à seleção,
-              ligue Seleção múltipla na barra. A ordem importa: os números verdes mostram a ordem dos pontos
+              ligue {phone ? "Vários, abaixo da prévia" : "Seleção múltipla na barra"}. A ordem importa: os números verdes mostram a ordem dos pontos
               selecionados. Dois dedos movem e aproximam a vista.
             </li>
           ) : (
@@ -59,7 +61,7 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             </li>
           )}
           <li>
-            <b>Construir.</b> Com pontos selecionados, use a barra acima da prévia: ligar pontos, marcar ângulo (A, B, C
+            <b>Construir.</b> Com pontos selecionados, use {phone ? "os botões abaixo da prévia" : "a barra acima da prévia"}: ligar pontos, marcar ângulo (A, B, C
             marca o ângulo em B), polígono e circunferência. Em Construções ficam ponto médio, altura, projeção
             ortogonal, mediana, bissetriz, mediatriz e interseção. O que é construído acompanha os pontos quando você os move.
           </li>
