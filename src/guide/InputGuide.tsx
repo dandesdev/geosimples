@@ -1,25 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, RotateCcw } from "lucide-react";
 import {
   addAxes,
   addNumberLine,
   applyInput,
-  buildScene,
   emptyDoc,
   encodeShareToken,
-  paintScene,
-  paperColor,
   parseInput,
-  sceneMarkup,
   shareUrl,
   type FigureDoc,
   type InputContext,
 } from "@geosimples/core/figure";
-import { PreviewGrid } from "@/components/preview/PreviewGrid";
+import { FigureSnapshot } from "@/components/preview/FigureSnapshot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fitView } from "@/lib/previewView";
-import { useApplyTheme, usePreviewPaper } from "@/lib/theme";
+import { useApplyTheme } from "@/lib/theme";
 import { useActivePrefs } from "@/store/useActivePrefs";
 
 /** One live example: lines typed in the bar, one after the other, over an optional starting figure. */
@@ -263,45 +258,15 @@ function Example({ sample }: { sample: Sample }) {
   );
 }
 
-/** The figure's shape in the guide: a little wider than tall, as a preview usually is. */
-const ASPECT = 3 / 2;
-
 /**
  * The figure as the editor's preview shows it, not as it is exported: on the
- * theme's paper, over the grid when the profile shows it, fitted the same way.
+ * theme's paper, over the grid when the profile shows it.
  */
 function GuideFigure({ doc }: { doc: FigureDoc }) {
-  const paper = usePreviewPaper();
   const showGrid = useActivePrefs().behavior.showGrid;
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(480);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(1, entry.contentRect.width)));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  const scene = useMemo(() => buildScene(doc), [doc]);
-  const markup = useMemo(() => sceneMarkup(paintScene(scene, paper)), [scene, paper]);
-  // The fitted view, widened or heightened to the box's shape so the grid reaches every edge.
-  const fit = fitView(scene.box, scene.k);
-  const w = Math.max(fit.w, fit.h * ASPECT);
-  const h = w / ASPECT;
-  const vb = { x: fit.x - (w - fit.w) / 2, y: fit.y - (h - fit.h) / 2, w, h };
   return (
-    <div ref={ref} data-testid="guide-figure" className="aspect-[3/2] w-full border-t">
-      <svg
-        className="block h-full w-full"
-        // The paper's color comes from core, which also colors the figure on it.
-        style={{ backgroundColor: paperColor(paper) }}
-        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-        role="img"
-        aria-label="Figura do exemplo"
-      >
-        {showGrid && <PreviewGrid ppu={{ x: scene.kx, y: scene.ky }} vb={vb} unitsPerPx={vb.w / width} paper={paper} />}
-        <g dangerouslySetInnerHTML={{ __html: markup }} />
-      </svg>
+    <div data-testid="guide-figure" className="border-t">
+      <FigureSnapshot doc={doc} grid={showGrid} label="Figura do exemplo" className="aspect-[3/2] w-full" />
     </div>
   );
 }

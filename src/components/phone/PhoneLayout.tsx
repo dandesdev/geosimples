@@ -69,13 +69,13 @@ function PhoneNav() {
   const setHidden = usePanelStore((s) => s.setHintsHidden);
   return (
     <div role="toolbar" aria-label="Ações da figura" className="flex flex-col gap-1">
-      <div className="flex items-center gap-1">
+      <div className="flex items-stretch gap-1">
         <ModeSwitch tiles />
         <IconButton
           label={hidden ? "Mostrar dicas" : "Esconder dicas"}
           hint={hidden ? "A dica do modo e o que está selecionado voltam para baixo dos modos." : "Esconde a dica e sobe o que está embaixo."}
           aria-expanded={!hidden}
-          className="h-12 w-8 shrink-0 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4"
+          className="h-auto w-8 shrink-0 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4"
           onClick={() => setHidden(!hidden)}
         >
           {hidden ? <ChevronDown /> : <ChevronUp />}

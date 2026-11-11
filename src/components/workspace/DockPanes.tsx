@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { FigureBar } from "@/components/figures/FigureBar";
+import { OpenFigureSnapshot } from "@/components/figures/OpenFigureSnapshot";
 import { Formatting } from "@/components/panel/Formatting";
 import { LabelTools } from "@/components/panel/LabelTools";
 import { Properties } from "@/components/panel/Properties";
@@ -138,7 +139,8 @@ export function ReadyPane() {
 export function FigurePane() {
   return (
     <Pane id="figure">
-      <FigureBar />
+      <FigureBar bordered={false} />
+      <OpenFigureSnapshot />
     </Pane>
   );
 }

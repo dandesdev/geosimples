@@ -10,8 +10,11 @@ import { MODES } from "./tools";
 const HOLD_MS = 500;
 
 
-/** The phone layout's tiles: small squares with the name under the icon. */
-const TILE = "size-12 shrink px-0.5 text-[10px] tracking-tight [&_svg]:h-[18px] [&_svg]:w-[18px]";
+/**
+ * The phone layout's tiles: squares with the name under the icon, sharing the
+ * row's width equally, up to a size where they stop growing taller.
+ */
+const TILE = "aspect-square h-auto max-h-16 min-w-0 flex-1 basis-0 px-0.5 text-[10px] tracking-tight [&_svg]:h-[18px] [&_svg]:w-[18px]";
 
 /**
  * What pressing and dragging in the preview does, and whether clicks add to
@@ -46,9 +49,11 @@ export function ModeSwitch({ vertical = false, tiles = false }: { vertical?: boo
         aria-label="Ao clicar ou arrastar na prévia"
         className={cn(
           "flex gap-0.5",
-          tiles ? "min-w-0 gap-1" : "shrink-0 rounded-md bg-muted/60 p-0.5",
+          tiles ? "min-w-0 items-start gap-1" : "shrink-0 rounded-md bg-muted/60 p-0.5",
           vertical && "flex-col",
         )}
+        // Tiles: one share of the row per mode, plus its own gaps, so each mode is exactly as wide as Vários.
+        style={tiles ? { flex: `${shown.length} 1 ${(shown.length - 1) * 0.25}rem` } : undefined}
       >
         {shown.map((m) => (
           <IconButton
