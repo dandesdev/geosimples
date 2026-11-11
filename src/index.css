@@ -149,12 +149,6 @@
   --phone-preview: max(40svh, 15rem);
 }
 
-/* While that preview is pinned on top, a field that gets the focus scrolls to below it, not under it. */
-@media (max-width: 639.98px) and (min-height: 500px) {
-  html {
-    scroll-padding-top: calc(var(--phone-preview) + 0.5rem);
-  }
-}
 
 body {
   background-color: var(--background);

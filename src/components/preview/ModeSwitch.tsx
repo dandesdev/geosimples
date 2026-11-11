@@ -77,6 +77,8 @@ export function ModeSwitch({ vertical = false, tiles = false }: { vertical?: boo
           </IconButton>
         ))}
       </div>
+      {/* Vários isn't one of the modes: it adds to whichever is on. */}
+      {tiles && <div aria-hidden="true" className="mx-0.5 w-px shrink-0 self-stretch rounded-full bg-border" />}
       <IconButton
         label="Seleção múltipla"
         hint="Cliques e toques somam à seleção em vez de trocá-la, como segurar Shift."

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { LabelScheme } from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { actions } from "@/lib/actions";
 import { AUTO_LABEL, NUMERIC_SCHEMES, toggleKind } from "@/lib/autoLabel";
 import { useFigureStore } from "@/store/figureStore";
@@ -87,46 +86,11 @@ function AutoLabelTool() {
   );
 }
 
-function FreeTextTool() {
-  const [text, setText] = useState("");
-  const insert = () => {
-    if (actions.addText(text)) setText("");
-  };
-  return (
-    <Section title="Texto livre">
-      <p className="mb-1 text-xs text-muted-foreground">
-        Um texto solto, como "Figura 1" ou "não está em escala". Ele entra abaixo da figura; arraste no modo Mover
-        pontos. Na barra de entrada também dá: <code>"Figura 1"@(2;-1)</code>.
-      </p>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          insert();
-        }}
-      >
-        <Input
-          value={text}
-          maxLength={200}
-          placeholder="Ex.: Figura 1"
-          aria-label="Texto livre"
-          onChange={(e) => setText(e.target.value)}
-          className="h-8 min-w-0 flex-1 bg-background px-2 sm:text-sm"
-        />
-        <Button type="submit" size="sm" disabled={text.trim() === ""}>
-          Inserir
-        </Button>
-      </form>
-    </Section>
-  );
-}
-
-/** Rótulos e textos: labels for many objects at once, and free text. */
+/** Rótulos: labels for many objects at once. Free text is in Inserir and the input bar (texto: …). */
 export function LabelTools() {
   return (
     <div className="space-y-3">
       <AutoLabelTool />
-      <FreeTextTool />
     </div>
   );
 }

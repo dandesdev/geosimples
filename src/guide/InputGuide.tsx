@@ -62,8 +62,16 @@ const TOPICS: Topic[] = [
   {
     id: "textos",
     title: "Textos",
-    intro: <>Escreva entre aspas e diga onde o texto fica com @.</>,
-    samples: [{ caption: "Um título embaixo da figura.", lines: ["A=(0;0)--B=(4;0)--C=(0;3)--", '"Figura 1"@(2;-1)'] }],
+    intro: (
+      <>
+        Comece com <code>texto:</code>, e o texto entra centrado embaixo da figura. Para escolher o lugar, escreva entre aspas e diga onde
+        fica com @.
+      </>
+    ),
+    samples: [
+      { caption: "Embaixo da figura, sem pensar no lugar.", lines: ["A=(0;0)--B=(4;0)--C=(0;3)--", "texto: Figura 1"] },
+      { caption: "Num lugar escolhido.", lines: ["A=(0;0)--B=(4;0)--C=(0;3)--", '"não está em escala"@(2;-1)'] },
+    ],
   },
   {
     id: "funcoes",

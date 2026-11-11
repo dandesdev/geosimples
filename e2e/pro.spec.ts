@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(pointInput(page)).toBeVisible();
   await page.getByRole("button", { name: "Layout profissional" }).click();
-  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Modo" })).toBeVisible();
 });
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -43,7 +43,7 @@ const at = (b: Box, fx: number, fy: number) => ({ x: b.x + b.width * fx, y: b.y 
 test("pro layout: hidden point input and the right-click menu", async ({ page }) => {
   const viewport = page.viewportSize()!;
   // Toolbars down the left, panels down the right.
-  expect((await box(page.getByRole("toolbar", { name: "Ferramentas" }))).x).toBeLessThan(10);
+  expect((await box(page.getByRole("toolbar", { name: "Modo" }))).x).toBeLessThan(10);
   expect((await box(panel(page, "properties"))).x).toBeGreaterThan(viewport.width / 2);
 
   // The input hides until / is pressed.
@@ -285,44 +285,45 @@ test("pro layout: a panel docks above or below another, and the overlay shows ex
 test("pro layout: dropped on the preview a panel floats there, and docks back beside another", async ({ page }) => {
   const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
   const spot = at(preview, 0.4, 0.4);
-  await drag(page, tab(page, "Rótulos e textos"), spot, async () => {
+  await drag(page, tab(page, "Rótulos"), spot, async () => {
     await expect(page.locator("[data-float-here]")).toBeVisible();
   });
-  await expect(page.locator(".dv-resize-container").getByRole("tab", { name: "Rótulos e textos" })).toBeVisible();
+  await expect(page.locator(".dv-resize-container").getByRole("tab", { name: "Rótulos" })).toBeVisible();
   const floating = await box(panel(page, "labels"));
   expect(Math.abs(floating.x - (spot.x - 40))).toBeLessThan(60);
   // Formatação stayed where it was.
-  expect((await box(panel(page, "formatting"))).x).toBeGreaterThan(preview.x + preview.width - 10);
+  expect((await box(tab(page, "Formatação"))).x).toBeGreaterThan(preview.x + preview.width - 10);
   // Minimized, a floating panel keeps only its tab strip.
-  await group(page, "Rótulos e textos").getByRole("button", { name: "Minimizar" }).click();
-  await expect.poll(async () => (await box(group(page, "Rótulos e textos"))).height).toBeLessThan(40);
-  await group(page, "Rótulos e textos").getByRole("button", { name: "Expandir" }).click();
-  await expect.poll(async () => (await box(group(page, "Rótulos e textos"))).height).toBeGreaterThan(200);
+  await group(page, "Rótulos").getByRole("button", { name: "Minimizar" }).click();
+  await expect.poll(async () => (await box(group(page, "Rótulos"))).height).toBeLessThan(40);
+  await group(page, "Rótulos").getByRole("button", { name: "Expandir" }).click();
+  await expect.poll(async () => (await box(group(page, "Rótulos"))).height).toBeGreaterThan(200);
 
   // Back into the column, under Propriedades: the first thing one tries.
-  await drag(page, tab(page, "Rótulos e textos"), at(await box(group(page, "Propriedades")), 0.5, 0.9));
+  await drag(page, tab(page, "Rótulos"), at(await box(group(page, "Propriedades")), 0.5, 0.96));
   await expect(page.locator(".dv-resize-container")).toHaveCount(0);
   const labels = await box(panel(page, "labels"));
-  const props = await box(panel(page, "properties"));
+  // Formatação took the front of the group Rótulos left: the group's box, whichever tab is open.
+  const props = await box(group(page, "Propriedades"));
   expect(Math.abs(labels.x - props.x)).toBeLessThanOrEqual(1);
   expect(labels.y).toBeGreaterThan(props.y);
 
   // Onto another panel's tabs it joins them.
-  await drag(page, tab(page, "Rótulos e textos"), at(await box(tab(page, "Figura")), 1.6, 0.5));
-  expect(await group(page, "Rótulos e textos").evaluate((g, other) => g === other, await group(page, "Figura").elementHandle()));
+  await drag(page, tab(page, "Rótulos"), at(await box(tab(page, "Figura")), 1.6, 0.5));
+  expect(await group(page, "Rótulos").evaluate((g, other) => g === other, await group(page, "Figura").elementHandle()));
 });
 
 test("pro layout: a toolbar docks across the top, and the arrangement survives a reload", async ({ page }) => {
-  const tools = page.getByRole("toolbar", { name: "Ferramentas" });
+  const tools = page.getByRole("toolbar", { name: "Janelas e ajuda" });
   await expect(tools).toHaveAttribute("aria-orientation", "vertical");
   const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
-  await drag(page, page.getByLabel("Arrastar Ferramentas"), { x: preview.x + preview.width / 2, y: preview.y + 6 });
+  await drag(page, page.getByLabel("Arrastar Janelas e ajuda"), { x: preview.x + preview.width / 2, y: preview.y + 6 });
   await expect(tools).toHaveAttribute("aria-orientation", "horizontal");
   const across = await box(tools);
-  expect(across.width).toBeGreaterThan(across.height * 4);
+  expect(across.width).toBeGreaterThan(across.height * 3);
   expect(across.y).toBeLessThan(20);
   // Its menus open below it now.
-  await tools.getByRole("button", { name: "Construções" }).click();
+  await tools.getByRole("button", { name: "Janelas" }).click();
   const menu = await box(page.getByRole("menu"));
   expect(menu.y).toBeGreaterThanOrEqual(across.y + across.height - 4);
   await page.keyboard.press("Escape");
@@ -344,7 +345,7 @@ test("pro layout: panels close, come back from Janelas, and the layout resets", 
   // The group's own menu docks it too.
   await group(page, "Propriedades").getByRole("button", { name: "Opções da janela" }).click();
   await page.getByRole("menuitem", { name: "Encaixar à esquerda" }).click();
-  expect((await box(panel(page, "properties"))).x).toBeLessThan(10);
+  expect((await box(group(page, "Propriedades"))).x).toBeLessThan(10);
 
   await page.getByRole("button", { name: "Janelas" }).click();
   await page.getByRole("menuitem", { name: "Restaurar janelas" }).click();
@@ -376,19 +377,19 @@ test("pro layout: toolbars sharing a column fit their buttons when one leaves or
       return Math.abs(groupEl.getBoundingClientRect().height - (bar.scrollHeight + 12));
     });
   await expect.poll(() => slack("Arquivo e histórico")).toBeLessThanOrEqual(2);
-  await expect.poll(() => slack("Ferramentas")).toBeLessThanOrEqual(2);
+  await expect.poll(() => slack("Modo")).toBeLessThanOrEqual(2);
 
   // Arquivo e histórico floats away: Ferramentas, now first in the column, still fits its buttons.
   const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(preview, 0.5, 0.5));
   await expect(page.locator(".dv-resize-container").getByRole("toolbar", { name: "Arquivo e histórico" })).toBeVisible();
-  await expect.poll(() => slack("Ferramentas")).toBeLessThanOrEqual(2);
+  await expect.poll(() => slack("Modo")).toBeLessThanOrEqual(2);
 
   // Back under Ferramentas: Ferramentas and Arquivo fit, Modo takes the rest.
-  const tools = await box(page.getByRole("toolbar", { name: "Ferramentas", exact: true }).locator("xpath=ancestor::*[contains(@class,'dv-groupview')][1]"));
+  const tools = await box(page.getByRole("toolbar", { name: "Modo", exact: true }).locator("xpath=ancestor::*[contains(@class,'dv-groupview')][1]"));
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(tools, 0.5, 0.95));
   await expect(page.locator(".dv-resize-container")).toHaveCount(0);
-  await expect.poll(() => slack("Ferramentas")).toBeLessThanOrEqual(2);
+  await expect.poll(() => slack("Modo")).toBeLessThanOrEqual(2);
   await expect.poll(() => slack("Arquivo e histórico")).toBeLessThanOrEqual(2);
   const file = await box(page.getByRole("toolbar", { name: "Arquivo e histórico" }));
   expect(file.x).toBeLessThan(10);
@@ -419,19 +420,22 @@ async function dragSplitter(page: Page, bar: Locator, edge: "bottom" | "right", 
   await page.mouse.up();
 }
 
-test("pro layout: toolbars keep every button in view, and the app buttons float over the preview", async ({ page }) => {
+test("pro layout: toolbars keep every button in view, the app buttons at the bottom and Inserir over the preview", async ({ page }) => {
   // Three toolbars, each one kind of button: no dividers inside.
   await expect(page.locator("[data-toolbar]")).toHaveCount(3);
   await expect(page.locator("[data-toolbar] .bg-border")).toHaveCount(0);
-  // Janelas, theme, settings and help sit at the preview's top right.
+  // Janelas, theme, settings and help at the bottom of the left column; Inserir floats at the preview's top right.
   const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
   const app = await box(page.getByRole("toolbar", { name: "Janelas e ajuda" }));
-  expect(app.x + app.width).toBeGreaterThan(preview.x + preview.width - 20);
-  expect(app.y).toBeLessThan(preview.y + 20);
+  expect(app.x).toBeLessThan(10);
+  expect(app.y + app.height).toBeGreaterThan(page.viewportSize()!.height - 20);
+  const insert = await box(page.getByRole("button", { name: "Inserir", exact: true }));
+  expect(insert.x + insert.width).toBeGreaterThan(preview.x + preview.width - 30);
+  expect(insert.y).toBeLessThan(preview.y + 30);
 
   // Splitters between toolbars in a column move nothing: no toolbar shrinks below its buttons or grows over the others.
   const file = page.getByRole("toolbar", { name: "Arquivo e histórico" });
-  const tools = page.getByRole("toolbar", { name: "Ferramentas" });
+  const tools = page.getByRole("toolbar", { name: "Modo" });
   const before = await box(tools);
   for (const [bar, by] of [[file, -80], [file, 120], [tools, -100], [tools, 200]] as const) {
     await dragSplitter(page, bar, "bottom", by);
@@ -440,7 +444,7 @@ test("pro layout: toolbars keep every button in view, and the app buttons float 
   expect((await box(tools)).y).toBeCloseTo(before.y, 0);
 
   // Across the top, side by side: the splitter between them can't hide buttons either.
-  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(preview, 0.5, 0.01));
+  await drag(page, page.getByLabel("Arrastar Modo"), at(preview, 0.5, 0.01));
   await expect(tools).toHaveAttribute("aria-orientation", "horizontal");
   const across = await box(tools);
   // Its group spans the whole row, so this spot stays in the group's left drop zone however many buttons it has.
@@ -475,10 +479,10 @@ test("pro layout: the right panels keep their width when toolbars move, and only
   // Toolbars moved around: onto the preview's left part, across its top, to the window's left edge,
   // floating, and along the bottom. The dock used to hand the freed width to the right panels.
   let p = await preview();
-  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(p, 0.03, 0.5));
+  await drag(page, page.getByLabel("Arrastar Modo"), at(p, 0.03, 0.5));
   p = await preview();
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(p, 0.5, 0.02));
-  await drag(page, page.getByLabel("Arrastar Ferramentas"), { x: 3, y: 400 });
+  await drag(page, page.getByLabel("Arrastar Modo"), { x: 3, y: 400 });
   p = await preview();
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), at(p, 0.5, 0.5));
   await drag(page, page.getByLabel("Arrastar Arquivo e histórico"), { x: 600, y: page.viewportSize()!.height - 3 });
@@ -566,9 +570,9 @@ test("pro layout: with a toolbar along the bottom, a lone panel group still take
     return { x: g.x + g.width * 0.6, y: g.y + 15 };
   };
   // Every panel but Propriedades joins it as a tab: one group, not as tall as the window, beside the preview.
-  for (const title of ["Figura", "Formatação", "Rótulos e textos"]) await drag(page, tab(page, title), await strip());
-  // Rótulos e textos out again, below it.
-  await drag(page, tab(page, "Rótulos e textos"), at(await box(group(page, "Propriedades")), 0.5, 0.92));
+  for (const title of ["Figura", "Formatação", "Rótulos"]) await drag(page, tab(page, title), await strip());
+  // Rótulos out again, below it.
+  await drag(page, tab(page, "Rótulos"), at(await box(group(page, "Propriedades")), 0.5, 0.92));
   const lone = await box(group(page, "Propriedades"));
   const labels = await box(panel(page, "labels"));
   expect(Math.abs(labels.x - lone.x)).toBeLessThanOrEqual(1);
@@ -576,8 +580,8 @@ test("pro layout: with a toolbar along the bottom, a lone panel group still take
 });
 
 test("pro layout: two full-height panel columns on both sides of the preview still take panels above and below", async ({ page }) => {
-  // Figura and Rótulos closed, Formatação joins Propriedades: the right column is one group, as tall as the window.
-  for (const title of ["Figura", "Rótulos e textos"]) {
+  // Everything but Propriedades and Formatação closed: the right column is one group, as tall as the window.
+  for (const title of ["Ferramentas", "Figura", "Prontos", "Rótulos"]) {
     await tab(page, title).hover();
     await page.getByRole("button", { name: `Fechar ${title}` }).click();
   }
@@ -589,15 +593,15 @@ test("pro layout: two full-height panel columns on both sides of the preview sti
   const props = await box(group(page, "Propriedades"));
   expect(props.height).toBeGreaterThan(page.viewportSize()!.height - 5);
 
-  // Rótulos e textos back (it opens beside Formatação), then below Propriedades: it stacks.
+  // Rótulos back (it opens beside Formatação), then below Propriedades: it stacks.
   await page.getByRole("button", { name: "Janelas" }).click();
-  await page.getByRole("menuitemcheckbox", { name: "Rótulos e textos" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Rótulos" }).click();
   await page.keyboard.press("Escape");
   // The closing menu blocks the pointer until it is gone.
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
   // Its tab may be cut short in Formatação's narrow strip: grab its start.
-  await drag(page, tab(page, "Rótulos e textos"), at(props, 0.5, 0.92), undefined, 20);
+  await drag(page, tab(page, "Rótulos"), at(props, 0.5, 0.92), undefined, 20);
   const after = await box(group(page, "Propriedades"));
   const labels = await box(panel(page, "labels"));
   expect(Math.abs(labels.x - after.x)).toBeLessThanOrEqual(1);
@@ -607,15 +611,15 @@ test("pro layout: two full-height panel columns on both sides of the preview sti
 test("pro layout: a toolbar between the preview and the panels doesn't widen the panels at each reload", async ({ page }) => {
   const width = async () => Math.round((await box(panel(page, "properties"))).width);
   const p = await box(page.getByRole("region", { name: "Prévia da figura" }));
-  await drag(page, page.getByLabel("Arrastar Ferramentas"), at(p, 0.98, 0.5));
-  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toHaveAttribute("aria-orientation", "vertical");
+  await drag(page, page.getByLabel("Arrastar Modo"), at(p, 0.98, 0.5));
+  await expect(page.getByRole("toolbar", { name: "Modo" })).toHaveAttribute("aria-orientation", "vertical");
   const start = await width();
   for (let i = 0; i < 2; i++) {
     await page.reload();
-    await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Modo" })).toBeVisible();
     await expect.poll(width).toBe(start);
   }
-  expect(Math.round((await box(page.getByRole("toolbar", { name: "Ferramentas" }))).width)).toBeLessThanOrEqual(48);
+  expect(Math.round((await box(page.getByRole("toolbar", { name: "Modo" }))).width)).toBeLessThanOrEqual(48);
 });
 
 test("pro layout: back from the classic layout, toolbars are one button wide again", async ({ page }) => {
@@ -624,6 +628,6 @@ test("pro layout: back from the classic layout, toolbars are one button wide aga
   await page.getByRole("button", { name: "Janelas" }).click();
   await page.getByRole("menuitem", { name: /layout clássico/ }).click();
   await page.getByRole("button", { name: "Layout profissional" }).click();
-  await expect(page.getByRole("toolbar", { name: "Ferramentas" })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Modo" })).toBeVisible();
   await expect.poll(widths).toEqual([48, 48, 48]);
 });

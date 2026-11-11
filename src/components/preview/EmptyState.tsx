@@ -47,7 +47,7 @@ export function EmptyState({ pro = false }: { pro?: boolean }) {
         <code className="my-3 block rounded bg-muted px-3 py-2 font-mono text-foreground">{EXAMPLE}</code>
         {/* Phones show the action bar right above, so this line mostly takes room there. */}
         <p className="mb-4 hidden text-muted-foreground sm:block">
-          Depois selecione os objetos na prévia e use os botões {pro ? "à esquerda, ou o botão direito do mouse," : "acima"}{" "}
+          Depois selecione os objetos na prévia e use o painel Ferramentas {pro ? "à direita, ou o botão direito do mouse," : "ou os botões acima"}{" "}
           para marcar ângulos, preencher o polígono ou criar circunferências.
         </p>
         <div className="mt-1 flex flex-wrap gap-2 sm:mt-0">

@@ -5,6 +5,9 @@ import {
   darkColor,
   dragHandle,
   draggedPoints,
+  circuitEnds,
+  endNear,
+  joinEnds,
   elementHandles,
   figureSpots,
   formatNumber,
@@ -31,7 +34,8 @@ import {
 import { actions } from "@/lib/actions";
 import { useFigureStore } from "@/store/figureStore";
 import { ActionBar } from "./ActionBar";
-import { ZoomBar } from "./ZoomBar";
+import { ZoomBar, type ZoomControls } from "./ZoomBar";
+import { DeleteButton, ExportIconButton, History } from "./ActionBar";
 import { EmptyState } from "./EmptyState";
 import { SelectionSummary } from "./SelectionSummary";
 import { PreviewMenu, type GraphSpot } from "./PreviewMenu";
@@ -89,6 +93,18 @@ type Gesture =
   | { kind: "spent" }
   /** Mover dragging an end of axes, a grid, a number line, a vertical line or a graph. */
   | { kind: "handle"; owner: Id; end: HandleEnd; base: FigureDoc; moved: boolean; x: number; y: number; slop: number };
+
+/** The circuit ends among the points that dragging `ids` moves. */
+function movedEnds(doc: FigureDoc, ids: Id[]): Id[] {
+  const ends = circuitEnds(doc);
+  if (ends.size === 0) return [];
+  const byId = new Map(doc.elements.map((e) => [e.id, e]));
+  const moved = new Set(ids.flatMap((id) => {
+    const el = byId.get(id);
+    return el ? draggedPoints(el, doc) : [];
+  }));
+  return [...moved].filter((id) => ends.has(id));
+}
 
 /** Elements Mover drags: points, texts, shapes by their points, vertical lines and number lines. */
 function movables(doc: FigureDoc): Set<Id> {
@@ -266,6 +282,25 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   useCommand("toggleAutoFit", toggleAutoFit);
 
   /** The grid crossing near `at` (world units), when snapping is on and one is in reach. */
+  /**
+   * The offset that puts one of the dragged circuit ends exactly on another
+   * end within reach, or null. Only ends move: what is dragged keeps its shape.
+   */
+  const endSnap = (base: FigureDoc, ids: Id[], by: Vec): Vec | null => {
+    const ends = movedEnds(base, ids);
+    if (ends.length === 0) return null;
+    const pts = pointMap(base);
+    const reach = ((coarse ? 16 : 10) * unitsPerPx) / ppu.x;
+    const skip = new Set(ends);
+    for (const id of ends) {
+      const p = pts.get(id);
+      if (!p) continue;
+      const near = endNear(base, { x: p.x + by.x, y: p.y + by.y }, reach, skip);
+      if (near) return { x: near.x - p.x, y: near.y - p.y };
+    }
+    return null;
+  };
+
   const crossingNear = (at: Vec): Vec | null => {
     if (!snap) return null;
     const reach = (coarse ? 14 : 8) * unitsPerPx;
@@ -420,6 +455,12 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
         dx = crossing.x - held.x;
         dy = crossing.y - held.y;
       }
+      // An end of a circuit piece or wire near another end lands on it, to join it when let go.
+      const snap = endSnap(g.base, g.ids, { x: dx, y: dy });
+      if (snap) {
+        dx = snap.x;
+        dy = snap.y;
+      }
       useFigureStore.getState().setTransient(moveElements(g.base, g.ids, { x: dx, y: dy }));
     } else if (g.kind === "handle") {
       // A tap jitters: it selects, and only a real drag moves the end.
@@ -490,6 +531,11 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       if (g.owner) store.pick(g.owner, g.additive);
       else if (!g.keys) store.clearSelection();
     } else if (g.kind === "drag") {
+      // Ends left on other ends join them, in the same undo step as the drag.
+      if (g.moved) {
+        const joined = joinEnds(store.doc, movedEnds(g.base, g.ids));
+        if (joined !== store.doc) store.setTransient(joined);
+      }
       store.endTransient();
       setFrozen(null);
       setDragCursor(null);
@@ -530,9 +576,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
           "relative flex flex-col overflow-hidden bg-card",
           pro && "h-full min-h-0 flex-1",
           !pro && !phone && "min-h-[max(55dvh,18rem)] flex-1 rounded-lg border lg:min-h-0",
-          // Flush with the screen's edges, and it stays in view while the page scrolls under it.
-          // A sideways phone is too short for that: there it scrolls away with the page.
-          phone && "z-30 h-(--phone-preview) shrink-0 border-b shadow-sm tall:sticky tall:top-0",
+          // Flush with the screen's edges, as tall as its bottom edge was dragged (PhoneLayout).
+          phone && "h-(--phone-preview) shrink-0 border-b shadow-sm",
         )}
       >
         {!pro && !phone && <ActionBar />}
@@ -605,12 +650,39 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
             {/* In add mode the whole preview is for clicking, and the hint below says how. */}
             {empty && !placing && <EmptyState pro={pro} />}
             {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
+            {phone && <PhoneCorners zoom={zoom} />}
             {roomy && <SelectionSummary placement={pro ? "overlay-top" : "overlay"} />}
           </div>
         </PreviewMenu>
       </section>
       {/* A short pro window has no room to float the hint over the figure. On phones it is among the tools. */}
       {pro && !roomy && <SelectionSummary placement="below" />}
+    </>
+  );
+}
+
+/**
+ * Phones: undo, redo and delete in the preview's bottom left corner, the view
+ * and Exportar in the right one, small, so the tools below keep their room.
+ */
+function PhoneCorners({ zoom }: { zoom: ZoomControls | null }) {
+  const autoFit = useFigureStore((s) => s.settings.autoFit);
+  return (
+    <>
+      <div role="toolbar" aria-label="Ações da figura" className="absolute bottom-2 left-2 flex gap-0.5 rounded-lg border bg-background/95 p-0.5 shadow-sm">
+        <History />
+        <DeleteButton />
+      </div>
+      <div role="toolbar" aria-label="Ações da figura" className="absolute bottom-2 right-2 flex gap-0.5 rounded-lg border bg-background/95 p-0.5 shadow-sm">
+        <ZoomBar
+          placement="corner"
+          autoFit={zoom?.autoFit ?? autoFit}
+          onToggleAutoFit={zoom?.onToggleAutoFit ?? (() => {})}
+          onZoomIn={zoom?.onZoomIn ?? (() => {})}
+          onZoomOut={zoom?.onZoomOut ?? (() => {})}
+        />
+        <ExportIconButton />
+      </div>
     </>
   );
 }

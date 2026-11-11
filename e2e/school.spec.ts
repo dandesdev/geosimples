@@ -107,7 +107,7 @@ test("the symbol buttons type where the caret is", async ({ page }) => {
   const input = pointInput(page);
   await input.fill("região A B");
   await input.press("ArrowLeft");
-  await page.getByRole("button", { name: /Interseção/ }).click();
+  await page.getByRole("button", { name: /Interseção \(ou digite n\)/ }).click();
   await expect(input).toHaveValue("região A ∩B");
 });
 

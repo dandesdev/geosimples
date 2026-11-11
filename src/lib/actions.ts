@@ -3,6 +3,11 @@ import {
   addBasis,
   addCircuitTemplate,
   addComponent,
+  placeComponent,
+  placeWire,
+  fillShapeOperation,
+  setShapeOperation,
+  type ShapeOperation,
   flipComponent,
   setCircuit,
   updateComponent,
@@ -62,6 +67,7 @@ import {
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { emitCommand } from "@/lib/commands";
+import { useInputHint } from "@/store/inputHintStore";
 import { activePrefs, opOptions } from "@/store/prefsStore";
 
 function perform(
@@ -81,11 +87,12 @@ const selectedPoints = (doc: FigureDoc, selection: Id[]) =>
   selectedOfType(doc, selection, "point").map((p) => p.id);
 
 /** Text typed in for the teacher to finish in the input bar, like "y = ". Text already there stays. */
-export const PREFILLS = ["y = ", "x = ", "[", "vetor ", "região ", "A={", "conta ", "fatorar ", "mmc(", "mdc(", "euclides(", "varal ", "sinal ", "quadro ", "modular "];
+export const PREFILLS = ["texto: ", "y = ", "x = ", "[", "vetor ", "região ", "A={", "conta ", "fatorar ", "mmc(", "mdc(", "euclides(", "varal ", "sinal ", "quadro ", "modular "];
 
-function startInput(prefill: string) {
+function startInput(prefill: string, hint?: string) {
   const store = useFigureStore.getState();
   if (store.inputDraft.trim() === "") store.setInputDraft(prefill);
+  useInputHint.getState().setHint(hint ?? null);
   // After the input shows the new text, so the caret lands at its end.
   requestAnimationFrame(() => emitCommand("focusInput"));
 }
@@ -108,10 +115,10 @@ export const actions = {
   freePoints: (ids: Id[]) => perform((doc) => freePoints(doc, ids), "keep"),
 
   /** Starts a graph: "y = " in the input bar, ready for the expression. Text already typed stays. */
-  startGraph: () => startInput("y = "),
+  startGraph: () => startInput("y = ", "Digite a função na forma y = f(x), como y = 3x, ou f(x) = 3x. Enter para desenhar."),
 
   /** Starts a vertical line: "x = " in the input bar, ready for the number. */
-  startVerticalLine: () => startInput("x = "),
+  startVerticalLine: () => startInput("x = ", "Digite onde a reta corta o eixo x, como x = 2."),
 
   /**
    * A point on the selected graph, at a whole x; its x is set in Propriedades.
@@ -155,8 +162,8 @@ export const actions = {
   /** Every result of the board as a gap, or none. */
   allGaps: (id: Id, all: boolean) => perform((doc) => setAllBoardGaps(doc, id, all), "keep"),
 
-  /** Text that starts something typed in the input bar, like "mmc(". */
-  startTyping: (prefill: string) => startInput(prefill),
+  /** Text that starts something typed in the input bar, like "mmc(", with a balloon saying what to type. */
+  startTyping: (prefill: string, hint?: string) => startInput(prefill, hint),
 
   /** An arrow from each selected point to the next. */
   vector: () => perform((doc, sel) => makeVectors(doc, sel, opOptions())),
@@ -166,6 +173,25 @@ export const actions = {
 
   /** A circuit piece between the two selected points. */
   component: (kind: ComponentKind) => perform((doc, sel) => addComponent(doc, sel, kind, opOptions())),
+
+  /**
+   * A piece on its own, under the figure, with no points to pick: selected,
+   * and Mover on, so it can be dragged into place right away.
+   */
+  placeComponent: (kind: ComponentKind) => {
+    if (perform((doc) => placeComponent(doc, kind, opOptions()))) useFigureStore.getState().setMode("move");
+  },
+
+  /** A wire on its own, to drag between two ends. */
+  placeWire: () => {
+    if (perform((doc) => placeWire(doc, opOptions()))) useFigureStore.getState().setMode("move");
+  },
+
+  /** Fills the union, intersection, difference or exclusion of the selected shapes. */
+  shapeOperation: (op: ShapeOperation) => perform((doc, sel) => fillShapeOperation(doc, sel, op, opOptions())),
+
+  /** Changes what a fill between shapes covers. */
+  setShapeOperation: (id: Id, op: ShapeOperation) => perform((doc) => setShapeOperation(doc, id, op), "keep"),
 
   /** A ready-made circuit, right of the figure. */
   circuitTemplate: (template: CircuitTemplate) => perform((doc) => addCircuitTemplate(doc, template, opOptions())),

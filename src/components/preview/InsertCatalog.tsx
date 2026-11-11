@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ComponentType } from "react";
-import { Blend, Calculator, ChartSpline, MoveUpRight, Plus, Search } from "lucide-react";
+import { Blend, Calculator, ChartSpline, MoveUpRight, Plus, Search, Spline, Type } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -12,7 +12,7 @@ import { useCoarsePointer } from "@/lib/useMediaQuery";
 import { useFigureStore } from "@/store/figureStore";
 import { cn } from "@/lib/utils";
 import { BOARD_ITEMS } from "./tools";
-import { COMPONENT_ITEMS, TEMPLATE_ITEMS } from "./circuitItems";
+import { COMPONENT_ITEMS } from "./circuitItems";
 import type { MenuSide } from "./ActionBar";
 
 interface CatalogItem {
@@ -31,7 +31,7 @@ interface CatalogItem {
 /** Things that need no selection. */
 const ALWAYS: Availability = { reason: null, preview: null };
 
-const SECTIONS = ["Pontos", "Gráficos", "Vetores", "Conjuntos", "Circuitos", "Contas e quadros"];
+const SECTIONS = ["Pontos e textos", "Gráficos", "Vetores", "Conjuntos", "Circuitos", "Contas e quadros"];
 
 /** Lowercase and without accents, so "funcao" finds "função". */
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -49,16 +49,26 @@ const BOARD_WORDS: Record<string, string> = {
 };
 
 function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
-  const typing = (prefill: string) => () => actions.startTyping(prefill);
+  const typing = (prefill: string, hint?: string) => () => actions.startTyping(prefill, hint);
   return [
     {
-      section: "Pontos",
+      section: "Pontos e textos",
       Icon: AddPointIcon,
       title: "Pontos…",
       hint: "A=0;0 B=4;0 C=0;3 na barra de entrada. Ou clique na prévia no modo Adicionar pontos.",
       words: "triangulo poligono vertice coordenadas",
       availability: ALWAYS,
       run: typing(""),
+      typing: true,
+    },
+    {
+      section: "Pontos e textos",
+      Icon: Type,
+      title: "Texto livre…",
+      hint: "texto: Figura 1 na barra. Entra embaixo da figura; arraste no modo Mover.",
+      words: "rotulo legenda escala titulo",
+      availability: ALWAYS,
+      run: typing("texto: ", "Digite o texto depois de texto:, como texto: Figura 1"),
       typing: true,
     },
     {
@@ -160,28 +170,26 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
       run: typing("A={"),
       typing: true,
     },
-    ...TEMPLATE_ITEMS.map(
-      (item): CatalogItem => ({
-        section: "Circuitos",
-        Icon: item.Icon,
-        title: item.title,
-        hint: item.hint,
-        words: "eletrico eletricidade fisica resistor gerador corrente tensao",
-        availability: ALWAYS,
-        run: () => actions.circuitTemplate(item.template),
-      }),
-    ),
     ...COMPONENT_ITEMS.map(
       (item): CatalogItem => ({
         section: "Circuitos",
         Icon: item.Icon,
-        title: `${item.title} entre pontos`,
-        hint: `Selecione dois pontos. ${item.hint}`,
-        words: "eletrico eletricidade fisica componente",
-        availability: av[`component-${item.kind}`],
-        run: () => actions.component(item.kind),
+        title: item.title,
+        hint: `Entra embaixo da figura; arraste até as pontas se ligarem. ${item.hint}`,
+        words: "eletrico eletricidade fisica componente circuito",
+        availability: ALWAYS,
+        run: () => actions.placeComponent(item.kind),
       }),
     ),
+    {
+      section: "Circuitos",
+      Icon: Spline,
+      title: "Fio",
+      hint: "Liga pontas distantes: arraste cada ponta até a de um componente.",
+      words: "eletrico ligacao condutor",
+      availability: ALWAYS,
+      run: actions.placeWire,
+    },
     ...BOARD_ITEMS.flatMap((item): CatalogItem[] =>
       item === null
         ? []
@@ -234,7 +242,7 @@ export function InsertCatalog({
   side?: MenuSide;
   compact?: boolean;
   wideLabel?: boolean;
-  variant?: "popover" | "screen";
+  variant?: "popover" | "screen" | "floating";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -341,9 +349,12 @@ export function InsertCatalog({
       <Dialog open={open} onOpenChange={close}>
         <DialogTrigger asChild>
           {/* As tall as the input bar beside it, and the one filled button of the row. */}
-          <Button className="h-[3.125rem] shrink-0 rounded-lg px-3.5 [&_svg]:size-5" title="Inserir gráficos, vetores, conjuntos, contas e quadros">
+          <Button
+            className="h-[3.125rem] w-[3.125rem] shrink-0 rounded-lg p-0 [&_svg]:size-6"
+            aria-label="Inserir"
+            title="Inserir pontos, textos, gráficos, vetores, conjuntos, circuitos e contas"
+          >
             <Plus />
-            Inserir
           </Button>
         </DialogTrigger>
         <DialogContent
@@ -365,7 +376,17 @@ export function InsertCatalog({
   return (
     <Popover open={open} onOpenChange={close}>
       <PopoverTrigger asChild>
-        {compact ? (
+        {variant === "floating" ? (
+          // The first thing to do in an empty figure: big, filled, over the preview's corner.
+          <Button
+            className="h-11 shrink-0 rounded-full px-5 text-sm shadow-lg [&_svg]:size-5"
+            aria-label="Inserir"
+            title="Inserir pontos, textos, gráficos, vetores, conjuntos, circuitos e contas"
+          >
+            <Plus />
+            Inserir
+          </Button>
+        ) : compact ? (
           <IconButton label="Inserir" hint="Gráficos, vetores, conjuntos, contas e quadros." shortcut="insert" active={open}>
             <Plus />
           </IconButton>
@@ -379,7 +400,7 @@ export function InsertCatalog({
       <PopoverContent
         ref={content}
         side={side}
-        align="start"
+        align={variant === "floating" ? "end" : "start"}
         data-catalog=""
         aria-label="Inserir"
         className="flex max-h-(--radix-popover-content-available-height) w-[min(60rem,calc(100vw-1rem))] flex-col p-0"

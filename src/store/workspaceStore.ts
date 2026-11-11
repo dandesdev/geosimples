@@ -8,27 +8,29 @@ export type Theme = "light" | "dark" | "system";
 export type ExportColors = "print" | "theme";
 
 /** The pro layout's panels, in their default order down the right side. */
-export const PANEL_IDS = ["figure", "properties", "formatting", "labels"] as const;
+export const PANEL_IDS = ["tools", "figure", "ready", "properties", "formatting", "labels"] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 
 export const PANEL_TITLES: Record<PanelId, string> = {
+  tools: "Ferramentas",
   figure: "Figura",
+  ready: "Prontos",
   properties: "Propriedades",
   formatting: "Formatação",
-  labels: "Rótulos e textos",
+  labels: "Rótulos",
 };
 
 /**
  * The pro layout's toolbars: the tool column, in pieces that dock and float on
  * their own. Each is one kind of button, so none needs a divider inside.
  */
-export const TOOLBAR_IDS = ["tools-file", "tools-build", "tools-mode"] as const;
+export const TOOLBAR_IDS = ["tools-file", "tools-mode", "tools-app"] as const;
 export type ToolbarId = (typeof TOOLBAR_IDS)[number];
 
 export const TOOLBAR_TITLES: Record<ToolbarId, string> = {
   "tools-file": "Arquivo e histórico",
-  "tools-build": "Ferramentas",
   "tools-mode": "Modo",
+  "tools-app": "Janelas e ajuda",
 };
 
 /** Everything the Janelas menu opens and closes. */
@@ -77,9 +79,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     {
       name: "geosimples-workspace",
       storage: createJSONStorage(() => localStorage),
-      version: 3,
+      version: 4,
       partialize: ({ layout, theme, exportColors, inputAutoHide, dock }) => ({ layout, theme, exportColors, inputAutoHide, dock }),
-      // Version 1 kept its own window positions, and version 2 had other toolbars: the dock starts from its default arrangement.
+      // Version 1 kept its own window positions, versions 2 and 3 had other toolbars and panels: the dock starts from its default arrangement.
       migrate: (saved) => {
         const { layout, theme, inputAutoHide } = (saved ?? {}) as Partial<WorkspaceState>;
         const kept = Object.entries({ layout, theme, inputAutoHide }).filter(([, v]) => v !== undefined);

@@ -1,10 +1,26 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { formatNumber, labelText, perpendicularBisectorOf, tangentOf, type Element, type FigureDoc } from "@geosimples/core/figure";
+import {
+  formatNumber,
+  labelText,
+  perpendicularBisectorOf,
+  shapeOperationOf,
+  tangentOf,
+  type Element,
+  type FigureDoc,
+  type ShapeOperation,
+} from "@geosimples/core/figure";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { TYPE_NAMES } from "@/lib/names";
 import { cn } from "@/lib/utils";
 import { useInspected, useInspector } from "./inspected";
+
+const SHAPE_FILL_NAMES: Record<ShapeOperation, string> = {
+  union: "União das formas",
+  inter: "Interseção das formas",
+  diff: "Diferença das formas",
+  xor: "Exclusão das formas",
+};
 
 function describe(doc: FigureDoc, el: Element): string {
   const tangent = tangentOf(doc, el);
@@ -18,7 +34,11 @@ function describe(doc: FigureDoc, el: Element): string {
   }
   if (el.type === "text") return `${name} "${el.text}"`;
   if (el.type === "vline") return `${name} x = ${formatNumber(el.x)}`;
-  if (el.type === "region") return `${name} ${el.expr}`;
+  if (el.type === "region") {
+    const op = shapeOperationOf(el);
+    // A fill between shapes names its operation: its expression is over stand-in names.
+    return op ? SHAPE_FILL_NAMES[op] : `${name} ${el.expr}`;
+  }
   if (el.type === "board") return el.source;
   if (el.type === "vennitems") return name;
   if (el.type === "extension") {
