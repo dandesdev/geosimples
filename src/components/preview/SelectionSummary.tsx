@@ -2,6 +2,8 @@ import type { ElementType } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
 import { TYPE_NAMES } from "@/lib/names";
 import { useCoarsePointer } from "@/lib/useMediaQuery";
+import { Button } from "@/components/ui/button";
+import { stopTool } from "@/lib/toolPick";
 import { cn } from "@/lib/utils";
 
 /** Where to turn it off, since it acts without asking. */
@@ -34,7 +36,9 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "overla
   const mode = useFigureStore((s) => s.mode);
   const coarse = useCoarsePointer();
   const snap = useFigureStore((s) => s.settings.snapToGrid);
+  const tool = useFigureStore((s) => s.tool);
   const placing = mode === "add" || mode === "figure";
+  if (tool) return <ToolHint placement={placement} title={tool.title} prompt={tool.prompt} coarse={coarse} />;
   // An empty figure has the welcome card, except where a click adds points: there this hint says what to do.
   if (doc.elements.length === 0 && !placing) return null;
 
@@ -68,5 +72,47 @@ export function SelectionSummary({ placement }: { placement: "overlay" | "overla
     >
       {text}
     </p>
+  );
+}
+
+/**
+ * What a tool chosen first waits for, and a button to finish it: the way out
+ * on a touch screen, where there is no Esc. The button is the one part of an
+ * overlay hint that takes clicks.
+ */
+function ToolHint({
+  placement,
+  title,
+  prompt,
+  coarse,
+}: {
+  placement: "overlay" | "overlay-top" | "below" | "tools";
+  title: string;
+  prompt: string;
+  coarse: boolean;
+}) {
+  const text = coarse ? prompt.replace(/Clique/g, "Toque").replace(/clique/g, "toque") : prompt;
+  return (
+    <div
+      aria-live="polite"
+      className={cn(
+        "flex items-center gap-2 text-xs",
+        placement === "below" || placement === "tools"
+          ? "px-1"
+          : "pointer-events-none absolute left-2 right-14 rounded bg-background/90 py-0.5 pl-2 pr-0.5",
+        placement === "below" && "-mt-1.5",
+        placement === "tools" && "min-h-8",
+        placement === "overlay" && "bottom-2",
+        placement === "overlay-top" && "right-44 top-2",
+      )}
+    >
+      <p className="min-w-0 flex-1 text-muted-foreground">
+        <span className="font-semibold text-foreground">{title}:</span> {text}
+        {!coarse && " Esc termina."}
+      </p>
+      <Button size="sm" variant="outline" className="pointer-events-auto h-6 shrink-0 px-2 text-xs" onClick={stopTool}>
+        Concluir
+      </Button>
+    </div>
   );
 }

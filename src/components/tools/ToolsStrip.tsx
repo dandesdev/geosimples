@@ -4,6 +4,7 @@ import { IconButton } from "@/components/IconButton";
 import { TooltipSide } from "@/components/tooltipSide";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { previewProps, useAvailability, useInsertAvailability } from "@/lib/availability";
+import { canPick, startTool } from "@/lib/toolPick";
 import { cn } from "@/lib/utils";
 import { useFigureStore } from "@/store/figureStore";
 import { usePanelStore, type AreaId } from "@/store/panelStore";
@@ -68,26 +69,28 @@ export function ToolsStrip() {
 
 /**
  * One tool as an icon. As on the tiles, one that can't run now stays legible
- * but flat, with a dashed outline; the ones with a card are the ones that work.
+ * but flat, with a dashed outline; the ones with a card are the ones that work,
+ * now or by choosing the tool first and then clicking its objects.
  */
 function StripTool({ tool, c, ready }: { tool: AreaTool; c: ToolContext; ready: boolean }) {
   const availability = tool.availability(c);
+  const waiting = useFigureStore((s) => s.tool?.id === tool.id);
+  const pickable = !!availability.reason && canPick(tool.id, c.doc);
+  const blocked = !!availability.reason && !pickable;
   return (
     <IconButton
       label={tool.title}
-      hint={tool.hint}
-      unavailable={availability.reason}
+      hint={pickable ? `${tool.hint} Ou escolha a ferramenta e depois clique nos objetos.` : tool.hint}
+      unavailable={blocked ? availability.reason : null}
       ready={ready && !availability.reason}
-      active={tool.active?.(c)}
-      className={cn(
-        "border",
-        availability.reason ? "border-dashed bg-transparent text-foreground/80 hover:text-foreground" : "bg-card",
-      )}
+      active={waiting || tool.active?.(c)}
+      className={cn("border", blocked ? "border-dashed bg-transparent text-foreground/80 hover:text-foreground" : !waiting && "bg-card")}
       onClick={() => {
         useFigureStore.getState().setActionPreview(null);
-        tool.run(c);
+        if (pickable || waiting) startTool(tool.id, tool.title);
+        else tool.run(c);
       }}
-      {...previewProps(availability)}
+      {...(pickable ? {} : previewProps(availability))}
     >
       <tool.Icon />
     </IconButton>

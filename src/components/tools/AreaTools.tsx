@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { IconButton } from "@/components/IconButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { previewProps, useAvailability, useInsertAvailability } from "@/lib/availability";
+import { canPick, startTool } from "@/lib/toolPick";
 import { cn } from "@/lib/utils";
 import { useFigureStore } from "@/store/figureStore";
 import { usePanelStore, type AreaId } from "@/store/panelStore";
@@ -65,20 +66,24 @@ export function AreaTools({ phone = false, className, footer }: { phone?: boolea
 
 function Tile({ tool, c, ready, hoverTip }: { tool: AreaTool; c: ToolContext; ready: boolean; hoverTip: boolean }) {
   const availability = tool.availability(c);
+  const waiting = useFigureStore((s) => s.tool?.id === tool.id);
+  // A tool that can't run on the selection may still be chosen first, and then wait for its objects.
+  const pickable = !!availability.reason && canPick(tool.id, c.doc);
   return (
     <IconButton
       label={tool.title}
       text={tool.short}
-      hint={tool.hint}
+      hint={pickable ? `${tool.hint} Ou escolha a ferramenta e depois clique nos objetos.` : tool.hint}
       hoverTip={hoverTip}
-      unavailable={availability.reason}
+      unavailable={pickable ? null : availability.reason}
       ready={ready && !availability.reason}
-      active={tool.active?.(c)}
+      active={waiting || tool.active?.(c)}
       onClick={() => {
         useFigureStore.getState().setActionPreview(null);
-        tool.run(c);
+        if (pickable || waiting) startTool(tool.id, tool.title);
+        else tool.run(c);
       }}
-      {...previewProps(availability)}
+      {...(pickable ? {} : previewProps(availability))}
     >
       <tool.Icon />
     </IconButton>
