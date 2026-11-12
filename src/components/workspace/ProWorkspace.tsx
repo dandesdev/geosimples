@@ -15,6 +15,7 @@ import { isToolbar } from "@/store/workspaceStore";
 import {
   edgeOverlay,
   fitFigure,
+  fitToolsBar,
   fitToolbars,
   floatItem,
   isPreviewGroup,
@@ -112,6 +113,7 @@ export function ProWorkspace() {
     syncDockState();
     api.onDidLayoutChange(() => {
       orientToolbars(api);
+      fitToolsBar(api);
       fitFigure(api);
       keepWidths(api);
       // Toolbars measure their buttons once they are drawn in their new place.

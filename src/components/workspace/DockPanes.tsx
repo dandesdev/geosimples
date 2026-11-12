@@ -15,6 +15,7 @@ import { dockApi, fitToolbars } from "./dock";
 import { Toolbar } from "./Toolbars";
 import { InsertCatalog } from "@/components/preview/InsertCatalog";
 import { AreaTools } from "@/components/tools/AreaTools";
+import { ToolsStrip } from "@/components/tools/ToolsStrip";
 import { ReadyFigures } from "@/components/panel/ReadyFigures";
 import { cn } from "@/lib/utils";
 
@@ -118,11 +119,12 @@ function Pane({ id, className, children }: { id: PanelId; className?: string; ch
   );
 }
 
-/** The tools by kind of figure, in tabs. */
+/** The tools by kind of figure, in tabs: as a panel of named tiles, or as a bar of icons. */
 export function ToolsPane() {
+  const bar = useWorkspaceStore((s) => s.toolsBar);
   return (
     <Pane id="tools" className="flex h-full flex-col overflow-hidden bg-card">
-      <AreaTools className="h-full px-2 pt-2" />
+      {bar ? <ToolsStrip /> : <AreaTools className="h-full px-2 pt-2" />}
     </Pane>
   );
 }

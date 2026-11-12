@@ -629,3 +629,39 @@ test("pro layout: back from the classic layout, toolbars are one button wide aga
   await expect(page.getByRole("toolbar", { name: "Modo" })).toBeVisible();
   await expect.poll(widths).toEqual([48, 48, 48]);
 });
+
+test("pro layout: Ferramentas turns into a bar of icons between the preview and the panels, and back", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const tools = panel(page, "tools");
+  await group(page, "Ferramentas").getByRole("button", { name: "Opções da janela" }).click();
+  await page.getByRole("menuitem", { name: "Mostrar como barra" }).click();
+  await expect.poll(async () => Math.round((await box(tools)).width)).toBe(82);
+  // A column of its own, between the preview and the panels.
+  const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
+  const figure = await box(panel(page, "figure"));
+  const bar = await box(tools);
+  expect(bar.x).toBeGreaterThanOrEqual(preview.x + preview.width - 1);
+  expect(bar.x + bar.width).toBeLessThanOrEqual(figure.x + 1);
+  expect(bar.height).toBeGreaterThan(500);
+
+  // The areas are icon tabs; the open area's tools are icons named by their tooltips.
+  await tools.getByRole("tab", { name: "Gráficos" }).click();
+  await expect(tools.getByRole("button", { name: "Gráfico de função" })).toBeVisible();
+  await tools.getByRole("tab", { name: "Geometria" }).click();
+  // Not all of them fit: an arrow scrolls to the rest, and then one scrolls back.
+  await tools.getByRole("button", { name: "Rolar para baixo" }).click();
+  await expect(tools.getByRole("button", { name: "Rolar para cima" })).toBeVisible();
+
+  // It stays a bar after a reload.
+  await page.reload();
+  await expect.poll(async () => Math.round((await box(panel(page, "tools"))).width)).toBe(82);
+
+  // Its grip's menu turns it back into the panel, on top of the panels' column.
+  await page.getByLabel("Arrastar Ferramentas").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Mostrar como painel" }).click();
+  await expect.poll(async () => (await box(panel(page, "tools"))).width).toBeGreaterThan(200);
+  await expect(tab(page, "Ferramentas")).toBeVisible();
+  const back = await box(panel(page, "tools"));
+  expect(Math.abs(back.x - (await box(panel(page, "figure"))).x)).toBeLessThanOrEqual(1);
+  expect(back.y).toBeLessThan((await box(panel(page, "figure"))).y);
+});

@@ -135,10 +135,6 @@
   --ring: rgb(var(--color-emerald-400));
 }
 
-* {
-  border-color: var(--border);
-}
-
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
