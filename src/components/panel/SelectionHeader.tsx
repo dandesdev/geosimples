@@ -40,6 +40,7 @@ function describe(doc: FigureDoc, el: Element): string {
     return op ? SHAPE_FILL_NAMES[op] : `${name} ${el.expr}`;
   }
   if (el.type === "board") return el.source;
+  if (el.type === "study") return name;
   if (el.type === "vennitems") return name;
   if (el.type === "extension") {
     const point = (id: string) => {

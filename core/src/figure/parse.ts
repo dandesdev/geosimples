@@ -1,4 +1,5 @@
 import { boardError, parseBoard, MAX_BOARD_SOURCE } from "./board";
+import { readStudy } from "./study";
 import { LIMITS } from "./defaults";
 import { parseExpr, type Expr } from "../plot";
 import { parseSetExpr } from "./sets";
@@ -104,6 +105,8 @@ export interface ParsedInput {
   vectors: ParsedVector[];
   /** A worked layout, written 1234÷5, mmc(12;18), varal …. The whole input is then the board. */
   boards: string[];
+  /** An Estudo na reta, written estudo ?; ?; ? or estudo x-2; x²-5x+4. The whole input is then the study. */
+  studies: string[];
   /** The elements of a set, written A={1,2,3}. The whole input is then the set. */
   sets: ParsedSet[];
   /** A count in a region, written n(A∩B)=3. The whole input is then the count. */
@@ -154,6 +157,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     parseLineInput(text) ??
     parseGraphPointInput(text, ctx) ??
     parseIntervalInput(text) ??
+    parseStudyInput(text) ??
     parseBoardInput(text);
   if (whole) return whole;
   const nodes: InputNode[] = [];
@@ -398,6 +402,7 @@ export function parseInput(text: string, ctx: InputContext = { points: [] }): Pa
     intervals: [],
     vectors: [],
     boards: [],
+    studies: [],
     sets: [],
     counts: [],
     regions: [],
@@ -448,6 +453,7 @@ const emptyInput = (): ParsedInput => ({
   intervals: [],
   vectors: [],
   boards: [],
+  studies: [],
   sets: [],
   counts: [],
   regions: [],
@@ -575,6 +581,19 @@ function parseVectorInput(text: string, ctx: InputContext): ParsedInput | null {
     }
   }
   return inputFailure(text, "Use vetor u=(3;2), vetor F=(5:30)@(1;1) ou vetor A B com pontos que existem.");
+}
+
+/** An Estudo na reta: estudo with its points or curves. Null when the text doesn't start with estudo. */
+function parseStudyInput(text: string): ParsedInput | null {
+  const trimmed = text.trim();
+  if (trimmed.length > MAX_BOARD_SOURCE) return null;
+  const spec = readStudy(trimmed);
+  if (spec === null) return null;
+  if (typeof spec === "string") return inputFailure(text, spec);
+  const result = emptyInput();
+  result.studies.push(trimmed);
+  result.tokens.push({ kind: "text", start: 0, end: text.length });
+  return result;
 }
 
 /** A division, an MMC, a varal…: everything laid out on its own. Null when the text is none of them. */

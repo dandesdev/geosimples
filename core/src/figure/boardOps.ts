@@ -8,7 +8,7 @@ import type { Board, FigureDoc } from "./types";
 const GAP = 1;
 
 /** Where a new board goes: under everything drawn, at the left edge of it. */
-function spotBelow(doc: FigureDoc): { x: number; y: number } {
+export function spotBelow(doc: FigureDoc): { x: number; y: number } {
   const { box, kx, ky } = buildScene(doc);
   if (!box) return { x: 0, y: 0 };
   const round = (v: number) => Math.round(v * 100) / 100;

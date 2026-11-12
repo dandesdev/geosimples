@@ -4,6 +4,7 @@ import { actions } from "@/lib/actions";
 import { emitCommand } from "@/lib/commands";
 import { comboFromEvent } from "@/lib/keys";
 import { stopTool } from "@/lib/toolPick";
+import { leavePiece, studyKey } from "@/lib/studyFocus";
 import { useFigureStore } from "@/store/figureStore";
 import { activePrefs, type ActionId } from "@/store/prefsStore";
 
@@ -34,6 +35,8 @@ export function runAction(id: ActionId): boolean {
         stopTool();
         return true;
       }
+      // Inside a study, Esc goes up a level before it lets go of the selection.
+      if (leavePiece()) return true;
       store.clearSelection();
       // Esc also finishes the figure Figura rápida is drawing.
       store.setQuickFigure(NO_QUICK_FIGURE);
@@ -86,6 +89,11 @@ export function useShortcuts() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping(e.target)) return;
       if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      // Enter, F2 and Tab walk into a selected study and through its pieces.
+      if ((e.key === "Enter" || e.key === "F2" || e.key === "Tab") && !e.ctrlKey && !e.metaKey && !e.altKey && studyKey(e.key, e.shiftKey)) {
+        e.preventDefault();
+        return;
+      }
       const combo = comboFromEvent(e);
       if (!combo) return;
       const shortcuts = activePrefs().shortcuts;

@@ -2,6 +2,7 @@ import { AXES_GRID, DEFAULT_AXES_STROKE, DEFAULT_LABEL, DEFAULT_PLOT_WINDOW, DEF
 import { MAX_EXPR_LENGTH } from "../plot";
 import { boardError, MAX_BOARD_SOURCE, MAX_GAP_TEXT } from "./board";
 import { MEASURES } from "./labels";
+import { MAX_STUDY_POINTS, MAX_STUDY_SKETCHES, MAX_STUDY_TEXT, STUDY_LIMITS, STUDY_STRETCH } from "./study";
 import type {
   Angle,
   Axes,
@@ -35,6 +36,11 @@ import type {
   Region,
   Segment,
   Stroke,
+  Study,
+  StudyAxis,
+  StudyBall,
+  StudyPoint,
+  StudySketch,
   Ticks,
   Vector,
   VectorNotation,
@@ -56,6 +62,50 @@ const oneOf = <T extends string>(x: unknown, options: readonly T[], fallback: T)
   options.includes(x as T) ? (x as T) : fallback;
 const endMark = (x: unknown): EndMark => oneOf<EndMark>(x, ["none", "closed", "open"], "none");
 const ticks = (x: unknown): Ticks => (x === 1 || x === 2 || x === 3 ? x : 0);
+
+const studyText = (x: unknown) => (str(x) ?? "").slice(0, MAX_STUDY_TEXT);
+
+/**
+ * A study's pieces, kept consistent: unique point ids, one text and one width
+ * per stretch, and sketches that meet only points it has, in their order.
+ */
+function studyAxis(x: unknown, size: number): StudyAxis {
+  const r = isObj(x) ? x : {};
+  const seen = new Set<string>();
+  const points: StudyPoint[] = (Array.isArray(r.points) ? r.points : []).flatMap((x): StudyPoint[] => {
+    if (!isObj(x) || !idOk(x.id) || seen.has(x.id) || seen.size >= MAX_STUDY_POINTS) return [];
+    seen.add(x.id);
+    return [
+      {
+        id: x.id,
+        label: studyText(x.label),
+        ball: oneOf<StudyBall>(x.ball, ["closed", "open", "none"], "closed"),
+        divider: x.divider === true,
+        drop: Math.round(num(x.drop, STUDY_LIMITS.drop[0], STUDY_LIMITS.drop[1], 0)),
+      },
+    ];
+  });
+  const stretches = points.length + 1;
+  const texts = Array.isArray(r.intervals) ? r.intervals : [];
+  const widths = Array.isArray(r.widths) ? r.widths : [];
+  const order = new Map(points.map((p, i) => [p.id, i]));
+  const sketchIds = new Set<string>();
+  const sketches = (Array.isArray(r.sketches) ? r.sketches : []).flatMap((x): StudySketch[] => {
+    if (!isObj(x) || !idOk(x.id) || sketchIds.has(x.id) || sketchIds.size >= MAX_STUDY_SKETCHES) return [];
+    const shape = x.shape === "line" ? "line" : "parabola";
+    const known = (Array.isArray(x.roots) ? x.roots : []).filter((id): id is string => typeof id === "string" && order.has(id));
+    const roots = [...new Set(known)].sort((a, b) => order.get(a)! - order.get(b)!).slice(0, shape === "line" ? 1 : 2);
+    if (shape === "line" && roots.length === 0) return [];
+    sketchIds.add(x.id);
+    return [{ id: x.id, shape, up: x.up !== false, roots, label: studyText(x.label) }];
+  });
+  return {
+    points,
+    intervals: Array.from({ length: stretches }, (_, i) => studyText(texts[i])),
+    widths: Array.from({ length: stretches }, (_, i) => Math.round(num(widths[i], STUDY_LIMITS.width[0], STUDY_LIMITS.width[1], size * STUDY_STRETCH))),
+    sketches,
+  };
+}
 
 /** A [from, to] interval with from < to, or the fallback. */
 function interval(x: unknown, fallback: [number, number]): [number, number] {
@@ -349,6 +399,26 @@ export function normalizeDoc(input: unknown): FigureDoc {
           font: r.font === "sans" ? "sans" : "serif",
         };
         out.push(b);
+        break;
+      }
+      case "study": {
+        const x = coord(r.x);
+        const y = coord(r.y);
+        if (ids.has(id) || x === null || y === null) break;
+        ids.add(id);
+        const size = num(r.size, 6, 40, 12);
+        out.push({
+          id,
+          type: "study",
+          x,
+          y,
+          axis: studyAxis(r.axis, size),
+          sketchDash: oneOf<Dash>(r.sketchDash, ["solid", "dashed", "dotted"], "solid"),
+          size,
+          color: color(r.color, DEFAULT_LABEL.color),
+          width: num(r.width, 0.1, 5, 0.8),
+          font: r.font === "sans" ? "sans" : "serif",
+        } satisfies Study);
         break;
       }
       case "function": {

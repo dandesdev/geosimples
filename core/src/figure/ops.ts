@@ -13,6 +13,7 @@ import {
 } from "./geometry";
 import { canHaveLabel, formatNumber, labelFor, type LabelScheme, newMeasure, nextPointNames, withText } from "./labels";
 import { addBoard, textSpotBelow } from "./boardOps";
+import { addStudy } from "./studyOps";
 import { functionValue, nearestOnGraph } from "./plot";
 import { addRegion, setMembers, setRegionCount } from "./setOps";
 import { addVector } from "./vectorOps";
@@ -104,6 +105,7 @@ const PREFIX: Record<ElementType, string> = {
   region: "z",
   vennitems: "i",
   board: "b",
+  study: "u",
   component: "k",
   circuit: "q",
 };
@@ -162,6 +164,7 @@ export function applyInput(doc: FigureDoc, parsed: ParsedInput, opts: OpOptions 
     return addVector(doc, v.name, v.from, v.to, opts);
   }
   if (parsed.boards.length > 0) return addBoard(doc, parsed.boards[0], opts);
+  if (parsed.studies.length > 0) return addStudy(doc, parsed.studies[0], opts);
   if (parsed.sets.length > 0) return setMembers(doc, parsed.sets[0].name, parsed.sets[0].items, opts);
   if (parsed.counts.length > 0) return setRegionCount(doc, parsed.counts[0].expr, parsed.counts[0].value, opts);
   if (parsed.regions.length > 0) return addRegion(doc, parsed.regions[0], opts);
@@ -495,6 +498,7 @@ function referencedPoints(el: Element): Id[] {
     case "numberline":
     case "vennitems":
     case "board":
+    case "study":
     case "circuit":
       return [];
     case "region":

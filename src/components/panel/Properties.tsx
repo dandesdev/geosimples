@@ -68,6 +68,7 @@ import { COMPONENT_ITEMS, CURRENT_OPTIONS } from "@/components/preview/circuitIt
 import { useFigureStore } from "@/store/figureStore";
 import { Choice, Field, NumberInput, Section, SwitchField } from "./controls";
 import { useInspected, type EditorProps } from "./inspected";
+import { StudyProperties } from "./StudyProperties";
 
 /**
  * Propriedades: what an object is and measures, and how it was built.
@@ -104,6 +105,7 @@ export function Properties() {
       {el.type === "region" && <RegionProperties key={el.id} el={el} {...props} />}
       {el.type === "vennitems" && <VennItemsProperties el={el} {...props} />}
       {el.type === "board" && <BoardProperties key={el.id} el={el} {...props} />}
+      {el.type === "study" && <StudyProperties key={el.id} el={el} />}
       {el.type === "component" && <ComponentProperties el={el} {...props} />}
       {el.type === "circuit" && <CircuitFields circuit={el} doc={props.doc} />}
     </div>

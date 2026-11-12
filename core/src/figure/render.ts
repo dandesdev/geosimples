@@ -23,6 +23,7 @@ import {
   type LabelRun,
 } from "./labels";
 import { boardLayout, boardSlots, layoutMath, type Mark, type MathPart } from "./board";
+import { studyLayout, type StudyHit } from "./study";
 import { circuitDrawings, componentDrawing } from "./circuit";
 import { regionOutline, vennItemSpots, type RegionEdge } from "./sets";
 import { grow, LineIndex, overlap, pathLines, textBox } from "./lines";
@@ -122,6 +123,29 @@ export interface Scene {
   numberSpots: Map<Id, AxisNumberSpots>;
   /** The results of each "gaps" board, in scene pt, for picking its gaps in the preview. */
   boardSlots: SceneSlot[];
+  /** Each place a piece of a study shows, for picking the piece in the preview. */
+  parts: ScenePart[];
+  /** Where the points and stretches of each study are, for dragging and adding points in the preview. */
+  studies: SceneStudy[];
+}
+
+/** A piece of an element, as a shape in the scene to pick it by. A piece may show in more than one place. */
+export interface ScenePart {
+  owner: Id;
+  path: string;
+  d: string;
+  area: boolean;
+  /** A piece with a text to type and none yet. */
+  empty: boolean;
+  /** Where its text is, for typing over it. */
+  text?: { x: number; y: number; w: number; h: number };
+}
+
+/** A study's points (with the bottom of their dividers) and stretch middles, in scene pt. */
+export interface SceneStudy {
+  owner: Id;
+  points: { id: Id; x: number; y: number; bottom: number | null }[];
+  stretches: { index: number; x: number; y: number }[];
 }
 
 /** A result a board can leave as a gap, as a rectangle in the scene. */
@@ -221,6 +245,8 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   };
   const axisNumbers: { el: Axes; x: AxisNumber[]; y: AxisNumber[] }[] = [];
   const slots: SceneSlot[] = [];
+  const parts: ScenePart[] = [];
+  const studies: SceneStudy[] = [];
   const hits: Record<ElementType, Hit[]> = {
     axes: [],
     grid: [],
@@ -235,6 +261,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     vector: [],
     extension: [],
     board: [],
+    study: [],
     vennitems: [],
     component: [],
     circuit: [],
@@ -486,6 +513,49 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
             slots.push({ owner: el.id, index: s.index, x: c.x, y: c.y, w: s.w, h: s.h, gap: s.gap });
           }
         }
+        break;
+      }
+      case "study": {
+        const layout = studyLayout(el);
+        const base = P(el);
+        const T = (o: Vec): Vec => ({ x: base.x + o.x, y: base.y - o.y });
+        const look = { color: el.color, width: el.width, font: el.font, opacity: 1 };
+        // Picking a piece goes by `parts`; the drawing is the study's as a whole.
+        drawMarks(el.id, layout.groups.flatMap((g) => g.marks), T, look, layers.board, true);
+        const [c0, c1] = [T({ x: layout.box.minX, y: layout.box.maxY }), T({ x: layout.box.maxX, y: layout.box.minY })];
+        box.add(c0.x, c0.y, 2);
+        box.add(c1.x, c1.y, 2);
+        hits.study.push({ owner: el.id, type: "study", d: `M${f(c0.x)} ${f(c0.y)}H${f(c1.x)}V${f(c1.y)}H${f(c0.x)}Z`, area: true });
+        const rect = (r: { minX: number; minY: number; maxX: number; maxY: number }) => {
+          const [a, b] = [T({ x: r.minX, y: r.maxY }), T({ x: r.maxX, y: r.minY })];
+          return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+        };
+        const hitPath = (hit: StudyHit): string => {
+          if (hit.kind === "rect") {
+            const r = rect(hit);
+            return `M${f(r.x)} ${f(r.y)}H${f(r.x + r.w)}V${f(r.y + r.h)}H${f(r.x)}Z`;
+          }
+          const points = hit.kind === "line" ? [hit.a, hit.b] : hit.points;
+          return points.map((p, i) => `${i === 0 ? "M" : "L"}${f(T(p).x)} ${f(T(p).y)}`).join("");
+        };
+        for (const piece of layout.pieces) {
+          parts.push({
+            owner: el.id,
+            path: piece.path,
+            d: hitPath(piece.hit),
+            area: piece.hit.kind === "rect",
+            empty: piece.empty,
+            ...(piece.text ? { text: rect(piece.text) } : {}),
+          });
+        }
+        studies.push({
+          owner: el.id,
+          points: layout.points.map((p) => {
+            const at = T({ x: p.x, y: 0 });
+            return { id: p.id, x: at.x, y: at.y, bottom: p.bottom === null ? null : T({ x: p.x, y: p.bottom }).y };
+          }),
+          stretches: layout.stretches.map((s) => ({ index: s.index, ...T({ x: s.x, y: 0 }) })),
+        });
         break;
       }
       case "component": {
@@ -847,6 +917,7 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
       ...hits.vector,
       ...hits.component,
       ...hits.board,
+      ...hits.study,
       ...hits.circuit,
       ...hits.vennitems,
       ...hits.text,
@@ -858,6 +929,8 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
     ky,
     numberSpots,
     boardSlots: slots,
+    parts,
+    studies,
   };
 }
 

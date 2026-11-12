@@ -67,6 +67,7 @@ function summary(parsed: ParsedInput): string {
   if (parsed.intervals.length > 0) return "Intervalo na reta numérica. Enter para adicionar.";
   if (parsed.vectors.length > 0) return "Vetor. Enter para adicionar.";
   if (parsed.boards.length > 0) return "Conta ou quadro, já calculado. Enter para adicionar.";
+  if (parsed.studies.length > 0) return "Estudo na reta, para preencher. Enter para adicionar.";
   if (parsed.sets.length > 0) return `Elementos de ${parsed.sets[0].name} no diagrama. Enter para adicionar.`;
   if (parsed.counts.length > 0) return "Quantidade numa região do diagrama. Enter para adicionar.";
   if (parsed.regions.length > 0) return "Região do diagrama. Enter para marcar.";

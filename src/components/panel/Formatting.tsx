@@ -2,6 +2,7 @@ import {
   AngleEditor,
   AxesEditor,
   BoardEditor,
+  StudyEditor,
   CircleEditor,
   CircuitEditor,
   ComponentEditor,
@@ -49,6 +50,7 @@ export function Formatting() {
       {el.type === "region" && <RegionEditor el={el} {...props} />}
       {el.type === "vennitems" && <VennItemsEditor el={el} {...props} />}
       {el.type === "board" && <BoardEditor el={el} {...props} />}
+      {el.type === "study" && <StudyEditor el={el} {...props} />}
       {el.type === "component" && <ComponentEditor el={el} {...props} />}
       {el.type === "circuit" && <CircuitEditor el={el} {...props} />}
     </>

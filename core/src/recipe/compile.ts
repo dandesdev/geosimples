@@ -484,6 +484,7 @@ function styleElements(build: Build, ids: Id[], p: StylePatch) {
       case "vennitems":
         return { ...el, color: p.color ? color(p.color) : el.color, size: p.size ?? el.size };
       case "board":
+      case "study":
       case "circuit":
         return { ...el, color: p.color ? color(p.color) : el.color };
       case "vector":
@@ -499,7 +500,7 @@ function styleElements(build: Build, ids: Id[], p: StylePatch) {
   });
 }
 
-const UNLABELED: ElementType[] = ["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board", "circuit"];
+const UNLABELED: ElementType[] = ["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board", "study", "circuit"];
 
 function labelElement(build: Build, id: Id, spec: LabelSpec) {
   const el = build.el(id);

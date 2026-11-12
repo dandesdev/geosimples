@@ -98,6 +98,7 @@ const BOARD_SHORT: Record<string, string> = {
   "MMC…": "MMC",
   "MDC…": "MDC",
   "MDC por divisões sucessivas…": "Euclides",
+  "Estudo na reta…": "Estudo",
   "Varal de intervalos…": "Varal",
   "Esboço de sinal…": "Sinal",
   "Quadro de sinais…": "Quadro",

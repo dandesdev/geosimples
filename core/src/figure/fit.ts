@@ -452,6 +452,7 @@ function drawnBox(doc: FigureDoc): { x: Span; y: Span } {
         add(el.x[1], el.y);
         break;
       case "board":
+      case "study":
         add(el.x, el.y);
         break;
     }

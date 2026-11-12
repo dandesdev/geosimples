@@ -4,6 +4,7 @@ import {
   type Angle,
   type Axes,
   type Board,
+  type Study,
   type Circle,
   type Circuit,
   type Component,
@@ -281,6 +282,27 @@ export function BoardEditor({ el, update }: EditorProps<Board>) {
       <Section title="Estilo">
         <TextStyleFields value={el} onChange={(patch, key) => update((b) => ({ ...b, ...patch }), key)} />
         <RangeField label="Linhas" value={el.width} min={0.3} max={2} step={0.1} format={pt} onChange={(width) => update((b) => ({ ...b, width }), "width")} />
+      </Section>
+    </div>
+  );
+}
+
+export function StudyEditor({ el, update }: EditorProps<Study>) {
+  return (
+    <div className="space-y-2">
+      <Section title="Estilo">
+        <TextStyleFields value={el} onChange={(patch, key) => update((s) => ({ ...s, ...patch }), key)} />
+        <RangeField label="Linhas" value={el.width} min={0.3} max={2} step={0.1} format={pt} onChange={(width) => update((s) => ({ ...s, width }), "width")} />
+        <Choice
+          label="Esboços"
+          value={el.sketchDash}
+          options={[
+            { value: "solid", label: "Contínuo", title: "Esboços em traço contínuo, mais fino que a reta" },
+            { value: "dashed", label: "Tracejado", title: "Esboços tracejados" },
+            { value: "dotted", label: "Pontilhado", title: "Esboços pontilhados" },
+          ]}
+          onChange={(sketchDash) => update((s) => ({ ...s, sketchDash }), "sketchDash")}
+        />
       </Section>
     </div>
   );

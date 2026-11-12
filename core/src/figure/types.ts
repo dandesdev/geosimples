@@ -327,6 +327,76 @@ export interface Board {
   label?: never;
 }
 
+/** How a critical point of a study shows on its line: a filled dot, a hollow one, or nothing. */
+export type StudyBall = "closed" | "open" | "none";
+
+/**
+ * A critical point of a study. Only the order matters, not a value: the
+ * teacher names it as they like, or leaves it blank to fill in by hand.
+ */
+export interface StudyPoint {
+  /** Unique within its study, so a sketch can say which points it meets. */
+  id: Id;
+  label: string;
+  ball: StudyBall;
+  /** A line down from the point, splitting what is under the line into columns. */
+  divider: boolean;
+  /** pt added to the divider's automatic length; negative shortens it. */
+  drop: number;
+}
+
+/** A sketch of a curve over a study's line, meeting it only at its roots. */
+export interface StudySketch {
+  id: Id;
+  shape: "line" | "parabola";
+  /** A line that rises, a parabola that opens upward. */
+  up: boolean;
+  /**
+   * The points it meets the line at, in their order on the line: one for a
+   * line; two, one (touching) or none for a parabola.
+   */
+  roots: Id[];
+  /** Written at the curve's end, like x − 2. */
+  label: string;
+}
+
+/**
+ * The line of a study and what is on it: critical points, the text over each
+ * stretch between them, and sketches of curves over it. Its own type, so a
+ * study can later hold more lines (the partial solutions in each column).
+ */
+export interface StudyAxis {
+  points: StudyPoint[];
+  /** Text over each stretch, from the one before the first point to the one after the last: one more than the points. */
+  intervals: string[];
+  /** The least width of each stretch, in pt; text wider than that widens it. One more than the points. */
+  widths: number[];
+  sketches: StudySketch[];
+}
+
+/**
+ * Estudo na reta: the skeleton of a solution on a number line, to fill in.
+ * Unlike a board, nothing is laid out from a typed source: every piece is
+ * stored, so each can be selected, edited and removed on its own. Its line
+ * starts at (x, y); inside, everything is in pt.
+ */
+export interface Study {
+  id: Id;
+  type: "study";
+  x: number;
+  y: number;
+  axis: StudyAxis;
+  /** The sketches' line: solid, dashed or dotted. They are always thinner than the line. */
+  sketchDash: Dash;
+  /** Font size, in pt. */
+  size: number;
+  color: Color;
+  /** Width of its lines, in pt. */
+  width: number;
+  font: LabelFont;
+  label?: never;
+}
+
 /** A piece of an electric circuit. A lamp is a resistor with its own symbol; a receptor is a source the current runs through backwards. */
 export type ComponentKind = "resistor" | "lamp" | "source" | "switch" | "ammeter" | "voltmeter" | "capacitor";
 
@@ -535,6 +605,7 @@ export type Element =
   | Region
   | VennItems
   | Board
+  | Study
   | Component
   | Circuit;
 export type ElementType = Element["type"];

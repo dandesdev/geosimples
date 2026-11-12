@@ -502,7 +502,11 @@ describe("exports", () => {
 
   it("escapes label text in SVG", () => {
     const doc = addPoints(emptyDoc(), [{ x: 0, y: 0, label: "<b>" }]).doc;
-    expect(toSvg(doc)).toContain("&lt;b&gt;");
+    const svg = toSvg(doc);
+    // Set as math, like x < 1, so the b may sit in its own italic run; either way nothing is left raw.
+    expect(svg).toContain("&lt;");
+    expect(svg).toContain("&gt;");
+    expect(svg).not.toContain("<b>");
   });
 
   it("bounds the scene around everything drawn", () => {
