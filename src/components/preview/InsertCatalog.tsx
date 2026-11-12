@@ -377,14 +377,21 @@ export function InsertCatalog({
     <Popover open={open} onOpenChange={close}>
       <PopoverTrigger asChild>
         {variant === "floating" ? (
-          // The first thing to do in an empty figure: big, filled, over the preview's corner.
+          // The first thing to do in an empty figure: filled, over the preview's corner, a round + that
+          // spells out its name when the pointer rests on it (a beat later, so passing over it doesn't),
+          // when the keyboard reaches it, or while it is open. It grows to the left, from the corner.
           <Button
-            className="h-11 shrink-0 rounded-full px-5 text-sm shadow-lg [&_svg]:size-5"
+            className="group h-11 shrink-0 gap-0 rounded-full px-3 text-sm shadow-lg [&_svg]:size-5"
             aria-label="Inserir"
             title="Inserir pontos, textos, gráficos, vetores, conjuntos, circuitos e contas"
           >
             <Plus />
-            Inserir
+            <span
+              aria-hidden="true"
+              className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity,margin] duration-200 ease-out motion-reduce:transition-none group-hover:ml-2 group-hover:max-w-24 group-hover:opacity-100 group-hover:delay-200 group-focus-visible:ml-2 group-focus-visible:max-w-24 group-focus-visible:opacity-100 group-data-[state=open]:ml-2 group-data-[state=open]:max-w-24 group-data-[state=open]:opacity-100 group-data-[state=open]:delay-0"
+            >
+              Inserir
+            </span>
           </Button>
         ) : compact ? (
           <IconButton label="Inserir" hint="Gráficos, vetores, conjuntos, contas e quadros." shortcut="insert" active={open}>
