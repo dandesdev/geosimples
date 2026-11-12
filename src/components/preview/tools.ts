@@ -137,7 +137,7 @@ export const MODES: { mode: CanvasMode; action: ActionId; label: string; short: 
     mode: "select",
     action: "modeSelect",
     label: "Selecionar",
-    short: "Selecionar",
+    short: "Seleção",
     hint: "Arraste para selecionar o que estiver dentro da caixa. Shift soma à seleção.",
     Icon: SquareDashedMousePointer,
   },

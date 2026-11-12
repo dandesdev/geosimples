@@ -1,8 +1,9 @@
 import { FigureBar } from "@/components/figures/FigureBar";
+import { OpenFigureSnapshot } from "@/components/figures/OpenFigureSnapshot";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReadyFigures } from "./ReadyFigures";
 
-/** The open figure and the library (Figura), beside the figures ready to use (Prontos). */
+/** The open figure, with a small picture of it, and the library (Figura), beside the figures ready to use (Prontos). */
 export function FigureTabs() {
   return (
     <Tabs defaultValue="figure" className="shrink-0 border-b">
@@ -16,6 +17,7 @@ export function FigureTabs() {
       </TabsList>
       <TabsContent value="figure" className="mt-0">
         <FigureBar bordered={false} />
+        <OpenFigureSnapshot />
       </TabsContent>
       <TabsContent value="ready" className="mt-0">
         <ReadyFigures />

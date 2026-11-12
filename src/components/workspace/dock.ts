@@ -162,8 +162,12 @@ export function fitFigure(target: DockviewApi) {
   const others = stackedWith(figure.group);
   // Alone in its column, or beside a minimized panel that must keep its strip, Figura takes what is left.
   if (others.length === 0 || others.some(isMinimized) || isMinimized(figure.group)) return;
-  const ready = figure.group.activePanel?.id === "ready" ? document.querySelector<HTMLElement>("[data-panel=ready] > *") : null;
-  const height = TAB_STRIP + (ready ? Math.min(ready.scrollHeight + 2, 320) : 52);
+  // As tall as what the active tab shows: the figure's bar and picture, or the ready figures up to a limit.
+  const active = figure.group.activePanel?.id === "ready" ? "ready" : "figure";
+  // The children, not the pane, which is as tall as the group.
+  const content = [...(document.querySelector(`[data-panel=${active}]`)?.children ?? [])] as HTMLElement[];
+  const tall = content.reduce((sum, el) => sum + el.scrollHeight, 0);
+  const height = TAB_STRIP + (tall > 0 ? Math.min(tall + 2, 320) : 52);
   const now = Math.round(figure.group.api.height);
   // One try per height: a column that can't give Figura exactly this height must not loop.
   if (Math.abs(now - height) <= 1) {

@@ -111,6 +111,16 @@ test("the symbol buttons type where the caret is", async ({ page }) => {
   await expect(input).toHaveValue("região A ∩B");
 });
 
+test("the guide says what wasn't typed: what was there before, and what is done after by tapping", async ({ page }) => {
+  await page.goto("/guia.html");
+  const point = page.getByRole("figure").filter({ hasText: "Um ponto com nome" });
+  await expect(point.getByText("Antes de digitar:")).toBeVisible();
+  await expect(point).toContainText("Inserir › Eixos");
+  const intersection = page.getByRole("figure").filter({ hasText: "A interseção, escrita com a letra n" });
+  await expect(intersection.getByText("Depois, no editor:")).toBeVisible();
+  await expect(intersection).toContainText("Uma linha de cada vez");
+});
+
 test("the starting example closes for the visit, or for good", async ({ page }) => {
   const card = page.getByRole("heading", { name: "Comece pelos pontos" });
   await expect(card).toBeVisible();

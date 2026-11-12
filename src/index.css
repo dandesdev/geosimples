@@ -144,9 +144,9 @@
   outline-offset: 2px;
 }
 
-/* The phone layout's preview: the same height whether the browser's bars show or not, so it doesn't resize on scroll. */
+/* The phone layout's preview until its edge is dragged: no taller than a 4:3 picture as wide as the screen, nor a third of it. */
 :root {
-  --phone-preview: max(40svh, 15rem);
+  --phone-preview: min(75vw, 100dvh / 3);
 }
 
 

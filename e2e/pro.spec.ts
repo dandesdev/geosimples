@@ -257,6 +257,9 @@ test("dark theme: the preview paper turns gray, and exports stay white unless as
 });
 
 test("pro layout: a panel docks above or below another, and the overlay shows exactly where", async ({ page }) => {
+  // Room for two groups in the column: a group's upper drop zone is a fifth of it, and must reach below its tabs.
+  await tab(page, "Ferramentas").click();
+  await page.getByRole("button", { name: "Fechar Ferramentas" }).click();
   const target = await box(group(page, "Formatação"));
   // Over the lower part of Formatação, the overlay is its lower half: no inset, no margin.
   await drag(page, tab(page, "Propriedades"), at(target, 0.5, 0.92), async () => {

@@ -1,18 +1,21 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, RotateCcw } from "lucide-react";
 import {
+  addAxes,
   addNumberLine,
   applyInput,
   emptyDoc,
   encodeShareToken,
   parseInput,
   shareUrl,
-  toSvg,
   type FigureDoc,
   type InputContext,
 } from "@geosimples/core/figure";
+import { FigureSnapshot } from "@/components/preview/FigureSnapshot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useApplyTheme } from "@/lib/theme";
+import { useActivePrefs } from "@/store/useActivePrefs";
 
 /** One live example: lines typed in the bar, one after the other, over an optional starting figure. */
 interface Sample {
@@ -20,7 +23,16 @@ interface Sample {
   lines: string[];
   /** A number line already in the figure, which intervals need. */
   numberLine?: boolean;
+  /** Numbered axes already in the figure, so a point's coordinates can be read off them. */
+  axes?: boolean;
+  /** What was in the figure before typing and how it got there, when it didn't come from the bar. */
+  before?: string;
+  /** What is done next in the editor, by selecting and tapping rather than typing. */
+  after?: string;
 }
+
+/** The note on samples that start over axes: they come from Inserir, not from the text. */
+const AXES_FIRST = "Os eixos já estavam na figura. Eles não vêm do texto: entram por Inserir › Eixos.";
 
 interface Topic {
   id: string;
@@ -36,13 +48,14 @@ const TOPICS: Topic[] = [
     intro: (
       <>
         Escreva as coordenadas entre parênteses, separadas por ponto e vírgula. A vírgula fica livre para os decimais. Um nome antes do
-        sinal de igual vira o rótulo do ponto.
+        sinal de igual vira o rótulo do ponto. Pontos sozinhos não trazem eixos: nos exemplos abaixo eles foram inseridos antes, para
+        você ver onde o ponto cai.
       </>
     ),
     samples: [
-      { caption: "Um ponto com nome. Mude os números e veja o ponto andar.", lines: ["A=(2;3)"] },
-      { caption: "Coordenadas polares: 3 unidades a 60 graus.", lines: ["P=(3:60)"] },
-      { caption: "O sinal + anda a partir do ponto anterior.", lines: ["A=(0;0) B=+(4;0) C=+(0;3)"] },
+      { caption: "Um ponto com nome. Mude os números e veja o ponto andar nos eixos.", lines: ["A=(2;3)"], axes: true, before: AXES_FIRST },
+      { caption: "Coordenadas polares: 3 unidades a 60 graus.", lines: ["P=(3:60)"], axes: true, before: AXES_FIRST },
+      { caption: "O sinal + anda a partir do ponto anterior.", lines: ["A=(0;0) B=+(4;0) C=+(0;3)"], axes: true, before: AXES_FIRST },
     ],
   },
   {
@@ -55,7 +68,11 @@ const TOPICS: Topic[] = [
       </>
     ),
     samples: [
-      { caption: "Um triângulo, fechado pelo último --.", lines: ["A=(0;0)--B=(4;0)--C=(0;3)--"] },
+      {
+        caption: "Um triângulo, fechado pelo último --.",
+        lines: ["A=(0;0)--B=(4;0)--C=(0;3)--"],
+        after: "Para marcar ângulos ou pintar o triângulo, selecione os pontos na prévia e use Ferramentas › Geometria.",
+      },
       { caption: "A segunda linha liga pontos criados na primeira.", lines: ["A=(0;0) B=(4;0) C=(4;3) D=(0;3)", "A--C"] },
     ],
   },
@@ -90,6 +107,7 @@ const TOPICS: Topic[] = [
         caption: "Um intervalo na reta numérica. O colchete virado para fora deixa a ponta aberta.",
         lines: ["[-2; 3["],
         numberLine: true,
+        before: "A reta numérica já estava na figura: entra por Inserir › Reta numérica. Sem ela, o intervalo não tem onde ficar.",
       },
     ],
   },
@@ -99,7 +117,7 @@ const TOPICS: Topic[] = [
     intro: (
       <>
         Comece com <code>vetor</code>. Depois do igual vêm as componentes, ou módulo e ângulo. Com <code>@</code> você escolhe de onde ele
-        sai. Selecione vetores e o botão Vetores aparece na barra, com soma, diferença e projeção.
+        sai. Soma, diferença e projeção não se digitam: selecione os vetores na prévia e use Ferramentas › Vetores.
       </>
     ),
     samples: [
@@ -113,13 +131,20 @@ const TOPICS: Topic[] = [
     title: "Conjuntos",
     intro: (
       <>
-        Escreva os elementos entre chaves: cada um vai para a região certa do diagrama. Com um diagrama na figura, o botão Conjuntos aparece na barra, com as operações. Para digitar,
-        use U para união, n para interseção, - para diferença e ' para complementar.
+        Escreva os elementos entre chaves, uma linha de cada vez, com Enter no fim de cada uma. A primeira, como{" "}
+        <code>A={"{1,2,3}"}</code>, cria o diagrama com o retângulo U em volta; cada letra nova entra no mesmo diagrama, até 3 conjuntos,
+        e cada elemento vai para a região certa. Com chaves vazias, o conjunto entra sem elementos. Regiões e quantidades usam os conjuntos
+        que já estão na figura. Para digitar, use U para união, n para interseção, - para diferença e ' para complementar.
       </>
     ),
     samples: [
       { caption: "Dois conjuntos com um elemento em comum.", lines: ["A={1,2,3}", "B={3,4}"] },
-      { caption: "A interseção, escrita com a letra n.", lines: ["A={}", "B={}", "região A n B"] },
+      {
+        caption: "A interseção, escrita com a letra n.",
+        lines: ["A={}", "B={}", "região A n B"],
+        after:
+          "Sem digitar a região: selecione os dois conjuntos na prévia (ou nenhum, para usar todos) e toque em Ferramentas › Conjuntos › Interseção.",
+      },
       { caption: "O que está fora da união.", lines: ["A={}", "B={}", "região (A U B)'"] },
       { caption: "A quantidade em uma região.", lines: ["A={}", "B={}", "n(A n B)=7"] },
     ],
@@ -129,8 +154,8 @@ const TOPICS: Topic[] = [
     title: "Contas armadas",
     intro: (
       <>
-        Escreva a conta como numa calculadora. Ao clicar nela no editor, você escolhe entre Resolvido, Em branco e Lacunas, e na divisão, o
-        processo e as casas decimais.
+        Escreva a conta como numa calculadora. O texto cria a conta resolvida; o resto se escolhe depois, no editor: selecione a conta na
+        prévia e, em Propriedades, escolha entre Resolvido, Em branco e Lacunas, e na divisão, o processo e as casas decimais.
       </>
     ),
     samples: [
@@ -195,8 +220,10 @@ function contextOf(doc: FigureDoc): InputContext {
 }
 
 /** Runs the lines as the bar would, one after the other, and says what is wrong with each. */
-function run(lines: string[], numberLine: boolean) {
-  let doc = numberLine ? addNumberLine(emptyDoc()).doc : emptyDoc();
+function run(lines: string[], sample: Sample) {
+  let doc = emptyDoc();
+  if (sample.numberLine) doc = addNumberLine(doc).doc;
+  if (sample.axes) doc = addAxes(doc).doc;
   const errors = lines.map((line) => {
     if (line.trim() === "") return null;
     const parsed = parseInput(line, contextOf(doc));
@@ -210,7 +237,7 @@ function run(lines: string[], numberLine: boolean) {
 
 function Example({ sample }: { sample: Sample }) {
   const [lines, setLines] = useState(sample.lines);
-  const { doc, errors } = run(lines, !!sample.numberLine);
+  const { doc, errors } = run(lines, sample);
   const changed = lines.some((l, i) => l !== sample.lines[i]);
   const open = async () => {
     const token = await encodeShareToken({ name: "Exemplo do guia", doc });
@@ -219,29 +246,35 @@ function Example({ sample }: { sample: Sample }) {
   return (
     <figure className="overflow-hidden rounded-lg border bg-card">
       <figcaption className="px-3 pt-3 text-sm text-muted-foreground">{sample.caption}</figcaption>
+      {sample.before && <Note title="Antes de digitar">{sample.before}</Note>}
       <div className="space-y-1.5 p-3">
+        {lines.length > 1 && <p className="text-xs text-muted-foreground">Uma linha de cada vez, com Enter no fim de cada uma:</p>}
         {lines.map((line, i) => (
-          <div key={i}>
-            <Input
-              value={line}
-              spellCheck={false}
-              aria-label={`Linha ${i + 1}: ${sample.caption}`}
-              aria-invalid={errors[i] !== null}
-              className="font-mono sm:text-sm"
-              onChange={(e) => setLines(lines.map((l, j) => (j === i ? e.target.value : l)))}
-            />
-            {errors[i] && <p className="mt-1 text-xs text-destructive">{errors[i]}</p>}
+          <div key={i} className="flex items-start gap-2">
+            {lines.length > 1 && (
+              <span
+                aria-hidden="true"
+                className="mt-2 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground"
+              >
+                {i + 1}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <Input
+                value={line}
+                spellCheck={false}
+                aria-label={`Linha ${i + 1}: ${sample.caption}`}
+                aria-invalid={errors[i] !== null}
+                className="font-mono sm:text-sm"
+                onChange={(e) => setLines(lines.map((l, j) => (j === i ? e.target.value : l)))}
+              />
+              {errors[i] && <p className="mt-1 text-xs text-destructive">{errors[i]}</p>}
+            </div>
           </div>
         ))}
       </div>
-      {doc.elements.length > 0 && (
-        <div
-          data-testid="guide-figure"
-          className="grid place-items-center bg-white p-3 [&_svg]:h-auto [&_svg]:max-h-72 [&_svg]:max-w-full"
-          // The same markup the export writes, built by core from what was typed.
-          dangerouslySetInnerHTML={{ __html: toSvg(doc, { background: "#ffffff" }) }}
-        />
-      )}
+      {doc.elements.length > 0 && <GuideFigure doc={doc} />}
+      {sample.after && <Note title="Depois, no editor">{sample.after}</Note>}
       <div className="flex justify-end gap-1 border-t p-1.5">
         {changed && (
           <Button variant="ghost" size="sm" onClick={() => setLines(sample.lines)}>
@@ -258,8 +291,31 @@ function Example({ sample }: { sample: Sample }) {
   );
 }
 
+/** A step of an example that isn't typed: what was there before, or what is done after by tapping. */
+function Note({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <p className="mx-3 mt-3 rounded-md border border-dashed px-2.5 py-1.5 text-xs text-muted-foreground last:mb-3">
+      <span className="font-medium text-foreground">{title}:</span> {children}
+    </p>
+  );
+}
+
+/**
+ * The figure as the editor's preview shows it, not as it is exported: on the
+ * theme's paper, over the grid when the profile shows it.
+ */
+function GuideFigure({ doc }: { doc: FigureDoc }) {
+  const showGrid = useActivePrefs().behavior.showGrid;
+  return (
+    <div data-testid="guide-figure" className="border-t">
+      <FigureSnapshot doc={doc} grid={showGrid} label="Figura do exemplo" className="aspect-[3/2] w-full" />
+    </div>
+  );
+}
+
 /** The page behind "Mais explicações": the input bar, topic by topic, with examples that run for real. */
 export function InputGuide() {
+  useApplyTheme();
   // The page is drawn after the browser looks for the #topic of the link, so it goes there now.
   useEffect(() => {
     if (window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
@@ -291,7 +347,9 @@ export function InputGuide() {
             <h1 className="mt-2 text-2xl font-semibold">Guia da barra de entrada</h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
               Tudo o que dá para criar digitando. Os exemplos abaixo funcionam de verdade: mude o texto e a figura muda junto. Quando gostar
-              do resultado, abra no editor.
+              do resultado, abra no editor. A barra cria os objetos; mudar como eles ficam, ou combinar uns com os outros, se faz depois,
+              selecionando na prévia e usando Ferramentas e Propriedades. Quando um exemplo começa com algo que não foi digitado, ou continua
+              com um toque, ele diz como.
             </p>
           </header>
           {TOPICS.map((topic) => (

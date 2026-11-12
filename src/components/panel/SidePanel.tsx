@@ -12,14 +12,17 @@ import { EditTabs } from "./EditTabs";
 import { FigureTabs } from "./FigureTabs";
 import { LabelTools } from "./LabelTools";
 
-/** The title with the theme, Configurações, help and (wide enough) the pro layout. */
-export function AppHeader({ className }: { className?: string }) {
+/**
+ * The title with the theme, Configurações, help and (wide enough) the pro
+ * layout. `start`: all of it at the left, clear of the phone menu's X.
+ */
+export function AppHeader({ className, start = false }: { className?: string; start?: boolean }) {
   const profileName = usePrefsStore((s) => activeProfileName(s));
   const beside = useSidePanelBeside();
   const dark = useDarkTheme();
   const ws = useWorkspaceStore.getState;
   return (
-    <header className={cn("flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5", className)}>
+    <header className={cn("flex shrink-0 items-center gap-2 border-b px-4 py-2.5", start ? "pl-3 pr-14" : "justify-between", className)}>
       <h1 className="flex items-center gap-2 text-base font-semibold">
         <Logo className="h-6 w-6 text-primary" />
         GeoSimples
@@ -66,8 +69,9 @@ export function AppHeader({ className }: { className?: string }) {
 export function SidePanel({ phone = false }: { phone?: boolean }) {
   const beside = useSidePanelBeside();
   return (
-    <aside aria-label="Painel" className="flex min-h-0 flex-col rounded-lg border bg-card">
-      <AppHeader />
+    // On a phone the panel is the menu's sheet itself, not a card on it.
+    <aside aria-label="Painel" className={cn("flex min-h-0 flex-col", phone ? "flex-1" : "rounded-lg border bg-card")}>
+      <AppHeader start={phone} />
       <FigureTabs />
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pt-3">
         {!phone && (
@@ -75,7 +79,14 @@ export function SidePanel({ phone = false }: { phone?: boolean }) {
             <AreaTools />
           </section>
         )}
-        {beside ? <EditTabs /> : <LabelTools />}
+        {beside ? (
+          <EditTabs />
+        ) : (
+          // Room under its buttons, as each tab of EditTabs has.
+          <div className="pb-3">
+            <LabelTools />
+          </div>
+        )}
       </div>
     </aside>
   );
