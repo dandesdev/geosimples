@@ -129,7 +129,7 @@ export function PanelTab(props: IDockviewPanelHeaderProps) {
   return (
     <TabMenu props={props}>
       <div
-        className="flex h-full items-center gap-1 pl-2.5 pr-1 text-xs font-semibold"
+        className="flex h-full items-center gap-1 px-3 text-xs font-semibold"
         onDoubleClick={() => {
           const group = props.api.group;
           if (canMinimize(group)) setMinimized(group, !isMinimized(group));

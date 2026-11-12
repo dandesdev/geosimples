@@ -22,7 +22,7 @@ GeoSimples makes standard geometry figures for teaching material (tests, workshe
 - **Fills between shapes**: two or more selected circles or polygons can fill their union, intersection, difference or exclusion, like Illustrator's Pathfinder (`fillShapeOperation` in `setOps.ts`): a `region` over those shapes, which follows them and is written as one exact path, as Venn regions are.
 - **Input guide**: `guia.html` is a second page of the Vite build (`src/guide/`), with live examples that run the real input parser, drawn as the preview draws them (theme paper and `PreviewGrid`), with numbered axes where coordinates matter. An example that needs something not typed says so: `before` (what was in the figure and where it is inserted from) and `after` (what is done next by selecting and tapping). New input syntax gets an example there.
 - **Figure library**: every figure is kept in localStorage (`geosimples-library` index plus one `geosimples-figure:<id>` key per doc; logic in `core/src/figure/library.ts`). The open figure autosaves; switching figures starts a fresh undo history. Files (`.geosimples.json`) and share links (`#figura=`, deflate-raw + base64url) are in `core/src/figure/file.ts` and always open as a new figure.
-- **Stack**: React 19 + TypeScript + React Compiler, Tailwind CSS v4, shadcn/ui (Radix), Zustand, sonner.
+- **Stack**: React 19 + TypeScript + React Compiler, Tailwind CSS v4, shadcn/ui (Radix), Zustand, sonner. The UI font, Inter, ships with the app (`@fontsource-variable/inter`), so every system shows the same widths.
 
 ## Repository Layout
 

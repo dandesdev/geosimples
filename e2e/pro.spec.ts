@@ -645,10 +645,14 @@ test("pro layout: Ferramentas starts as a bar of folder tabs between the preview
   const tools = panel(page, "tools");
   // A column of its own, between the preview and the panels, with Propriedades above Figura.
   await expect.poll(async () => Math.round((await box(tools)).width)).toBe(86);
-  const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
+  // The preview follows the new window size a moment later.
+  const previewEnd = async () => {
+    const p = await box(page.getByRole("region", { name: "Prévia da figura" }));
+    return p.x + p.width;
+  };
+  await expect.poll(async () => (await box(tools)).x - (await previewEnd())).toBeGreaterThanOrEqual(-1);
   const props = await box(panel(page, "properties"));
   const bar = await box(tools);
-  expect(bar.x).toBeGreaterThanOrEqual(preview.x + preview.width - 1);
   expect(bar.x + bar.width).toBeLessThanOrEqual(props.x + 1);
   expect(bar.height).toBeGreaterThan(500);
   expect(props.y).toBeLessThan((await box(panel(page, "figure"))).y);
