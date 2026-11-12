@@ -56,7 +56,10 @@ export function ToolsStrip() {
           {AREAS.map((a, i) => {
             // Tall tabs that overlap like a card index, all on one left edge: each one tucks under the one
             // above it, and the open one comes to the front over both neighbours and joins the column.
-            // The icon sits in the middle of the part that shows.
+            // Only the corners that show are round: a covered corner stays square, so the round corner
+            // over it shows the tab behind instead of a notch, and the left edge runs straight.
+            // The icon sits near the middle of the part that shows, and moves only a few pixels when
+            // the open tab changes.
             const open = area === a.id;
             const coveredAbove = i > 0 && !open;
             const coveredBelow = AREAS[i + 1]?.id === area;
@@ -67,10 +70,13 @@ export function ToolsStrip() {
                 title={a.title}
                 aria-label={a.title}
                 className={cn(
-                  "relative -mr-px ml-1 h-11 shrink-0 rounded-none rounded-l-xl border border-r-0 bg-muted p-0 text-muted-foreground shadow-[0_2px_3px_-2px_rgb(0_0_0/0.25)] hover:text-foreground data-[state=active]:z-20 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-[18px] [&_svg]:w-[18px]",
+                  "relative -mr-px ml-1 h-14 shrink-0 rounded-none border border-r-0 bg-muted p-0 text-muted-foreground shadow-[0_2px_3px_-2px_rgb(0_0_0/0.25)] hover:text-foreground data-[state=active]:z-20 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-[18px] [&_svg]:w-[18px]",
                   i > 0 && "-mt-2.5",
+                  !coveredAbove && "rounded-tl-[10px]",
+                  !coveredBelow && "rounded-bl-[10px]",
                   coveredAbove && "pt-2.5",
-                  coveredBelow && "pb-2.5",
+                  open && i > 0 && "pt-[5px]",
+                  coveredBelow && "pb-[5px]",
                 )}
                 // Each tab lies over the next one: the stacking follows the order, which is data.
                 style={{ zIndex: area === a.id ? undefined : AREAS.length - i }}
