@@ -71,6 +71,14 @@
 .dockview-theme-geosimples .dv-tab:not(.dv-active-tab) [data-close] {
   display: none;
 }
+/* The tab's own content has the side padding: dockview's would add to it, and with a wider font the third tab would no longer fit. */
+.dockview-theme-geosimples .dv-tab {
+  padding-inline: 0;
+}
+/* The close button's own room is its margin: the text stays as far from either edge. */
+.dockview-theme-geosimples .dv-tab [data-close] {
+  margin-right: -0.5rem;
+}
 
 /* Toolbars have a thin grip instead of tabs. */
 .dockview-theme-geosimples .dv-groupview:has([data-grip]) {
@@ -117,5 +125,10 @@
 
 /* A floating toolbar is as long as its buttons: it has no handles to make it shorter. */
 .dockview-theme-geosimples .dv-resize-container:has([data-toolbar]) > [class^="dv-resize-handle-"] {
+  display: none;
+}
+
+/* Ferramentas as a bar: its folder tabs hang over the preview's paper, so no line runs between them. */
+.dockview-theme-geosimples .dv-view:has([data-tools-bar])::before {
   display: none;
 }

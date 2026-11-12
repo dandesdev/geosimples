@@ -216,22 +216,23 @@ const panelOptions = (id: DockItemId) =>
 /**
  * The default arrangement: the toolbars down the left, with Janelas, the
  * theme, Configurações and help at the bottom; the preview in the middle,
- * with Inserir floating on it; and down the right Ferramentas, Figura with
- * Prontos as a second tab, then Propriedades with Formatação and Rótulos.
+ * with Inserir floating on it; Ferramentas as a bar beside it; and down the
+ * right Propriedades with Formatação and Rótulos, then Figura with Prontos.
  */
 export function buildDefaultLayout(target: DockviewApi) {
   target.clear();
+  useWorkspaceStore.getState().setToolsBar(true);
   target.addPanel({ id: PREVIEW_ID, component: PREVIEW_ID, title: "Prévia" });
   target.addPanel({ ...panelOptions("tools-file"), position: { referencePanel: PREVIEW_ID, direction: "left" }, initialWidth: TOOLBAR_SIZE });
   target.addPanel({ ...panelOptions("tools-mode"), position: { referencePanel: "tools-file", direction: "below" } });
   target.addPanel({ ...panelOptions("tools-app"), position: { referencePanel: "tools-mode", direction: "below" } });
-  target.addPanel({ ...panelOptions("tools"), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: RIGHT_COLUMN });
-  target.addPanel({ ...panelOptions("figure"), position: { referencePanel: "tools", direction: "below" } });
-  target.addPanel({ ...panelOptions("ready"), position: { referencePanel: "figure", direction: "within" }, inactive: true });
-  target.addPanel({ ...panelOptions("properties"), position: { referencePanel: "figure", direction: "below" } });
+  target.addPanel({ ...panelOptions("properties"), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: RIGHT_COLUMN });
   target.addPanel({ ...panelOptions("formatting"), position: { referencePanel: "properties", direction: "within" }, inactive: true });
   target.addPanel({ ...panelOptions("labels"), position: { referencePanel: "properties", direction: "within" }, inactive: true });
-  target.getPanel("tools")?.group.api.setSize({ height: 330 });
+  target.addPanel({ ...panelOptions("figure"), position: { referencePanel: "properties", direction: "below" } });
+  target.addPanel({ ...panelOptions("ready"), position: { referencePanel: "figure", direction: "within" }, inactive: true });
+  // Between the preview and the panels, as wide as the bar.
+  target.addPanel({ ...panelOptions("tools"), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: TOOLS_BAR });
   prepareGroups(target);
   // Figura is one row of buttons. The toolbars fit their buttons once they are drawn; the last takes the rest.
   fitFigure(target);
@@ -435,6 +436,12 @@ export function openItem(id: DockItemId) {
     orientToolbar(api.getPanel(id)!.group);
     return;
   }
+  // Ferramentas as a bar comes back to its own column beside the preview.
+  if (id === "tools" && useWorkspaceStore.getState().toolsBar) {
+    api.addPanel({ ...panelOptions(id), position: { referencePanel: PREVIEW_ID, direction: "right" }, initialWidth: TOOLS_BAR });
+    prepareGroups(api);
+    return;
+  }
   // A panel joins another open panel as a tab (the tall ones first: Figura is one row), or starts the right column again.
   const neighbour = [...PANEL_IDS]
     .reverse()
@@ -460,8 +467,8 @@ export function setItemOpen(id: DockItemId, open: boolean) {
 
 /** Puts every panel and toolbar back where it starts out. */
 export function resetLayout() {
-  // The default arrangement has Ferramentas as a panel.
-  useWorkspaceStore.getState().setToolsBar(false);
+  // The default arrangement has Ferramentas as a bar.
+  useWorkspaceStore.getState().setToolsBar(true);
   if (api) buildDefaultLayout(api);
   else useWorkspaceStore.getState().setDock(null);
 }
@@ -569,7 +576,7 @@ function resize(group: DockviewGroupPanel, minimized: boolean) {
 
 
 /** Ferramentas as a bar: its icon tabs and one column of tool icons. */
-export const TOOLS_BAR = 82;
+export const TOOLS_BAR = 86;
 
 /** The group Ferramentas is in, if it is docked in the grid. */
 const toolsGroup = () => {
@@ -632,9 +639,12 @@ export function setToolsBar(bar: boolean) {
   useWorkspaceStore.getState().setToolsBar(false);
   const group = toolsGroup();
   if (group) limitTools(group, false);
-  // Back on top of the panels, where it starts out, if they still have a column.
-  const below = target.getPanel("figure") ?? target.getPanel("properties");
-  if (below && below.group.api.location.type === "grid" && below.group !== tools.group) {
+  // Back on top of the panels' column, if they still have one.
+  const below = ["properties", "figure", "formatting", "labels", "ready"]
+    .map((id) => target.getPanel(id))
+    .filter((p): p is IDockviewPanel => !!p && p.group.api.location.type === "grid" && p.group !== tools.group)
+    .sort((a, b) => a.group.element.getBoundingClientRect().top - b.group.element.getBoundingClientRect().top)[0];
+  if (below) {
     tools.api.moveTo({ group: below.group, position: "top" });
   } else if (group) {
     group.api.setSize({ width: RIGHT_COLUMN });

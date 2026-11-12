@@ -23,33 +23,29 @@ const Dot = ({ cx, cy }: { cx: number; cy: number }) => (
   <circle cx={cx} cy={cy} r={1.8} fill="currentColor" stroke="none" />
 );
 
-/** Two overlapping sets, with the part an operation keeps shaded. */
-const SetsOutline = () => (
-  <>
-    <circle cx={9} cy={12} r={6} />
-    <circle cx={15} cy={12} r={6} />
-  </>
-);
 const LENS = "M12 6.8 A6 6 0 0 1 12 17.2 A6 6 0 0 1 12 6.8 Z";
+
+/* The Venn operations: what the operation keeps is solid, the rest a faint outline, so they read at 18 px. */
+const FAINT = 0.45;
 
 export const SetUnionIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M12 6.8 A6 6 0 1 1 12 17.2 A6 6 0 1 1 12 6.8 Z" fill="currentColor" fillOpacity={0.45} stroke="none" />
-    <SetsOutline />
+    <path d="M12 6.8a6 6 0 1 1 0 10.4 6 6 0 1 1 0-10.4z" fill="currentColor" />
   </Icon>
 );
 
 export const SetIntersectionIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d={LENS} fill="currentColor" fillOpacity={0.6} stroke="none" />
-    <SetsOutline />
+    <circle cx={9} cy={12} r={6} strokeOpacity={FAINT} />
+    <circle cx={15} cy={12} r={6} strokeOpacity={FAINT} />
+    <path d={LENS} fill="currentColor" stroke="none" />
   </Icon>
 );
 
 export const SetDifferenceIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M12 6.8 A6 6 0 1 0 12 17.2 A6 6 0 0 1 12 6.8 Z" fill="currentColor" fillOpacity={0.6} stroke="none" />
-    <SetsOutline />
+    <circle cx={15} cy={12} r={6} strokeOpacity={FAINT} />
+    <path d="M12 6.8a6 6 0 1 0 0 10.4 6 6 0 0 1 0-10.4z" fill="currentColor" />
   </Icon>
 );
 
@@ -261,11 +257,11 @@ export const RootsIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** A hill with its top marked, the other way up from Raízes' cup, so the two never look alike. */
 export const ExtremumIcon = (p: IconProps) => (
   <Icon {...p}>
-    <MidAxis />
-    <Parabola />
-    <Dot cx={12} cy={17.5} />
+    <path d="M5 20Q12-6 19 20" />
+    <circle cx={12} cy={7} r={2.2} fill="currentColor" stroke="none" />
   </Icon>
 );
 
@@ -380,5 +376,346 @@ export const CircuitIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M4 9V5h4l1-2 2 4 2-4 2 4 1-2h4v14H4v-6" />
     <path d="M2 9h4M3 11h2" />
+  </Icon>
+);
+
+/* Vectors: a filled head, as vectors are drawn in figures. Axes and number lines have open heads. */
+
+const DOTTED = "1.4 2.2";
+/** The vectors an operation starts from are fainter than the one it makes. */
+const OPERAND = 0.45;
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/** A vector from (x1, y1) to (x2, y2): the shaft up to a filled head. `dotted` dots the shaft. */
+function Arrow({
+  x1,
+  y1,
+  x2,
+  y2,
+  head = 5.5,
+  dotted = false,
+  faint = false,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  head?: number;
+  dotted?: boolean;
+  /** An operand, fainter than the result an operation draws. */
+  faint?: boolean;
+}) {
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  const ux = (x2 - x1) / len;
+  const uy = (y2 - y1) / len;
+  const bx = x2 - ux * head;
+  const by = y2 - uy * head;
+  const half = head * 0.5;
+  return (
+    <g opacity={faint ? OPERAND : undefined}>
+      <path d={`M${x1} ${y1}L${r2(bx + ux)} ${r2(by + uy)}`} strokeDasharray={dotted ? DOTTED : undefined} />
+      <path
+        d={`M${x2} ${y2}L${r2(bx - uy * half)} ${r2(by + ux * half)}L${r2(bx + uy * half)} ${r2(by - ux * half)}Z`}
+        fill="currentColor"
+        strokeWidth={1}
+      />
+    </g>
+  );
+}
+
+/** The Vetores tab: one vector. */
+export const VectorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={5} y1={19} x2={19} y2={5} />
+  </Icon>
+);
+
+/** Digitar vetor: a vector with its coordinates dotted at the tip. */
+export const TypeVectorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={4} y1={20} x2={17} y2={7} />
+    <path d="M8 4h12v11" strokeDasharray={DOTTED} />
+  </Icon>
+);
+
+/** Versores i e j: two short vectors from the origin, the axes going on dotted. */
+export const BasisIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={5} y1={19} x2={5} y2={7.5} head={4.5} />
+    <Arrow x1={5} y1={19} x2={16.5} y2={19} head={4.5} />
+    <path d="M5 5V2.5M19 19h2.5" strokeDasharray={DOTTED} />
+  </Icon>
+);
+
+/** Vetor entre pontos: a vector between two points. */
+export const VectorBetweenIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Dot cx={4.5} cy={19.5} />
+    <Dot cx={19.5} cy={4.5} />
+    <Arrow x1={6.5} y1={17.5} x2={17.2} y2={6.8} />
+  </Icon>
+);
+
+/** Soma pela regra do polígono: two vectors tip to tail, faint, and the resultant from the first tail to the last tip. */
+export const VectorSumIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={3} y1={20} x2={13} y2={20} head={4.5} faint />
+    <Arrow x1={13} y1={20} x2={20} y2={9} head={4.5} faint />
+    <Arrow x1={3} y1={19} x2={20.5} y2={5} />
+  </Icon>
+);
+
+/** Soma pelo paralelogramo: two faint vectors from one point, the dotted sides, and the diagonal as the sum. */
+export const VectorParallelogramIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={3} y1={19} x2={8.5} y2={8} head={4.5} faint />
+    <Arrow x1={3} y1={19} x2={14} y2={19} head={4.5} faint />
+    <path d="M9.5 6H21L15.5 18" strokeDasharray={DOTTED} />
+    <Arrow x1={3} y1={19} x2={20} y2={7} />
+  </Icon>
+);
+
+/** Diferença: two faint vectors from one point, the difference from the tip of the second to the tip of the first. */
+export const VectorDifferenceIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={3} y1={19} x2={12.5} y2={5} head={4.5} faint />
+    <Arrow x1={3} y1={19} x2={19} y2={19} head={4.5} faint />
+    <Arrow x1={21} y1={19.5} x2={15} y2={4} />
+  </Icon>
+);
+
+/** Projeção: a faint vector, and its projection along the other direction up to the dotted perpendicular. */
+export const VectorProjectionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={3} y1={18} x2={18.5} y2={6} faint />
+    <Arrow x1={3} y1={18} x2={18.5} y2={18} />
+    <path d="M20.5 3v18" strokeDasharray={DOTTED} />
+  </Icon>
+);
+
+/** Versor: a short vector, its direction going on dotted. */
+export const UnitVectorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={4} y1={20} x2={11.5} y2={12.5} />
+    <path d="M14 10 20 4" strokeDasharray={DOTTED} />
+  </Icon>
+);
+
+/** Componentes: a faint vector and its horizontal and vertical components. */
+export const VectorComponentsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={4} y1={20} x2={19} y2={5} faint />
+    <Arrow x1={4} y1={20.5} x2={20} y2={20.5} head={4.5} />
+    <Arrow x1={20.5} y1={20} x2={20.5} y2={4.5} head={4.5} />
+  </Icon>
+);
+
+/** Múltiplo: the vector three times, faint and tip to tail, beside the multiple. */
+export const VectorMultipleIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={2.5} y1={16.5} x2={6.8} y2={12.2} head={3.8} faint />
+    <Arrow x1={6.8} y1={12.2} x2={11.1} y2={7.9} head={3.8} faint />
+    <Arrow x1={11.1} y1={7.9} x2={15.4} y2={3.6} head={3.8} faint />
+    <Arrow x1={8} y1={21} x2={21} y2={8} />
+  </Icon>
+);
+
+/* Circuits: the current's arrows are filled in the figure, as here. */
+
+export const CurrentConventionalIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h5M4.5 9.5v5" />
+    <Arrow x1={9} y1={12} x2={22} y2={12} />
+  </Icon>
+);
+
+export const CurrentRealIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx={18} cy={12} r={4} />
+    <path d="M16 12h4" />
+    <Arrow x1={12} y1={12} x2={2} y2={12} />
+  </Icon>
+);
+
+export const CurrentNoneIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Arrow x1={3} y1={12} x2={19} y2={12} />
+    <path d="M5 20 19 4" />
+  </Icon>
+);
+
+/** Fio: a bent wire between two terminals. */
+export const WireIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx={4.5} cy={16} r={2} />
+    <circle cx={19.5} cy={8} r={2} />
+    <path d="M6.5 16H12V8h5.5" />
+  </Icon>
+);
+
+/* Conjuntos: the diagrams by how many sets, inside the universe U. */
+
+export const Venn1Icon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x={3} y={5} width={18} height={14} rx={1.5} />
+    <circle cx={12} cy={12} r={4} />
+  </Icon>
+);
+
+export const Venn2Icon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x={2} y={5} width={20} height={14} rx={1.5} />
+    <circle cx={9.5} cy={12} r={4} />
+    <circle cx={14.5} cy={12} r={4} />
+  </Icon>
+);
+
+export const Venn3Icon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x={2} y={3} width={20} height={18} rx={1.5} />
+    <circle cx={9.5} cy={9.5} r={3.6} />
+    <circle cx={14.5} cy={9.5} r={3.6} />
+    <circle cx={12} cy={14} r={3.6} />
+  </Icon>
+);
+
+/** Elementos de um conjunto: braces with elements, as in A={1,2}. */
+export const SetElementsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 4c-2 0-3 1-3 3v2.5C5 11 4 12 3 12c1 0 2 1 2 2.5V17c0 2 1 3 3 3" />
+    <path d="M16 4c2 0 3 1 3 3v2.5c0 1.5 1 2.5 2 2.5-1 0-2 1-2 2.5V17c0 2-1 3-3 3" />
+    <circle cx={10} cy={12} r={1.6} fill="currentColor" stroke="none" />
+    <circle cx={14} cy={12} r={1.6} fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+/** Digitar região: a text cursor and the region shaded. */
+export const TypeRegionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 5h4M4 5v14M2 19h4" />
+    <circle cx={13} cy={12} r={4.5} />
+    <circle cx={18} cy={12} r={4.5} />
+    <path d="M15.5 8.26a4.5 4.5 0 0 1 0 7.48 4.5 4.5 0 0 1 0-7.48z" fill="currentColor" fillOpacity={0.45} stroke="none" />
+  </Icon>
+);
+
+/* Fills between any selected shapes: a square and a circle, so they don't read as the Venn operations. */
+
+const ShapesOutline = () => (
+  <>
+    <rect x={3} y={3} width={12} height={12} strokeOpacity={FAINT} />
+    <circle cx={15} cy={15} r={6} strokeOpacity={FAINT} />
+  </>
+);
+
+export const ShapeUnionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 3h12v6a6 6 0 1 1-6 6H3z" fill="currentColor" />
+  </Icon>
+);
+
+export const ShapeIntersectionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <ShapesOutline />
+    <path d="M15 9v6H9a6 6 0 0 1 6-6z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+export const ShapeDifferenceIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <ShapesOutline />
+    <path d="M3 3h12v6a6 6 0 0 0-6 6H3z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+export const ShapeExclusionIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <ShapesOutline />
+    <path d="M3 3h12v6a6 6 0 0 0-6 6H3zM15 9a6 6 0 1 1-6 6h6z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+/* Contas: one picture per kind of board. */
+
+/** Conta armada: an addition in columns. */
+export const ColumnSumIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 8.5h4M5 6.5v4" />
+    <path d="M11 6h9M11 11h9" />
+    <path d="M3 15h18" />
+    <path d="M11 19.5h9" />
+  </Icon>
+);
+
+/** Fatoração em primos: the bar, the numbers getting smaller, the primes beside it. */
+export const FactorIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 3v18" />
+    <path d="M3 6h7M5 12h5M7 18h3" />
+    <circle cx={18} cy={6} r={1.6} fill="currentColor" stroke="none" />
+    <circle cx={18} cy={12} r={1.6} fill="currentColor" stroke="none" />
+    <circle cx={18} cy={18} r={1.6} fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+/** MMC: two small numbers lead to a bigger one, their common multiple. */
+export const LcmIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx={4.5} cy={6} r={2} fill="currentColor" stroke="none" />
+    <circle cx={4.5} cy={18} r={2} fill="currentColor" stroke="none" />
+    <path d="M7.5 7.5l4.5 2.5M7.5 16.5l4.5-2.5" />
+    <circle cx={17} cy={12} r={5} fill="currentColor" fillOpacity={0.45} />
+  </Icon>
+);
+
+/** MDC: two big numbers lead to a smaller one, their common divisor. */
+export const GcdIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx={6.5} cy={6.5} r={4} />
+    <circle cx={6.5} cy={17.5} r={4} />
+    <path d="M11.5 8.5l4 2M11.5 15.5l4-2" />
+    <circle cx={19} cy={12} r={2.2} fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+/** MDC por divisões sucessivas: the tic-tac-toe table of Euclid's algorithm. */
+export const EuclidIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 4v16M15 4v16M4 9h16M4 15h16" />
+  </Icon>
+);
+
+/** Varal: an interval on each of two lines, and the result on the third. */
+export const IntervalsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 6h18M3 12h18M3 18h18" strokeOpacity={0.3} />
+    <path d="M4 6h10M10 12h10M10 18h4" strokeWidth={3.2} />
+  </Icon>
+);
+
+/** Esboço de sinal: the curve over the line, positive outside its roots and negative between. */
+export const SignSketchIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 14h20" />
+    <path d="M8 4Q12 28 16 4" />
+    <path d="M2 8h4M4 6v4M18 8h4M20 6v4" />
+    <path d="M10.5 20h3" />
+  </Icon>
+);
+
+/** Quadro de sinais: a table of signs. */
+export const SignTableIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x={3} y={4} width={18} height={16} rx={1.5} />
+    <path d="M3 12h18M12 4v16" />
+    <path d="M6 8h3M7.5 6.5v3M15 8h3M6 16h3M15 16h3M16.5 14.5v3" />
+  </Icon>
+);
+
+/** Equação modular: |x|. */
+export const AbsoluteIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 4v16M19 4v16" />
+    <path d="M9 9l6 6M15 9l-6 6" />
   </Icon>
 );

@@ -194,7 +194,7 @@ export function varal(spec: VaralSpec, ctx: LineContext): Mark[] {
     const y = top - i * rowH;
     out.push(text(mathWidth(name, size) / 2, y, name, size));
     out.push(line({ x: left, y }, { x: right, y }, { width: 0.5 }));
-    out.push({ kind: "head", tip: { x: right + 6, y }, dir: { x: 1, y: 0 }, length: 6 });
+    out.push({ kind: "head", tip: { x: right + 6, y }, dir: { x: 1, y: 0 }, length: 6, open: true });
     drawSet(out, { criticals, holds, x, right, left, y, size, style: ctx.intervals, role });
   };
   spec.terms.forEach((_, i) => drawRow(i, letter(i), preds[i]));
@@ -333,7 +333,7 @@ export function signSketch(source: string, ctx: LineContext): Mark[] | string {
   const arm = size * 2.2;
   const out: Mark[] = [];
   out.push(line({ x: 0, y: 0 }, { x: right, y: 0 }));
-  out.push({ kind: "head", tip: { x: right + 6, y: 0 }, dir: { x: 1, y: 0 }, length: 6 });
+  out.push({ kind: "head", tip: { x: right + 6, y: 0 }, dir: { x: 1, y: 0 }, length: 6, open: true });
   out.push(text(right + size * 0.9, -size * 0.6, "x", size));
 
   const solution = sided.rel ? solutionOf(parsed.fn, sided.rel, crit) : null;
@@ -504,7 +504,7 @@ export function signTable(source: string, ctx: LineContext): Mark[] | string {
   const rowY = (r: number) => headerY - (r + 0.5) * rowH;
   const axis = (y: number, strong: boolean) => {
     out.push(line({ x: 0, y }, { x: width + 4, y }, strong ? {} : { width: 0.5 }));
-    out.push({ kind: "head", tip: { x: width + 10, y }, dir: { x: 1, y: 0 }, length: 6 });
+    out.push({ kind: "head", tip: { x: width + 10, y }, dir: { x: 1, y: 0 }, length: 6, open: true });
   };
   out.push(text(nameWidth / 2, 0, "x", size));
   crit.forEach((c, i) => out.push(text(x(i), Math.max(0, layoutMath(c.node, size).down - size * 0.55), c.node, size)));
@@ -747,7 +747,7 @@ export function modulusTable(source: string, ctx: LineContext): Mark[] | string 
   // The line along the top, the critical values at the column borders.
   const axis = rowH * 0.1;
   out.push(line({ x: nameWidth, y: axis }, { x: width, y: axis }));
-  out.push({ kind: "head", tip: { x: width + 6, y: axis }, dir: { x: 1, y: 0 }, length: 6 });
+  out.push({ kind: "head", tip: { x: width + 6, y: axis }, dir: { x: 1, y: 0 }, length: 6, open: true });
   borders.forEach((b, i) => {
     if (!b) return;
     out.push(text(x(i), axis + size * 0.95, b.node, size));
@@ -778,7 +778,7 @@ export function modulusTable(source: string, ctx: LineContext): Mark[] | string 
     const lineRight = px(changes.length - 1) + step;
     out.push(text(mathWidth("S", size) / 2 + size / 2, y, "S", size));
     out.push(line({ x: lineLeft, y }, { x: lineRight, y }, { width: 0.5 }));
-    out.push({ kind: "head", tip: { x: lineRight + 6, y }, dir: { x: 1, y: 0 }, length: 6 });
+    out.push({ kind: "head", tip: { x: lineRight + 6, y }, dir: { x: 1, y: 0 }, length: 6, open: true });
     changes.forEach((c, i) => out.push(text(px(i), y + size * 1.1, c.node, size, "result")));
     drawSet(out, { criticals: changes, holds: (v) => inPieces(solutionSet, v), x: px, left: lineLeft, right: lineRight, y, size, style: ctx.intervals, role: "result" });
   }

@@ -175,6 +175,8 @@ for (const phone of PHONES) {
       await expect(menu.getByRole("heading", { name: "GeoSimples" })).toBeVisible();
       for (const name of ["Tema escuro", "Configurações", "Como usar"]) await expect(menu.getByRole("button", { name }), name).toBeVisible();
       // The title and its buttons sit at the left, clear of the X that closes the menu, and on the sheet itself, not on a card.
+      // Measured once the sheet has slid in: on its way it is further right.
+      await expect.poll(async () => (await menu.boundingBox())!.x).toBe(0);
       const close = (await page.getByTitle("Fechar o menu").boundingBox())!;
       const help = (await menu.getByRole("button", { name: "Como usar" }).boundingBox())!;
       expect(help.x + help.width).toBeLessThan(close.x - 4);

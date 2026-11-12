@@ -70,7 +70,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       exportColors: "print",
       inputAutoHide: true,
       dock: null,
-      toolsBar: false,
+      toolsBar: true,
       open: [],
       visible: [],
       setLayout: (layout) => set({ layout }),

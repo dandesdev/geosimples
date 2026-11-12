@@ -27,7 +27,7 @@ import {
   pointGuides,
   xTickText,
 } from "./plot";
-import { buildScene, type AxisNumberSpots } from "./render";
+import { buildScene, OPEN_HEAD, type AxisNumberSpots } from "./render";
 import { PATTERN } from "./svg";
 import type { Axes, Dash, Element, FigureDoc, Fill, LabelFont, Stroke } from "./types";
 import { polar, type Vec } from "./vec";
@@ -158,6 +158,13 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
           break;
         case "head": {
           const back = { x: m.tip.x - m.dir.x * m.length, y: m.tip.y - m.dir.y * m.length };
+          if (m.open) {
+            const h = m.length * OPEN_HEAD;
+            out.push(
+              `\\draw${opts([`draw=${c}`, "line width=0.6pt", ...faded, "line join=round"])} ${P({ x: back.x - m.dir.y * h, y: back.y + m.dir.x * h })} -- ${P(m.tip)} -- ${P({ x: back.x + m.dir.y * h, y: back.y - m.dir.x * h })} ${P(back)} -- ${P(m.tip)};`,
+            );
+            break;
+          }
           const half = m.length * 0.4;
           out.push(
             `\\fill${opts([c, ...faded])} ${P(m.tip)} -- ${P({ x: back.x - m.dir.y * half, y: back.y + m.dir.x * half })} -- ${P({ x: back.x + m.dir.y * half, y: back.y - m.dir.x * half })} -- cycle;`,
@@ -375,14 +382,12 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         sections.axes.push(
           `\\draw${opts(strokeOpts(el.stroke))} (${at({ x: el.x[0], y: o.y })}) -- (${xEnd}) (${at({ x: o.x, y: el.y[0] })}) -- (${yEnd});`,
         );
-        // Arrowheads drawn like the SVG's, so no arrows library is needed.
+        // Open arrowheads drawn like the SVG's, so no arrows library is needed.
         const len = 4 + el.stroke.width * 2;
-        const half = len * 0.4;
+        const half = len * OPEN_HEAD;
         const head = (tip: string, dx: number, dy: number) =>
-          `(${tip}) -- ${shifted(tip, { x: -dx * len - dy * half, y: -dy * len + dx * half })} -- ${shifted(tip, { x: -dx * len + dy * half, y: -dy * len - dx * half })} -- cycle`;
-        const headOpts = [color(el.stroke.color)];
-        if (el.stroke.opacity < 1) headOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
-        sections.axes.push(`\\fill${opts(headOpts)} ${head(xEnd, 1, 0)} ${head(yEnd, 0, 1)};`);
+          `${shifted(tip, { x: -dx * len - dy * half, y: -dy * len + dx * half })} -- (${tip}) -- ${shifted(tip, { x: -dx * len + dy * half, y: -dy * len - dx * half })}`;
+        sections.axes.push(`\\draw${opts([...strokeOpts({ ...el.stroke, dash: "solid" }), "line join=round"])} ${head(xEnd, 1, 0)} ${head(yEnd, 0, 1)};`);
         const tick = 2.5;
         const ticks = [
           ...xs.map((x) => at({ x, y: o.y })).map((b) => `${shifted(b, { x: 0, y: -tick })} -- ${shifted(b, { x: 0, y: tick })}`),
@@ -417,11 +422,9 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         const tip = at({ x: el.x[1], y: el.y });
         sections.axes.push(`\\draw${opts(strokeOpts(el.stroke))} (${from}) -- (${tip});`);
         const len = 4 + el.stroke.width * 2;
-        const half = len * 0.4;
-        const headOpts = [color(el.stroke.color)];
-        if (el.stroke.opacity < 1) headOpts.push(`fill opacity=${n(el.stroke.opacity)}`);
+        const half = len * OPEN_HEAD;
         sections.axes.push(
-          `\\fill${opts(headOpts)} (${tip}) -- ${shifted(tip, { x: -len, y: half })} -- ${shifted(tip, { x: -len, y: -half })} -- cycle;`,
+          `\\draw${opts([...strokeOpts({ ...el.stroke, dash: "solid" }), "line join=round"])} ${shifted(tip, { x: -len, y: half })} -- (${tip}) -- ${shifted(tip, { x: -len, y: -half })};`,
         );
         const tick = 2.5;
         const xs = axisTicks(el.x, el.step, NaN);

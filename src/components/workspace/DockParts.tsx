@@ -20,6 +20,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { paperColor } from "@geosimples/core/figure";
+import { usePreviewPaper } from "@/lib/theme";
 import { DOCK_ITEM_TITLES, useWorkspaceStore, type DockItemId } from "@/store/workspaceStore";
 import { canMinimize, isMinimized, isPreviewGroup, isToolbarGroup, onMinimizedChange, setMinimized } from "./dock";
 import { panelMenuItems, type PanelMenuItem } from "./panelMenu";
@@ -123,11 +125,11 @@ function TabMenu({ props, children }: { props: IDockviewPanelHeaderProps; childr
 export function PanelTab(props: IDockviewPanelHeaderProps) {
   const bar = useWorkspaceStore((s) => s.toolsBar) && props.api.id === "tools";
   const title = DOCK_ITEM_TITLES[props.api.id as DockItemId] ?? props.api.title;
-  if (bar) return <GripTab {...props} />;
+  if (bar) return <ToolsBarGrip {...props} />;
   return (
     <TabMenu props={props}>
       <div
-        className="flex h-full items-center gap-1 pl-2.5 pr-1 text-xs font-semibold"
+        className="flex h-full items-center gap-1 px-3 text-xs font-semibold"
         onDoubleClick={() => {
           const group = props.api.group;
           if (canMinimize(group)) setMinimized(group, !isMinimized(group));
@@ -159,6 +161,25 @@ export function GripTab(props: IDockviewPanelHeaderProps) {
         className="grid h-full w-full cursor-grab place-items-center text-muted-foreground/70 hover:text-foreground active:cursor-grabbing"
       >
         {row ? <GripVertical className="h-3.5 w-3.5" /> : <GripHorizontal className="h-3.5 w-3.5" />}
+      </div>
+    </TabMenu>
+  );
+}
+
+/**
+ * Ferramentas as a bar has a grip over its tool column only; over its tabs the
+ * strip has the preview's paper, so the tabs hang from the column as they do below.
+ */
+function ToolsBarGrip(props: IDockviewPanelHeaderProps) {
+  const paper = usePreviewPaper();
+  return (
+    <TabMenu props={props}>
+      <div data-grip aria-label="Arrastar Ferramentas" title="Ferramentas: arraste para mover" className="flex h-full w-full cursor-grab active:cursor-grabbing">
+        {/* The paper's color comes from core, as the preview's own background does. */}
+        <span aria-hidden="true" className="w-[34px] shrink-0" style={{ backgroundColor: paperColor(paper) }} />
+        <span className="grid flex-1 place-items-center border-l bg-card text-muted-foreground/70 hover:text-foreground">
+          <GripHorizontal className="h-3.5 w-3.5" />
+        </span>
       </div>
     </TabMenu>
   );

@@ -29,8 +29,11 @@ export type Mark =
   | { kind: "dot"; at: Vec; r: number; open: boolean; role?: MarkRole }
   /** A circle drawn as a line, 0.6 pt wide unless `width` says. */
   | { kind: "ring"; at: Vec; r: number; width?: number; role?: MarkRole }
-  /** An arrowhead with its tip at `tip`, along `dir`. */
-  | { kind: "head"; tip: Vec; dir: Vec; length: number }
+  /**
+   * An arrowhead with its tip at `tip`, along `dir`: filled, as vectors and currents
+   * have, or `open` (two strokes and the shaft up to the tip), as axes and number lines have.
+   */
+  | { kind: "head"; tip: Vec; dir: Vec; length: number; open?: boolean }
   /** An empty square where a result was left out. */
   | { kind: "box"; at: Vec; w: number; h: number };
 

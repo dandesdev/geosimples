@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Inter ships with the app: without it, each system falls back to its own font, and wider ones crowd the panel tabs. */
+@import "@fontsource-variable/inter";
 
 @plugin "tailwindcss-animate";
 @import "tw-animate-css";
@@ -149,7 +151,7 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Inter Variable", "Inter", system-ui, sans-serif;
   margin: 0;
   padding: 0;
 }

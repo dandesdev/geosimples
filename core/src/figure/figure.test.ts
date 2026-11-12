@@ -997,3 +997,21 @@ describe("unclutterLabels", () => {
     expect(lines.some(([, , , y]) => y > 9)).toBe(true);
   });
 });
+
+describe("arrowheads", () => {
+  it("draws axes and number lines with open heads and vectors with filled ones, so they never look alike", () => {
+    let doc = applyInput(emptyDoc(), parseInput("vetor u=(2;1)")).doc;
+    doc = applyInput(doc, parseInput("f(x)=x^2")).doc;
+    const scene = buildScene(doc);
+    const of = (type: string) => {
+      const ids = new Set(doc.elements.filter((e) => e.type === type).map((e) => e.id));
+      return scene.prims.filter((p) => ids.has(p.owner) && p.kind === "path");
+    };
+    expect(of("axes").length).toBeGreaterThan(0);
+    expect(of("axes").every((p) => p.kind === "path" && p.fill === null)).toBe(true);
+    expect(of("vector").some((p) => p.kind === "path" && p.fill !== null)).toBe(true);
+    // TikZ draws the axes heads as two strokes meeting at the tip.
+    const tikz = toTikz(doc);
+    expect(tikz).toContain("line join=round");
+  });
+});
