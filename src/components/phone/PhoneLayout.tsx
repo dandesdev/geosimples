@@ -11,6 +11,7 @@ import { SelectionSummary } from "@/components/preview/SelectionSummary";
 import { AreaTools } from "@/components/tools/AreaTools";
 import { Dialog, DialogClose, DialogPortal, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useFigureStore } from "@/store/figureStore";
 import { usePanelStore } from "@/store/panelStore";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ export function PhoneLayout() {
 function PhoneNav() {
   const hidden = usePanelStore((s) => s.hintsHidden);
   const setHidden = usePanelStore((s) => s.setHintsHidden);
+  const tool = useFigureStore((s) => !!s.tool);
   return (
     <div role="toolbar" aria-label="Ações da figura" className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
@@ -81,7 +83,8 @@ function PhoneNav() {
           <Info />
         </IconButton>
       </div>
-      {!hidden && <SelectionSummary placement="tools" />}
+      {/* A waiting tool's hint shows even with the hints folded away: it holds the button that finishes the tool. */}
+      {(!hidden || tool) && <SelectionSummary placement="tools" />}
     </div>
   );
 }

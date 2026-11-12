@@ -63,6 +63,25 @@ const HISTORY_LIMIT = 100;
 /** Edits with the same key within this window merge into one undo step. */
 const COALESCE_MS = 1000;
 
+/** A tool waiting for its objects: see `lib/toolPick.ts`. */
+export interface ActiveTool {
+  /** The tool's id in the Ferramentas panel (`areas.ts`). */
+  id: string;
+  title: string;
+  /** What to click, for the hint. */
+  prompt: string;
+  /** Runs the tool on the picks, without saving: it succeeds once they are enough. */
+  op: (doc: FigureDoc, picks: Id[]) => OpResult;
+  /** A click on an empty spot puts a point there and picks it. */
+  createsPoints: boolean;
+  /** Each result's last pick starts the next one, as Ligar draws a path. */
+  chain: boolean;
+  /** Picks after which the tool gives up and starts over, saying why. */
+  max: number;
+  /** The first point of the path a chain is drawing: clicking it again closes the path. */
+  chainStart?: Id;
+}
+
 interface FigureState extends LibrarySlice {
   doc: FigureDoc;
   /** Selected ids in the order they were picked. Order matters for connect and angles. */
@@ -79,6 +98,12 @@ interface FigureState extends LibrarySlice {
   multiSelect: boolean;
   /** The figure Figura rápida is drawing. Changing mode finishes it. */
   quickFigure: QuickFigure;
+  /**
+   * A tool chosen before what it works on: clicks in the preview pick its
+   * objects (the selection, in order) until it can run (`lib/toolPick.ts`).
+   * Changing mode ends it.
+   */
+  tool: ActiveTool | null;
 
   commit: (doc: FigureDoc, coalesceKey?: string) => void;
   /** Runs an operation on the current figure and selects what it created. */
@@ -102,6 +127,7 @@ interface FigureState extends LibrarySlice {
   setMode: (mode: CanvasMode) => void;
   setMultiSelect: (on: boolean) => void;
   setQuickFigure: (figure: QuickFigure) => void;
+  setTool: (tool: ActiveTool | null) => void;
   setInputDraft: (text: string) => void;
   setActionPreview: (preview: ActionPreview | null) => void;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
@@ -383,6 +409,7 @@ export const useFigureStore = create<FigureState>()(
       actionPreview: null,
       settings: DEFAULT_SETTINGS,
       multiSelect: false,
+      tool: null,
       quickFigure: NO_QUICK_FIGURE,
 
       commit: (edited, coalesceKey) => {
@@ -500,7 +527,8 @@ export const useFigureStore = create<FigureState>()(
         get().commit(emptyDoc());
         set({ selection: [] });
       },
-      setMode: (mode) => set({ mode, quickFigure: NO_QUICK_FIGURE }),
+      setMode: (mode) => set({ mode, quickFigure: NO_QUICK_FIGURE, tool: null }),
+      setTool: (tool) => set({ tool }),
       setMultiSelect: (multiSelect) => set({ multiSelect }),
       setQuickFigure: (quickFigure) => set({ quickFigure }),
       setInputDraft: (inputDraft) => set({ inputDraft }),

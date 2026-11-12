@@ -30,6 +30,7 @@ import {
   type Vec,
 } from "@geosimples/core/figure";
 import { actions } from "@/lib/actions";
+import { toolClick, toolHover } from "@/lib/toolPick";
 import { useFigureStore } from "@/store/figureStore";
 import { ActionBar } from "./ActionBar";
 import { ZoomBar, type ZoomControls } from "./ZoomBar";
@@ -144,8 +145,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   const setSetting = useFigureStore((s) => s.setSetting);
   const quickFigure = useFigureStore((s) => s.quickFigure);
   const snap = useFigureStore((s) => s.settings.snapToGrid);
+  /** A tool chosen first, waiting for clicks on what it works on: it takes the clicks from the mode. */
+  const tool = useFigureStore((s) => s.tool);
   /** Modes where a click puts a point down. */
-  const placing = mode === "add" || mode === "figure";
+  const placing = !tool && (mode === "add" || mode === "figure");
 
   const paper = usePreviewPaper();
   const scene = useMemo(() => buildScene(doc, { scale }), [doc, scale]);
@@ -181,6 +184,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   /** The crossing or notable point under the mouse, shown as a ghost until it is added. */
   const [hoverSpot, setHoverSpot] = useState<Spot | null>(null);
   const gesture = useRef<Gesture>({ kind: "none" });
+  /** The frame that will draw what a waiting tool's click would make. */
+  const hoverFrame = useRef(0);
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const coarse = useCoarsePointer();
@@ -377,6 +382,12 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const store = useFigureStore.getState();
     const keys = e.shiftKey || e.ctrlKey || e.metaKey;
     const additive = keys || store.multiSelect;
+    // A waiting tool takes the click, whatever the mode: a press picks, a drag moves the view.
+    if (tool) {
+      store.setActionPreview(null);
+      gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, additive: false, keys, slop };
+      return;
+    }
     const handle = mode === "move" && e.target instanceof Element ? e.target.closest("[data-handle]") : null;
     if (handle) {
       const [id, end] = handle.getAttribute("data-handle")!.split(":") as [Id, HandleEnd];
@@ -417,7 +428,14 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const g = gesture.current;
     const svg = svgRef.current!;
     if (placing && e.pointerType === "mouse") setAddAt(g.kind === "none" ? pointAt(e.clientX, e.clientY) : null);
-    if (e.pointerType === "mouse") setHoverSpot(g.kind === "none" ? spotNear(e.clientX, e.clientY) : null);
+    if (e.pointerType === "mouse") setHoverSpot(g.kind === "none" && !tool ? spotNear(e.clientX, e.clientY) : null);
+    // What the click would make, drawn like an action's preview, once a frame at most.
+    if (tool && e.pointerType === "mouse" && g.kind === "none") {
+      const owner = ownerAt(e.target);
+      const at = pointAt(e.clientX, e.clientY);
+      cancelAnimationFrame(hoverFrame.current);
+      hoverFrame.current = requestAnimationFrame(() => toolHover(owner, at));
+    }
     if (g.kind === "pinch") {
       const a = pointers.current.get(g.ids[0]);
       const b = pointers.current.get(g.ids[1]);
@@ -454,7 +472,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       useFigureStore.getState().setTransient(dragHandle(g.base, g, { x: p.x / ppu.x, y: -p.y / ppu.y }, reach));
     } else if (g.kind === "press" && Math.hypot(e.clientX - g.x, e.clientY - g.y) > g.slop) {
       // Adding points needs no box: a drag moves the view, as fingers expect.
-      if (mode === "pan" || placing) {
+      if (mode === "pan" || placing || tool) {
         gesture.current = { kind: "pan", x: g.x, y: g.y, view: vb };
       } else {
         const start = toUser(svg, g.x, g.y);
@@ -494,7 +512,11 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     gesture.current = { kind: "none" };
     const store = useFigureStore.getState();
     const point = g.kind === "press" && g.owner && pointMap(store.doc).has(g.owner) ? g.owner : null;
-    if (g.kind === "press" && placing && !(mode === "add" && point)) {
+    if (g.kind === "press" && tool) {
+      // Keep the view still, so the next pick lands where the next click is.
+      if (autoFit) placeCamera(vb);
+      toolClick(g.owner, pointAt(g.x, g.y), { x: g.x, y: g.y });
+    } else if (g.kind === "press" && placing && !(mode === "add" && point)) {
       // Keep the view still, so the next point lands where the next click is.
       if (autoFit) placeCamera(vb);
       const graph = g.owner && store.doc.elements.some((e) => e.id === g.owner && e.type === "function") ? g.owner : null;
@@ -569,8 +591,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               className={cn(
                 // touch-none keeps the browser from scrolling or zooming the page under the fingers.
                 "absolute inset-0 h-full w-full touch-none select-none [-webkit-touch-callout:none]",
-                mode === "pan" && "cursor-grab active:cursor-grabbing",
-                mode === "select" && "cursor-crosshair",
+                mode === "pan" && !tool && "cursor-grab active:cursor-grabbing",
+                (mode === "select" || tool) && "cursor-crosshair",
                 placing && "cursor-copy",
                 dragCursor,
               )}
@@ -585,6 +607,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               onPointerLeave={() => {
                 setAddAt(null);
                 setHoverSpot(null);
+                if (tool) {
+                  cancelAnimationFrame(hoverFrame.current);
+                  useFigureStore.getState().setActionPreview(null);
+                }
               }}
               // Stops the browser's autoscroll from starting on a middle click.
               onMouseDown={(e) => e.button === 1 && e.preventDefault()}
@@ -628,8 +654,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 />
               )}
             </svg>
-            {/* In add mode the whole preview is for clicking, and the hint below says how. A phone's preview is too short for the card. */}
-            {empty && !placing && !phone && <EmptyState pro={pro} />}
+            {/* In add mode the whole preview is for clicking, and the hint below says how. A phone's preview is too short for the card, and a waiting tool needs the clicks. */}
+            {empty && !placing && !tool && !phone && <EmptyState pro={pro} />}
             {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
             {phone && <PhoneCorners zoom={zoom} />}
             {roomy && <SelectionSummary placement={pro ? "overlay-top" : "overlay"} />}

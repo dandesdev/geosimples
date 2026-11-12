@@ -3,6 +3,7 @@ import { NO_QUICK_FIGURE } from "@geosimples/core/figure";
 import { actions } from "@/lib/actions";
 import { emitCommand } from "@/lib/commands";
 import { comboFromEvent } from "@/lib/keys";
+import { stopTool } from "@/lib/toolPick";
 import { useFigureStore } from "@/store/figureStore";
 import { activePrefs, type ActionId } from "@/store/prefsStore";
 
@@ -28,6 +29,11 @@ export function runAction(id: ActionId): boolean {
       store.selectAll();
       return true;
     case "clearSelection":
+      // Esc first ends a tool waiting for its objects.
+      if (store.tool) {
+        stopTool();
+        return true;
+      }
       store.clearSelection();
       // Esc also finishes the figure Figura rápida is drawing.
       store.setQuickFigure(NO_QUICK_FIGURE);

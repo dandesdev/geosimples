@@ -96,7 +96,7 @@ export const CONSTRUCTION_KINDS: ConstructionKind[] = [
 ];
 
 /** Elements an operation adds or changes. Operations keep unchanged elements as the same objects. */
-function changedIds(before: FigureDoc, after: FigureDoc): Id[] {
+export function changedIds(before: FigureDoc, after: FigureDoc): Id[] {
   const old = new Map(before.elements.map((e) => [e.id, e]));
   return after.elements.filter((e) => old.get(e.id) !== e).map((e) => e.id);
 }
