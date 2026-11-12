@@ -628,8 +628,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 />
               )}
             </svg>
-            {/* In add mode the whole preview is for clicking, and the hint below says how. */}
-            {empty && !placing && <EmptyState pro={pro} />}
+            {/* In add mode the whole preview is for clicking, and the hint below says how. A phone's preview is too short for the card. */}
+            {empty && !placing && !phone && <EmptyState pro={pro} />}
             {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
             {phone && <PhoneCorners zoom={zoom} />}
             {roomy && <SelectionSummary placement={pro ? "overlay-top" : "overlay"} />}

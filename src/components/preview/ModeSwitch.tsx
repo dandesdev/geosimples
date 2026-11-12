@@ -42,6 +42,19 @@ export function ModeSwitch({ vertical = false, tiles = false }: { vertical?: boo
   const endHold = () => window.clearTimeout(hold.current.timer);
 
   const shown = MODES.filter((m) => m.mode !== "figure" || quickFigure || mode === "figure");
+  const several = (
+    <IconButton
+      label="Seleção múltipla"
+      hint="Cliques e toques somam à seleção em vez de trocá-la, como segurar Shift."
+      shortcut="toggleMultiSelect"
+      active={multiSelect}
+      text={tiles ? "Vários" : undefined}
+      className={tiles ? TILE : undefined}
+      onClick={() => setMultiSelect(!multiSelect)}
+    >
+      <CheckCheck />
+    </IconButton>
+  );
   return (
     <>
       <div
@@ -88,17 +101,13 @@ export function ModeSwitch({ vertical = false, tiles = false }: { vertical?: boo
       </div>
       {/* Vários isn't one of the modes: it adds to whichever is on. */}
       {tiles && <div aria-hidden="true" className="mx-0.5 w-px shrink-0 self-stretch rounded-full bg-border" />}
-      <IconButton
-        label="Seleção múltipla"
-        hint="Cliques e toques somam à seleção em vez de trocá-la, como segurar Shift."
-        shortcut="toggleMultiSelect"
-        active={multiSelect}
-        text={tiles ? "Vários" : undefined}
-        className={tiles ? TILE : undefined}
-        onClick={() => setMultiSelect(!multiSelect)}
-      >
-        <CheckCheck />
-      </IconButton>
+      {tiles ? (
+        // A box with no border or padding of its own takes its share of the row from zero, as the modes' group does:
+        // the button straight in the row would start from its border and padding, and come out wider than a mode.
+        <div className="min-w-0 flex-1 basis-0">{several}</div>
+      ) : (
+        several
+      )}
     </>
   );
 }

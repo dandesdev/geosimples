@@ -83,6 +83,19 @@ for (const phone of PHONES) {
       expect(sideways).toEqual({ page: false, tall: false, strips: 0 });
     });
 
+    test("the modes and Vários are squares of one size, with the round hint switch closing the row", async ({ page }) => {
+      // An empty figure shows no starting card: the short preview has no room for it.
+      await expect(page.getByRole("heading", { name: "Comece pelos pontos" })).toHaveCount(0);
+      const boxes = await Promise.all(MODES.map(async (name) => (await toolbarButton(page, name).boundingBox())!));
+      for (const box of boxes) {
+        expect(Math.abs(box.width - boxes[0].width)).toBeLessThan(0.5);
+        expect(Math.abs(box.height - boxes[0].height)).toBeLessThan(0.5);
+      }
+      const hints = (await page.getByRole("button", { name: "Dicas" }).boundingBox())!;
+      // Nothing is left over at the row's end: the switch sits at the page's padding.
+      expect(Math.abs(hints.x + hints.width - (phone.viewport.width - 8))).toBeLessThan(1);
+    });
+
     test("only the tools scroll: a swipe that starts on a tile taps nothing, and the rest stays put", async ({ page }) => {
       await addTriangle(page);
       await boxSelectAll(page);
@@ -145,10 +158,13 @@ for (const phone of PHONES) {
       const hint = page.locator("p[aria-live=polite]").filter({ hasText: /Toque/ });
       await expect(hint).toBeVisible();
       const before = (await tabs.boundingBox())!.y;
-      await tap(page, page.getByRole("button", { name: "Esconder dicas" }));
+      const toggle = page.getByRole("button", { name: "Dicas" });
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await tap(page, toggle);
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
       await expect(hint).toHaveCount(0);
       expect((await tabs.boundingBox())!.y).toBeLessThan(before - 8);
-      await tap(page, page.getByRole("button", { name: "Mostrar dicas" }));
+      await tap(page, toggle);
       await expect(hint).toBeVisible();
       expect(Math.abs((await tabs.boundingBox())!.y - before)).toBeLessThan(2);
     });
@@ -158,9 +174,28 @@ for (const phone of PHONES) {
       const menu = page.getByRole("dialog", { name: "Menu" });
       await expect(menu.getByRole("heading", { name: "GeoSimples" })).toBeVisible();
       for (const name of ["Tema escuro", "Configurações", "Como usar"]) await expect(menu.getByRole("button", { name }), name).toBeVisible();
+      // The title and its buttons sit at the left, clear of the X that closes the menu, and on the sheet itself, not on a card.
+      const close = (await page.getByTitle("Fechar o menu").boundingBox())!;
+      const help = (await menu.getByRole("button", { name: "Como usar" }).boundingBox())!;
+      expect(help.x + help.width).toBeLessThan(close.x - 4);
+      expect(await menu.getByRole("complementary", { name: "Painel" }).evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
       await tap(page, menu.getByRole("tab", { name: "Prontos" }));
       await tap(page, menu.getByRole("button", { name: /Circuito em série/ }));
       await expect.poll(async () => (await counts(page)).component).toBe(3);
+    });
+
+    test("Configurações fills the screen and goes back with an arrow", async ({ page }) => {
+      await tap(page, page.getByRole("button", { name: "Menu" }));
+      const menu = page.getByRole("dialog", { name: "Menu" });
+      // The sheet slides in: tap once it is still.
+      await expect.poll(async () => (await menu.boundingBox())!.x).toBe(0);
+      await tap(page, menu.getByRole("button", { name: "Configurações" }));
+      const settings = page.getByRole("dialog", { name: "Configurações" });
+      await expect(settings).toBeVisible();
+      await expect(settings.getByRole("button", { name: "Fechar" })).toBeHidden();
+      await tap(page, settings.getByRole("button", { name: "Voltar" }));
+      await expect(settings).toHaveCount(0);
+      await expect(menu).toBeVisible();
     });
 
     test("Inserir opens over the whole screen, without the keyboard", async ({ page }) => {

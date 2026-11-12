@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Menu, X } from "lucide-react";
+import { Info, Menu, X } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { PointInput } from "@/components/PointInput";
 import { SelectionCard } from "@/components/panel/EditSheet";
@@ -63,22 +63,22 @@ export function PhoneLayout() {
   );
 }
 
-/** The modes, apart from Vários, with the hint's switch beside them, and the hint under them. */
+/** The modes and Vários, with the hint's round switch at the row's end, and the hint under them. */
 function PhoneNav() {
   const hidden = usePanelStore((s) => s.hintsHidden);
   const setHidden = usePanelStore((s) => s.setHintsHidden);
   return (
     <div role="toolbar" aria-label="Ações da figura" className="flex flex-col gap-1">
-      <div className="flex items-stretch gap-1">
+      <div className="flex items-center gap-1">
         <ModeSwitch tiles />
         <IconButton
-          label={hidden ? "Mostrar dicas" : "Esconder dicas"}
-          hint={hidden ? "A dica do modo e o que está selecionado voltam para baixo dos modos." : "Esconde a dica e sobe o que está embaixo."}
-          aria-expanded={!hidden}
-          className="h-auto w-8 shrink-0 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4"
+          label="Dicas"
+          hint="Mostra ou esconde, embaixo dos modos, a dica do modo e o que está selecionado."
+          active={!hidden}
+          className="ml-0.5 h-7 w-7 rounded-full border [&_svg]:h-4 [&_svg]:w-4"
           onClick={() => setHidden(!hidden)}
         >
-          {hidden ? <ChevronDown /> : <ChevronUp />}
+          <Info />
         </IconButton>
       </div>
       {!hidden && <SelectionSummary placement="tools" />}
@@ -113,7 +113,7 @@ function PhoneMenu() {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-background p-2 pt-14 shadow-lg outline-none duration-200 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=open]:slide-in-from-right"
+          className="fixed inset-y-0 right-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-background shadow-lg outline-none duration-200 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=open]:slide-in-from-right"
           // A focused button would open its tooltip over the menu.
           onOpenAutoFocus={(e) => {
             e.preventDefault();

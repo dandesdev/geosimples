@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Pencil, Plus, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { PointShape } from "@geosimples/core/figure";
 import { HelpTip } from "@/components/HelpTip";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -118,6 +118,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         On a phone it is the whole screen, as the menu it opens from.
       */}
       <DialogContent
+        hideClose
         className="left-0 top-0 flex h-dvh max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-3 overflow-hidden rounded-none border-0 p-4 sm:left-[50%] sm:top-[50%] sm:h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:p-6"
         onEscapeKeyDown={(e) => {
           if (document.activeElement?.hasAttribute(OWN_ESCAPE)) e.preventDefault();
@@ -174,9 +175,21 @@ function SettingsBody() {
 
   return (
     <>
+      {/* A window closes with the X in its corner; on a phone, where it is a screen of its own, an arrow goes back. */}
+      <DialogClose className="absolute right-2 top-2 hidden rounded-sm p-2 opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:block">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Fechar</span>
+      </DialogClose>
       {/* The right padding keeps the profile controls clear of the close button. */}
-      <DialogHeader className="flex-col gap-2 space-y-0 pr-8 sm:flex-row sm:items-center">
+      <DialogHeader className="flex-col gap-2 space-y-0 sm:flex-row sm:items-center sm:pr-8">
         <div className="flex items-center gap-1">
+          <DialogClose
+            aria-label="Voltar"
+            title="Voltar"
+            className="-ml-2 mr-1 grid h-9 w-9 place-items-center rounded-md hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:hidden [&_svg]:h-5 [&_svg]:w-5"
+          >
+            <ArrowLeft />
+          </DialogClose>
           <DialogTitle>Configurações</DialogTitle>
           <HelpTip label="Sobre as configurações">
             Padrões para objetos novos, comportamento e atalhos, salvos neste computador. Figuras já feitas não mudam.
