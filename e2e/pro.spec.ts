@@ -629,3 +629,26 @@ test("pro layout: back from the classic layout, toolbars are one button wide aga
   await expect(page.getByRole("toolbar", { name: "Modo" })).toBeVisible();
   await expect.poll(widths).toEqual([48, 48, 48]);
 });
+
+test("pro layout: Inserir is a round + that spells out its name when the pointer rests on it", async ({ page }) => {
+  const insert = page.getByRole("button", { name: "Inserir", exact: true });
+  const round = await box(insert);
+  expect(Math.abs(round.width - round.height)).toBeLessThan(1);
+  await insert.hover();
+  await expect.poll(async () => (await box(insert)).width).toBeGreaterThan(round.width + 30);
+  // It grows from the corner: its right edge stays put.
+  const wide = await box(insert);
+  expect(Math.abs(wide.x + wide.width - (round.x + round.width))).toBeLessThan(1);
+  await page.mouse.move(400, 400);
+  await expect.poll(async () => (await box(insert)).width).toBeLessThan(round.width + 1);
+});
+
+test("pro layout: switching between Figura and Prontos doesn't move the panels below", async ({ page }) => {
+  const below = tab(page, "Propriedades");
+  const before = await box(below);
+  for (const name of ["Prontos", "Figura"]) {
+    await tab(page, name).click();
+    await page.waitForTimeout(150);
+    expect((await box(below)).y).toBe(before.y);
+  }
+});

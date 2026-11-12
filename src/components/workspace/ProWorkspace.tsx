@@ -121,7 +121,7 @@ export function ProWorkspace() {
     });
     api.onDidActivePanelChange(() => {
       syncDockState();
-      // Figura and Prontos share a group as tall as the tab in view.
+      // Figura's height is measured once its tab is drawn; Prontos keeps it.
       requestAnimationFrame(() => fitFigure(api));
     });
     // The overlay on a window edge is as big as what is dragged will be there.

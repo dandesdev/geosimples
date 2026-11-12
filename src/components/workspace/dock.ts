@@ -152,8 +152,9 @@ export function splitsLine(group: DockviewGroupPanel | undefined, position: stri
 }
 
 /**
- * Figura is one row of buttons: stacked with other panels, it keeps just that
- * height. With Prontos as its second tab, the group is as tall as the tab in view.
+ * Figura is its bar and a picture of the figure: stacked with other panels,
+ * its group keeps just that height. Prontos, its second tab, scrolls in the
+ * same height, so switching tabs never moves the panels below.
  */
 export function fitFigure(target: DockviewApi) {
   const figure = target.getPanel("figure");
@@ -162,12 +163,13 @@ export function fitFigure(target: DockviewApi) {
   const others = stackedWith(figure.group);
   // Alone in its column, or beside a minimized panel that must keep its strip, Figura takes what is left.
   if (others.length === 0 || others.some(isMinimized) || isMinimized(figure.group)) return;
-  // As tall as what the active tab shows: the figure's bar and picture, or the ready figures up to a limit.
-  const active = figure.group.activePanel?.id === "ready" ? "ready" : "figure";
-  // The children, not the pane, which is as tall as the group.
-  const content = [...(document.querySelector(`[data-panel=${active}]`)?.children ?? [])] as HTMLElement[];
-  const tall = content.reduce((sum, el) => sum + el.scrollHeight, 0);
-  const height = TAB_STRIP + (tall > 0 ? Math.min(tall + 2, 320) : 52);
+  // Measured while Figura is in view (its children, not the pane, which is as tall as the group), and kept for Prontos.
+  if (figure.group.activePanel?.id === "figure") {
+    const content = [...(document.querySelector("[data-panel=figure]")?.children ?? [])] as HTMLElement[];
+    const tall = content.reduce((sum, el) => sum + el.scrollHeight, 0);
+    if (tall > 0) figureContent = tall + 2;
+  }
+  const height = TAB_STRIP + figureContent;
   const now = Math.round(figure.group.api.height);
   // One try per height: a column that can't give Figura exactly this height must not loop.
   if (Math.abs(now - height) <= 1) {
@@ -179,6 +181,8 @@ export function fitFigure(target: DockviewApi) {
   figure.group.api.setSize({ height });
 }
 
+/** The height of Figura's bar and picture, until it is measured. */
+let figureContent = 166;
 let figureTried = -1;
 
 let api: DockviewApi | null = null;
