@@ -382,10 +382,29 @@ export const CircuitIcon = (p: IconProps) => (
 /* Vectors: a filled head, as vectors are drawn in figures. Axes and number lines have open heads. */
 
 const DOTTED = "1.4 2.2";
+/** The vectors an operation starts from are fainter than the one it makes. */
+const OPERAND = 0.45;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
 /** A vector from (x1, y1) to (x2, y2): the shaft up to a filled head. `dotted` dots the shaft. */
-function Arrow({ x1, y1, x2, y2, head = 5.5, dotted = false }: { x1: number; y1: number; x2: number; y2: number; head?: number; dotted?: boolean }) {
+function Arrow({
+  x1,
+  y1,
+  x2,
+  y2,
+  head = 5.5,
+  dotted = false,
+  faint = false,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  head?: number;
+  dotted?: boolean;
+  /** An operand, fainter than the result an operation draws. */
+  faint?: boolean;
+}) {
   const len = Math.hypot(x2 - x1, y2 - y1);
   const ux = (x2 - x1) / len;
   const uy = (y2 - y1) / len;
@@ -393,14 +412,14 @@ function Arrow({ x1, y1, x2, y2, head = 5.5, dotted = false }: { x1: number; y1:
   const by = y2 - uy * head;
   const half = head * 0.5;
   return (
-    <>
+    <g opacity={faint ? OPERAND : undefined}>
       <path d={`M${x1} ${y1}L${r2(bx + ux)} ${r2(by + uy)}`} strokeDasharray={dotted ? DOTTED : undefined} />
       <path
         d={`M${x2} ${y2}L${r2(bx - uy * half)} ${r2(by + ux * half)}L${r2(bx + uy * half)} ${r2(by - ux * half)}Z`}
         fill="currentColor"
         strokeWidth={1}
       />
-    </>
+    </g>
   );
 }
 
@@ -437,36 +456,38 @@ export const VectorBetweenIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** Soma pela regra do polígono: two vectors tip to tail, the dashed resultant closing them. */
+/** Soma pela regra do polígono: two vectors tip to tail, faint, and the resultant from the first tail to the last tip. */
 export const VectorSumIcon = (p: IconProps) => (
   <Icon {...p}>
-    <Arrow x1={3} y1={18} x2={10} y2={5} head={5} />
-    <Arrow x1={10} y1={5} x2={21} y2={12} head={5} />
-    <path d="M3 18.5 19.5 13" strokeDasharray="2 2.5" />
+    <Arrow x1={3} y1={20} x2={13} y2={20} head={4.5} faint />
+    <Arrow x1={13} y1={20} x2={20} y2={9} head={4.5} faint />
+    <Arrow x1={3} y1={19} x2={20.5} y2={5} />
   </Icon>
 );
 
-/** Soma pelo paralelogramo: the dashed parallelogram and its diagonal. */
+/** Soma pelo paralelogramo: two faint vectors from one point, the dotted sides, and the diagonal as the sum. */
 export const VectorParallelogramIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M4 19h11l5-11H9z" strokeDasharray="2 2.5" />
-    <Arrow x1={4} y1={19} x2={20} y2={8} />
+    <Arrow x1={3} y1={19} x2={8.5} y2={8} head={4.5} faint />
+    <Arrow x1={3} y1={19} x2={14} y2={19} head={4.5} faint />
+    <path d="M9.5 6H21L15.5 18" strokeDasharray={DOTTED} />
+    <Arrow x1={3} y1={19} x2={20} y2={7} />
   </Icon>
 );
 
-/** Diferença: two vectors from one point, the difference from the tip of the second to the tip of the first. */
+/** Diferença: two faint vectors from one point, the difference from the tip of the second to the tip of the first. */
 export const VectorDifferenceIcon = (p: IconProps) => (
   <Icon {...p}>
-    <Arrow x1={3} y1={13} x2={14} y2={3.5} head={5} />
-    <Arrow x1={3} y1={13} x2={20} y2={20} head={5} />
-    <Arrow x1={20} y1={20} x2={16} y2={5.5} head={5} />
+    <Arrow x1={3} y1={19} x2={12.5} y2={5} head={4.5} faint />
+    <Arrow x1={3} y1={19} x2={19} y2={19} head={4.5} faint />
+    <Arrow x1={21} y1={19.5} x2={15} y2={4} />
   </Icon>
 );
 
-/** Projeção: a vector, and the projection along the other direction up to the dotted perpendicular. */
+/** Projeção: a faint vector, and its projection along the other direction up to the dotted perpendicular. */
 export const VectorProjectionIcon = (p: IconProps) => (
   <Icon {...p}>
-    <Arrow x1={3} y1={18} x2={18.5} y2={6} />
+    <Arrow x1={3} y1={18} x2={18.5} y2={6} faint />
     <Arrow x1={3} y1={18} x2={18.5} y2={18} />
     <path d="M20.5 3v18" strokeDasharray={DOTTED} />
   </Icon>
@@ -480,20 +501,21 @@ export const UnitVectorIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** Componentes: a vector and its dashed horizontal and vertical legs. */
+/** Componentes: a faint vector and its horizontal and vertical components. */
 export const VectorComponentsIcon = (p: IconProps) => (
   <Icon {...p}>
-    <Arrow x1={5} y1={19} x2={19} y2={5} />
-    <path d="M5 19h14V9" strokeDasharray="2 2.5" />
+    <Arrow x1={4} y1={20} x2={19} y2={5} faint />
+    <Arrow x1={4} y1={20.5} x2={20} y2={20.5} head={4.5} />
+    <Arrow x1={20.5} y1={20} x2={20.5} y2={4.5} head={4.5} />
   </Icon>
 );
 
-/** Múltiplo: three short vectors in a row beside one three times as long. */
+/** Múltiplo: the vector three times, faint and tip to tail, beside the multiple. */
 export const VectorMultipleIcon = (p: IconProps) => (
   <Icon {...p}>
-    <Arrow x1={2.5} y1={16.5} x2={6.8} y2={12.2} head={3.8} />
-    <Arrow x1={6.8} y1={12.2} x2={11.1} y2={7.9} head={3.8} />
-    <Arrow x1={11.1} y1={7.9} x2={15.4} y2={3.6} head={3.8} />
+    <Arrow x1={2.5} y1={16.5} x2={6.8} y2={12.2} head={3.8} faint />
+    <Arrow x1={6.8} y1={12.2} x2={11.1} y2={7.9} head={3.8} faint />
+    <Arrow x1={11.1} y1={7.9} x2={15.4} y2={3.6} head={3.8} faint />
     <Arrow x1={8} y1={21} x2={21} y2={8} />
   </Icon>
 );

@@ -37,6 +37,15 @@ async function drag(
   await page.mouse.up();
 }
 
+/** Closes a panel from the Janelas menu, which works whatever its header looks like (Ferramentas as a bar has a grip). */
+async function closeFromWindows(page: Page, title: string) {
+  await page.getByRole("button", { name: "Janelas" }).click();
+  await page.getByRole("menuitemcheckbox", { name: title }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
+}
+
 /** A point inside `b`, as fractions of its width and height. */
 const at = (b: Box, fx: number, fy: number) => ({ x: b.x + b.width * fx, y: b.y + b.height * fy });
 
@@ -258,8 +267,7 @@ test("dark theme: the preview paper turns gray, and exports stay white unless as
 
 test("pro layout: a panel docks above or below another, and the overlay shows exactly where", async ({ page }) => {
   // Room for two groups in the column: a group's upper drop zone is a fifth of it, and must reach below its tabs.
-  await tab(page, "Ferramentas").click();
-  await page.getByRole("button", { name: "Fechar Ferramentas" }).click();
+  await closeFromWindows(page, "Figura");
   const target = await box(group(page, "Formatação"));
   // Over the lower part of Formatação, the overlay is its lower half: no inset, no margin.
   await drag(page, tab(page, "Propriedades"), at(target, 0.5, 0.92), async () => {
@@ -526,7 +534,8 @@ test("pro layout: panels never split a column side by side, and drop overlays do
   const after = await box(panel(page, "properties"));
   expect(Math.abs(figure.x - after.x)).toBeLessThanOrEqual(1);
   expect(Math.abs(figure.width - after.width)).toBeLessThanOrEqual(1);
-  expect(figure.y).toBeLessThan(after.y);
+  // Still below it, as it starts out.
+  expect(figure.y).toBeGreaterThan(after.y);
 
   // Below Formatação it still goes, and its overlay shows up at its final size at once.
   const target = await box(group(page, "Formatação"));
@@ -579,7 +588,8 @@ test("pro layout: with a toolbar along the bottom, a lone panel group still take
 
 test("pro layout: two full-height panel columns on both sides of the preview still take panels above and below", async ({ page }) => {
   // Everything but Propriedades and Formatação closed: the right column is one group, as tall as the window.
-  for (const title of ["Ferramentas", "Figura", "Prontos", "Rótulos"]) {
+  await closeFromWindows(page, "Ferramentas");
+  for (const title of ["Figura", "Prontos", "Rótulos"]) {
     await tab(page, title).click();
     await page.getByRole("button", { name: `Fechar ${title}` }).click();
   }
@@ -630,21 +640,20 @@ test("pro layout: back from the classic layout, toolbars are one button wide aga
   await expect.poll(widths).toEqual([48, 48, 48]);
 });
 
-test("pro layout: Ferramentas turns into a bar of icons between the preview and the panels, and back", async ({ page }) => {
+test("pro layout: Ferramentas starts as a bar of folder tabs between the preview and the panels, and turns into a panel and back", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 600 });
   const tools = panel(page, "tools");
-  await group(page, "Ferramentas").getByRole("button", { name: "Opções da janela" }).click();
-  await page.getByRole("menuitem", { name: "Mostrar como barra" }).click();
-  await expect.poll(async () => Math.round((await box(tools)).width)).toBe(82);
-  // A column of its own, between the preview and the panels.
+  // A column of its own, between the preview and the panels, with Propriedades above Figura.
+  await expect.poll(async () => Math.round((await box(tools)).width)).toBe(86);
   const preview = await box(page.getByRole("region", { name: "Prévia da figura" }));
-  const figure = await box(panel(page, "figure"));
+  const props = await box(panel(page, "properties"));
   const bar = await box(tools);
   expect(bar.x).toBeGreaterThanOrEqual(preview.x + preview.width - 1);
-  expect(bar.x + bar.width).toBeLessThanOrEqual(figure.x + 1);
+  expect(bar.x + bar.width).toBeLessThanOrEqual(props.x + 1);
   expect(bar.height).toBeGreaterThan(500);
+  expect(props.y).toBeLessThan((await box(panel(page, "figure"))).y);
 
-  // The areas are icon tabs; the open area's tools are icons named by their tooltips.
+  // The areas are tabs; the open area's tools are icons named by their tooltips.
   await tools.getByRole("tab", { name: "Gráficos" }).click();
   await expect(tools.getByRole("button", { name: "Gráfico de função" })).toBeVisible();
   await tools.getByRole("tab", { name: "Geometria" }).click();
@@ -652,18 +661,21 @@ test("pro layout: Ferramentas turns into a bar of icons between the preview and 
   await tools.getByRole("button", { name: "Rolar para baixo" }).click();
   await expect(tools.getByRole("button", { name: "Rolar para cima" })).toBeVisible();
 
-  // It stays a bar after a reload.
-  await page.reload();
-  await expect.poll(async () => Math.round((await box(panel(page, "tools"))).width)).toBe(82);
-
-  // Its grip's menu turns it back into the panel, on top of the panels' column.
+  // Its grip's menu turns it into the panel, on top of the panels' column.
   await page.getByLabel("Arrastar Ferramentas").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Mostrar como painel" }).click();
   await expect.poll(async () => (await box(panel(page, "tools"))).width).toBeGreaterThan(200);
   await expect(tab(page, "Ferramentas")).toBeVisible();
   const back = await box(panel(page, "tools"));
-  expect(Math.abs(back.x - (await box(panel(page, "figure"))).x)).toBeLessThanOrEqual(1);
-  expect(back.y).toBeLessThan((await box(panel(page, "figure"))).y);
+  expect(Math.abs(back.x - (await box(panel(page, "properties"))).x)).toBeLessThanOrEqual(1);
+  expect(back.y).toBeLessThan((await box(panel(page, "properties"))).y);
+
+  // It stays a panel after a reload, and its menu makes it the bar again.
+  await page.reload();
+  await expect(tab(page, "Ferramentas")).toBeVisible();
+  await group(page, "Ferramentas").getByRole("button", { name: "Opções da janela" }).click();
+  await page.getByRole("menuitem", { name: "Mostrar como barra" }).click();
+  await expect.poll(async () => Math.round((await box(panel(page, "tools"))).width)).toBe(86);
 });
 
 test("pro layout: Inserir is a round + that spells out its name when the pointer rests on it", async ({ page }) => {

@@ -39,17 +39,24 @@ export function ToolsStrip() {
         */}
         <TabsList
           aria-label="Ferramentas por área"
-          className="flex h-full w-[30px] shrink-0 flex-col items-stretch justify-start gap-[3px] rounded-none bg-transparent p-0 pt-2"
+          className="flex h-full w-[34px] shrink-0 flex-col items-stretch justify-start rounded-none bg-transparent p-0"
           // The preview's paper comes from core, as the preview's own background does.
           style={{ backgroundColor: paperColor(paper) }}
         >
-          {AREAS.map((a) => (
+          {AREAS.map((a, i) => (
             <TabsTrigger
               key={a.id}
               value={a.id}
               title={a.title}
               aria-label={a.title}
-              className="relative z-10 -mr-px ml-1 h-[30px] rounded-none rounded-l-md border border-r-0 bg-muted p-0 text-muted-foreground hover:text-foreground data-[state=active]:ml-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-4 [&_svg]:w-4"
+              // Tall tabs that overlap like a card index: each one tucks under the one above it, so its
+              // icon sits in the part that shows. The open one comes to the front and joins the column.
+              className={cn(
+                "relative -mr-px ml-1 h-11 shrink-0 rounded-none rounded-l-xl border border-r-0 bg-muted p-0 text-muted-foreground shadow-[0_2px_3px_-2px_rgb(0_0_0/0.25)] hover:text-foreground data-[state=active]:z-20 data-[state=active]:ml-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-[18px] [&_svg]:w-[18px]",
+                i > 0 && "-mt-2.5 pt-2.5",
+              )}
+              // Each tab lies over the next one: the stacking follows the order, which is data.
+              style={{ zIndex: area === a.id ? undefined : AREAS.length - i }}
             >
               <a.Icon />
             </TabsTrigger>
