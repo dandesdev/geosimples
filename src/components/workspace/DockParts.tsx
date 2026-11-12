@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DOCK_ITEM_TITLES, type DockItemId } from "@/store/workspaceStore";
+import { DOCK_ITEM_TITLES, useWorkspaceStore, type DockItemId } from "@/store/workspaceStore";
 import { canMinimize, isMinimized, isPreviewGroup, isToolbarGroup, onMinimizedChange, setMinimized } from "./dock";
 import { panelMenuItems, type PanelMenuItem } from "./panelMenu";
 
@@ -119,9 +119,11 @@ function TabMenu({ props, children }: { props: IDockviewPanelHeaderProps; childr
   );
 }
 
-/** A panel's tab: its title, and a button to close it. Double-click minimizes the group. */
+/** A panel's tab: its title, and a button to close it. Double-click minimizes the group. Ferramentas as a bar has a grip instead. */
 export function PanelTab(props: IDockviewPanelHeaderProps) {
+  const bar = useWorkspaceStore((s) => s.toolsBar) && props.api.id === "tools";
   const title = DOCK_ITEM_TITLES[props.api.id as DockItemId] ?? props.api.title;
+  if (bar) return <GripTab {...props} />;
   return (
     <TabMenu props={props}>
       <div
@@ -167,7 +169,8 @@ export function GroupActions(props: IDockviewHeaderActionsProps) {
   const { minimized, maximized, canMinimize } = useGroupState(props);
   const { items, onOpenChange } = useMenuItems(props.group);
   const { group } = props;
-  if (isPreviewGroup(group) || isToolbarGroup(group)) return null;
+  const bar = useWorkspaceStore((s) => s.toolsBar) && group.panels.some((p) => p.id === "tools");
+  if (isPreviewGroup(group) || isToolbarGroup(group) || bar) return null;
   const floating = props.location?.type === "floating";
   return (
     <div className="flex h-full items-center gap-0.5 px-1">

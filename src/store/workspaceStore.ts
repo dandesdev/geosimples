@@ -48,6 +48,8 @@ interface WorkspaceState {
   inputAutoHide: boolean;
   /** The pro layout's arrangement, as the dock saves it. Null means the default arrangement. */
   dock: object | null;
+  /** In the pro layout, Ferramentas is a bar of icons in a column of its own instead of a panel of tiles. */
+  toolsBar: boolean;
   /** Panels and toolbars open in the pro layout right now, and those in view (not a hidden tab). Not saved: the dock reports them. */
   open: DockItemId[];
   visible: DockItemId[];
@@ -56,6 +58,7 @@ interface WorkspaceState {
   setExportColors: (colors: ExportColors) => void;
   setInputAutoHide: (on: boolean) => void;
   setDock: (dock: object | null) => void;
+  setToolsBar: (on: boolean) => void;
   setDockState: (open: DockItemId[], visible: DockItemId[]) => void;
 }
 
@@ -67,6 +70,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       exportColors: "print",
       inputAutoHide: true,
       dock: null,
+      toolsBar: false,
       open: [],
       visible: [],
       setLayout: (layout) => set({ layout }),
@@ -74,13 +78,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setExportColors: (exportColors) => set({ exportColors }),
       setInputAutoHide: (inputAutoHide) => set({ inputAutoHide }),
       setDock: (dock) => set({ dock }),
+      setToolsBar: (toolsBar) => set({ toolsBar }),
       setDockState: (open, visible) => set({ open, visible }),
     }),
     {
       name: "geosimples-workspace",
       storage: createJSONStorage(() => localStorage),
       version: 4,
-      partialize: ({ layout, theme, exportColors, inputAutoHide, dock }) => ({ layout, theme, exportColors, inputAutoHide, dock }),
+      partialize: ({ layout, theme, exportColors, inputAutoHide, dock, toolsBar }) => ({ layout, theme, exportColors, inputAutoHide, dock, toolsBar }),
       // Version 1 kept its own window positions, versions 2 and 3 had other toolbars and panels: the dock starts from its default arrangement.
       migrate: (saved) => {
         const { layout, theme, inputAutoHide } = (saved ?? {}) as Partial<WorkspaceState>;
