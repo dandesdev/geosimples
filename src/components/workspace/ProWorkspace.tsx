@@ -15,6 +15,7 @@ import { isToolbar } from "@/store/workspaceStore";
 import {
   edgeOverlay,
   fitFigure,
+  fitToolsBar,
   fitToolbars,
   floatItem,
   isPreviewGroup,
@@ -112,6 +113,7 @@ export function ProWorkspace() {
     syncDockState();
     api.onDidLayoutChange(() => {
       orientToolbars(api);
+      fitToolsBar(api);
       fitFigure(api);
       keepWidths(api);
       // Toolbars measure their buttons once they are drawn in their new place.
@@ -121,7 +123,7 @@ export function ProWorkspace() {
     });
     api.onDidActivePanelChange(() => {
       syncDockState();
-      // Figura and Prontos share a group as tall as the tab in view.
+      // Figura's height is measured once its tab is drawn; Prontos keeps it.
       requestAnimationFrame(() => fitFigure(api));
     });
     // The overlay on a window edge is as big as what is dragged will be there.

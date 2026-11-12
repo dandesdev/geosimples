@@ -114,3 +114,16 @@ test.describe("on a phone", () => {
     await expect(finish(page)).toHaveCount(0);
   });
 });
+
+test("in the pro layout's tools bar, a tool chosen first waits for its objects too", async ({ page }) => {
+  await page.getByRole("button", { name: "Layout profissional" }).click();
+  const tools = page.locator('[data-panel="tools"]');
+  await tools.locator("xpath=ancestor::*[contains(@class,'dv-groupview')][1]").getByRole("button", { name: "Opções da janela" }).click();
+  await page.getByRole("menuitem", { name: "Mostrar como barra" }).click();
+  await tools.getByRole("button", { name: "Ligar em sequência", exact: true }).click();
+  await expect(tools.getByRole("button", { name: "Ligar em sequência", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await clickAt(page, await spot(page, 0.3, 0.6));
+  await page.waitForTimeout(400);
+  await clickAt(page, await spot(page, 0.6, 0.6));
+  await expect.poll(() => counts(page)).toMatchObject({ point: 2, segment: 1 });
+});

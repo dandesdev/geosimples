@@ -39,7 +39,8 @@
   --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
   --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
-  --dv-separator-border: color-mix(in srgb, var(--border) 60%, transparent);
+  /* The lines between panels: a step past the borders inside them, so where one panel ends reads at a glance. */
+  --dv-separator-border: color-mix(in srgb, var(--foreground) 22%, var(--border));
   --dv-paneview-header-border-color: var(--border);
   --dv-scrollbar-background-color: color-mix(in srgb, var(--foreground) 25%, transparent);
   --dv-floating-titlebar-background-color: var(--background);

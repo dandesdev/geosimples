@@ -152,8 +152,9 @@ export function splitsLine(group: DockviewGroupPanel | undefined, position: stri
 }
 
 /**
- * Figura is one row of buttons: stacked with other panels, it keeps just that
- * height. With Prontos as its second tab, the group is as tall as the tab in view.
+ * Figura is its bar and a picture of the figure: stacked with other panels,
+ * its group keeps just that height. Prontos, its second tab, scrolls in the
+ * same height, so switching tabs never moves the panels below.
  */
 export function fitFigure(target: DockviewApi) {
   const figure = target.getPanel("figure");
@@ -162,12 +163,13 @@ export function fitFigure(target: DockviewApi) {
   const others = stackedWith(figure.group);
   // Alone in its column, or beside a minimized panel that must keep its strip, Figura takes what is left.
   if (others.length === 0 || others.some(isMinimized) || isMinimized(figure.group)) return;
-  // As tall as what the active tab shows: the figure's bar and picture, or the ready figures up to a limit.
-  const active = figure.group.activePanel?.id === "ready" ? "ready" : "figure";
-  // The children, not the pane, which is as tall as the group.
-  const content = [...(document.querySelector(`[data-panel=${active}]`)?.children ?? [])] as HTMLElement[];
-  const tall = content.reduce((sum, el) => sum + el.scrollHeight, 0);
-  const height = TAB_STRIP + (tall > 0 ? Math.min(tall + 2, 320) : 52);
+  // Measured while Figura is in view (its children, not the pane, which is as tall as the group), and kept for Prontos.
+  if (figure.group.activePanel?.id === "figure") {
+    const content = [...(document.querySelector("[data-panel=figure]")?.children ?? [])] as HTMLElement[];
+    const tall = content.reduce((sum, el) => sum + el.scrollHeight, 0);
+    if (tall > 0) figureContent = tall + 2;
+  }
+  const height = TAB_STRIP + figureContent;
   const now = Math.round(figure.group.api.height);
   // One try per height: a column that can't give Figura exactly this height must not loop.
   if (Math.abs(now - height) <= 1) {
@@ -179,6 +181,8 @@ export function fitFigure(target: DockviewApi) {
   figure.group.api.setSize({ height });
 }
 
+/** The height of Figura's bar and picture, until it is measured. */
+let figureContent = 166;
 let figureTried = -1;
 
 let api: DockviewApi | null = null;
@@ -290,6 +294,8 @@ export function prepareGroups(target: DockviewApi) {
   const preview = target.getPanel(PREVIEW_ID);
   if (preview) preview.group.header.hidden = true;
   orientToolbars(target);
+  // A bar's width limits aren't saved with the arrangement.
+  fitToolsBar(target);
 }
 
 export const isPreviewGroup = (group: DockviewGroupPanel | undefined) =>
@@ -454,6 +460,8 @@ export function setItemOpen(id: DockItemId, open: boolean) {
 
 /** Puts every panel and toolbar back where it starts out. */
 export function resetLayout() {
+  // The default arrangement has Ferramentas as a panel.
+  useWorkspaceStore.getState().setToolsBar(false);
   if (api) buildDefaultLayout(api);
   else useWorkspaceStore.getState().setDock(null);
 }
@@ -559,3 +567,77 @@ function resize(group: DockviewGroupPanel, minimized: boolean) {
   api.addFloatingGroup(group, { x: overlay.offsetLeft, y: overlay.offsetTop, width: overlay.offsetWidth, height: height + 2 });
 }
 
+
+/** Ferramentas as a bar: its icon tabs and one column of tool icons. */
+export const TOOLS_BAR = 82;
+
+/** The group Ferramentas is in, if it is docked in the grid. */
+const toolsGroup = () => {
+  const tools = api?.getPanel("tools");
+  return tools && tools.group.api.location.type === "grid" ? tools.group : undefined;
+};
+
+/** Whether Ferramentas can be the bar where it is: alone in its group and in a column of its own. */
+const barFits = (group: DockviewGroupPanel) => group.panels.length === 1 && stackedWith(group).length === 0;
+
+/** Holds the bar to its width, or lets a panel be as wide as panels are. */
+function limitTools(group: DockviewGroupPanel, bar: boolean) {
+  group.api.setConstraints(
+    bar
+      ? { minimumWidth: TOOLS_BAR, maximumWidth: TOOLS_BAR }
+      : { minimumWidth: 200, maximumWidth: Number.MAX_SAFE_INTEGER },
+  );
+}
+
+/**
+ * Keeps the bar a bar: held to its width while it has a column of its own.
+ * Dropped among the panels, as a tab or above or below one, or floated, it
+ * turns back into the panel.
+ */
+export function fitToolsBar(target: DockviewApi) {
+  if (!useWorkspaceStore.getState().toolsBar) return;
+  const tools = target.getPanel("tools");
+  const group = tools?.group;
+  if (!group || group.api.location.type !== "grid" || !barFits(group)) {
+    useWorkspaceStore.getState().setToolsBar(false);
+    if (group?.api.location.type === "grid") limitTools(group, false);
+    return;
+  }
+  if (Math.round(group.api.width) !== TOOLS_BAR) limitTools(group, true);
+}
+
+/**
+ * Turns Ferramentas into the bar, in a column of its own between the preview
+ * and the panels, or back into a panel at the top of the panels' column.
+ */
+export function setToolsBar(bar: boolean) {
+  if (!api) return;
+  const target = api;
+  const tools = target.getPanel("tools");
+  if (!tools) return;
+  if (bar) {
+    if (tools.group.api.location.type !== "grid" || !barFits(tools.group)) {
+      const preview = target.getPanel(PREVIEW_ID);
+      if (preview) tools.api.moveTo({ group: preview.group, position: "right" });
+    }
+    useWorkspaceStore.getState().setToolsBar(true);
+    const group = toolsGroup();
+    if (group) {
+      limitTools(group, true);
+      group.api.setSize({ width: TOOLS_BAR });
+      settle(target, () => [group]);
+    }
+    return;
+  }
+  useWorkspaceStore.getState().setToolsBar(false);
+  const group = toolsGroup();
+  if (group) limitTools(group, false);
+  // Back on top of the panels, where it starts out, if they still have a column.
+  const below = target.getPanel("figure") ?? target.getPanel("properties");
+  if (below && below.group.api.location.type === "grid" && below.group !== tools.group) {
+    tools.api.moveTo({ group: below.group, position: "top" });
+  } else if (group) {
+    group.api.setSize({ width: RIGHT_COLUMN });
+  }
+  settle(target, () => [toolsGroup()]);
+}

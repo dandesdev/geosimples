@@ -25,13 +25,17 @@ export function AreaTools({ phone = false, className, footer }: { phone?: boolea
   };
   return (
     <Tabs value={area} onValueChange={(v) => setArea(v as AreaId)} className={cn("@container flex min-h-0 flex-col", className)}>
-      <TabsList aria-label="Ferramentas por área" className="grid h-auto w-full shrink-0 grid-cols-6 gap-0.5 p-0.5">
+      {/*
+        Tabs on a line, not in a tinted box: the open one is underlined in the accent, the others in a quieter tone,
+        so the contrast goes to what is chosen rather than to the box around the choices.
+      */}
+      <TabsList aria-label="Ferramentas por área" className="grid h-auto w-full shrink-0 grid-cols-6 gap-0.5 rounded-none border-b bg-transparent p-0">
         {AREAS.map((a) => (
           <TabsTrigger
             key={a.id}
             value={a.id}
             title={a.title}
-            className="flex h-auto min-w-0 flex-col gap-0.5 px-0.5 py-1 text-[10px] leading-tight [&_svg]:h-4 [&_svg]:w-4"
+            className="-mb-px flex h-auto min-w-0 flex-col gap-0.5 rounded-none border-b-2 border-transparent px-0.5 pb-1 pt-1.5 text-[10px] leading-tight hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none [&_svg]:h-4 [&_svg]:w-4"
           >
             <a.Icon />
             <span className="max-w-full truncate">{a.title}</span>

@@ -1,6 +1,7 @@
 import type { DockviewGroupPanel, IDockviewPanel } from "dockview-react";
 import { DOCK_ITEM_TITLES, type DockItemId } from "@/store/workspaceStore";
-import { canMinimize, dockApi, dockGroupAt, floatItem, isMinimized, isToolbarGroup, setMinimized } from "./dock";
+import { useWorkspaceStore } from "@/store/workspaceStore";
+import { canMinimize, dockApi, dockGroupAt, floatItem, isMinimized, isToolbarGroup, setMinimized, setToolsBar } from "./dock";
 
 export interface PanelMenuItem {
   label: string;
@@ -27,11 +28,17 @@ export function panelMenuItems(group: DockviewGroupPanel, panel?: IDockviewPanel
   const floating = group.api.location.type === "floating";
   const toolbar = isToolbarGroup(group);
   const items: PanelMenuItem[] = [];
-  if (!toolbar && canMinimize(group)) {
+  // Ferramentas can be a bar of icons in a column of its own, between the preview and the panels.
+  if (group.panels.some((p) => p.id === "tools")) {
+    const bar = useWorkspaceStore.getState().toolsBar;
+    items.push({ label: bar ? "Mostrar como painel" : "Mostrar como barra", onSelect: () => setToolsBar(!bar) });
+  }
+  const bar = useWorkspaceStore.getState().toolsBar && group.panels.some((p) => p.id === "tools");
+  if (!toolbar && !bar && canMinimize(group)) {
     const minimized = isMinimized(group);
     items.push({ label: minimized ? "Expandir" : "Minimizar", onSelect: () => setMinimized(group, !minimized) });
   }
-  if (!toolbar && !floating) {
+  if (!toolbar && !bar && !floating) {
     const maximized = group.api.isMaximized();
     items.push({
       label: maximized ? "Restaurar tamanho" : "Maximizar",

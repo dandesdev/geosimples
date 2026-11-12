@@ -65,7 +65,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
               ? "grid h-9 w-9 shrink-0 place-items-center rounded-md"
               : "flex h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-lg border bg-card px-1 text-[11px] font-medium leading-none [&_svg]:shrink-0",
             active && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
-            (unavailable || dimmed) && "text-muted-foreground/60 hover:text-muted-foreground",
+            // A tile that can't run now stays as legible as the others, but flat, with a dashed outline:
+            // the ones with a card are the ones that work. A toolbar's icon just dims.
+            (unavailable || dimmed) &&
+              (text === undefined
+                ? "text-muted-foreground/60 hover:text-muted-foreground"
+                : "border-dashed bg-transparent text-foreground/80 hover:text-foreground"),
             className,
           )}
           onClick={(e) => {

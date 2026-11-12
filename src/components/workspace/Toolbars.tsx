@@ -26,6 +26,13 @@ import {
 } from "@/store/workspaceStore";
 import { resetLayout, setItemOpen } from "./dock";
 
+/**
+ * The app's own buttons (Janelas, theme, Configurações, help) in a quieter tone than the
+ * figure's: on the bar's plain background they would otherwise stand out more than the modes,
+ * which sit on a tinted group. They take the full color under the pointer, as the others do.
+ */
+const QUIET = "text-foreground/50 dark:text-foreground/65 dark:hover:text-primary";
+
 /** Opens and closes the pro layout's panels and toolbars. `side` is where it opens. */
 function WindowsMenu({ side }: { side: MenuSide }) {
   const open = useWorkspaceStore((s) => s.open);
@@ -43,7 +50,7 @@ function WindowsMenu({ side }: { side: MenuSide }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <IconButton label="Janelas" hint="Mostrar ou esconder painéis e barras, pô-los de volta no lugar, ou voltar ao layout clássico.">
+        <IconButton className={QUIET} label="Janelas" hint="Mostrar ou esconder painéis e barras, pô-los de volta no lugar, ou voltar ao layout clássico.">
           <LayoutDashboard />
         </IconButton>
       </DropdownMenuTrigger>
@@ -73,6 +80,7 @@ function AppButtons({ side }: { side: MenuSide }) {
     <>
         <WindowsMenu side={side} />
         <IconButton
+          className={QUIET}
           label={dark ? "Tema claro" : "Tema escuro"}
           hint="A prévia continua branca, como no papel."
           onClick={() => ws().setTheme(nextTheme(dark))}
@@ -80,6 +88,7 @@ function AppButtons({ side }: { side: MenuSide }) {
           {dark ? <Sun /> : <Moon />}
         </IconButton>
         <IconButton
+          className={QUIET}
           label="Configurações"
           hint={`Em uso: ${profileName}. Padrões, comportamento, atalhos e aparência.`}
           shortcut="settings"
@@ -87,7 +96,7 @@ function AppButtons({ side }: { side: MenuSide }) {
         >
           <Settings />
         </IconButton>
-        <IconButton label="Como usar" shortcut="help" onClick={() => emitCommand("help")}>
+        <IconButton className={QUIET} label="Como usar" shortcut="help" onClick={() => emitCommand("help")}>
           <CircleHelp />
         </IconButton>
     </>
