@@ -3,7 +3,11 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { TooltipSide } from "@/components/tooltipSide";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { previewProps, useAvailability, useInsertAvailability } from "@/lib/availability";
+import {
+  previewProps,
+  useAvailability,
+  useInsertAvailability,
+} from "@/lib/availability";
 import { canPick, startTool } from "@/lib/toolPick";
 import { paperColor } from "@geosimples/core/figure";
 import { usePreviewPaper } from "@/lib/theme";
@@ -31,7 +35,13 @@ export function ToolsStrip() {
   return (
     // The bar sits between the preview and the panels: tooltips open over the preview.
     <TooltipSide.Provider value="left">
-      <Tabs value={area} onValueChange={(v) => setArea(v as AreaId)} orientation="vertical" data-tools-bar="" className="flex h-full min-h-0">
+      <Tabs
+        value={area}
+        onValueChange={(v) => setArea(v as AreaId)}
+        orientation="vertical"
+        data-tools-bar=""
+        className="flex h-full min-h-0"
+      >
         {/*
           Folder tabs on the side of the column, over the preview's paper: under the last tab the preview
           goes on, instead of a second strip down the whole height. The open tab takes the column's
@@ -43,34 +53,61 @@ export function ToolsStrip() {
           // The preview's paper comes from core, as the preview's own background does.
           style={{ backgroundColor: paperColor(paper) }}
         >
-          {AREAS.map((a, i) => (
-            <TabsTrigger
-              key={a.id}
-              value={a.id}
-              title={a.title}
-              aria-label={a.title}
-              // Tall tabs that overlap like a card index: each one tucks under the one above it, so its
-              // icon sits in the part that shows. The open one comes to the front and joins the column.
-              className={cn(
-                "relative -mr-px ml-1 h-11 shrink-0 rounded-none rounded-l-xl border border-r-0 bg-muted p-0 text-muted-foreground shadow-[0_2px_3px_-2px_rgb(0_0_0/0.25)] hover:text-foreground data-[state=active]:z-20 data-[state=active]:ml-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-[18px] [&_svg]:w-[18px]",
-                i > 0 && "-mt-2.5 pt-2.5",
-              )}
-              // Each tab lies over the next one: the stacking follows the order, which is data.
-              style={{ zIndex: area === a.id ? undefined : AREAS.length - i }}
-            >
-              <a.Icon />
-            </TabsTrigger>
-          ))}
+          {AREAS.map((a, i) => {
+            // Tall tabs that overlap like a card index, all on one left edge: each one tucks under the one
+            // above it, and the open one comes to the front over both neighbours and joins the column.
+            // The icon sits in the middle of the part that shows.
+            const open = area === a.id;
+            const coveredAbove = i > 0 && !open;
+            const coveredBelow = AREAS[i + 1]?.id === area;
+            return (
+              <TabsTrigger
+                key={a.id}
+                value={a.id}
+                title={a.title}
+                aria-label={a.title}
+                className={cn(
+                  "relative -mr-px ml-1 h-11 shrink-0 rounded-none rounded-l-xl border border-r-0 bg-muted p-0 text-muted-foreground shadow-[0_2px_3px_-2px_rgb(0_0_0/0.25)] hover:text-foreground data-[state=active]:z-20 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-[18px] [&_svg]:w-[18px]",
+                  i > 0 && "-mt-2.5",
+                  coveredAbove && "pt-2.5",
+                  coveredBelow && "pb-2.5",
+                )}
+                // Each tab lies over the next one: the stacking follows the order, which is data.
+                style={{ zIndex: area === a.id ? undefined : AREAS.length - i }}
+              >
+                <a.Icon />
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
         <ScrollColumn>
           {AREAS.map((a) => (
-            <TabsContent key={a.id} value={a.id} aria-label={a.title} className="mt-0 flex flex-col items-center py-1">
+            <TabsContent
+              key={a.id}
+              value={a.id}
+              aria-label={a.title}
+              className="mt-0 flex flex-col items-center py-1"
+            >
               {a.groups.map((g, i) => (
                 <Fragment key={g.title}>
-                  {i > 0 && <div aria-hidden="true" className="my-1.5 h-px w-6 shrink-0 bg-border" />}
-                  <div role="group" aria-label={g.title} className="flex flex-col items-center gap-1">
+                  {i > 0 && (
+                    <div
+                      aria-hidden="true"
+                      className="my-1.5 h-px w-6 shrink-0 bg-border"
+                    />
+                  )}
+                  <div
+                    role="group"
+                    aria-label={g.title}
+                    className="flex flex-col items-center gap-1"
+                  >
                     {g.tools.map((t) => (
-                      <StripTool key={t.id} tool={t} c={c} ready={hasSelection && g.title !== "Inserir"} />
+                      <StripTool
+                        key={t.id}
+                        tool={t}
+                        c={c}
+                        ready={hasSelection && g.title !== "Inserir"}
+                      />
                     ))}
                   </div>
                 </Fragment>
@@ -88,7 +125,15 @@ export function ToolsStrip() {
  * but flat, with a dashed outline; the ones with a card are the ones that work,
  * now or by choosing the tool first and then clicking its objects.
  */
-function StripTool({ tool, c, ready }: { tool: AreaTool; c: ToolContext; ready: boolean }) {
+function StripTool({
+  tool,
+  c,
+  ready,
+}: {
+  tool: AreaTool;
+  c: ToolContext;
+  ready: boolean;
+}) {
   const availability = tool.availability(c);
   const waiting = useFigureStore((s) => s.tool?.id === tool.id);
   const pickable = !!availability.reason && canPick(tool.id, c.doc);
@@ -96,11 +141,20 @@ function StripTool({ tool, c, ready }: { tool: AreaTool; c: ToolContext; ready: 
   return (
     <IconButton
       label={tool.title}
-      hint={pickable ? `${tool.hint} Ou escolha a ferramenta e depois clique nos objetos.` : tool.hint}
+      hint={
+        pickable
+          ? `${tool.hint} Ou escolha a ferramenta e depois clique nos objetos.`
+          : tool.hint
+      }
       unavailable={blocked ? availability.reason : null}
       ready={ready && !availability.reason}
       active={waiting || tool.active?.(c)}
-      className={cn("border", blocked ? "border-dashed bg-transparent text-foreground/80 hover:text-foreground" : !waiting && "bg-card")}
+      className={cn(
+        "border",
+        blocked
+          ? "border-dashed bg-transparent text-foreground/80 hover:text-foreground"
+          : !waiting && "bg-card",
+      )}
       onClick={() => {
         useFigureStore.getState().setActionPreview(null);
         if (pickable || waiting) startTool(tool.id, tool.title);
@@ -134,9 +188,14 @@ function ScrollColumn({ children }: { children: ReactNode }) {
   }, []);
   const scroll = (direction: 1 | -1) => {
     const el = scroller.current;
-    if (el) el.scrollBy({ top: direction * el.clientHeight * 0.75, behavior: "smooth" });
+    if (el)
+      el.scrollBy({
+        top: direction * el.clientHeight * 0.75,
+        behavior: "smooth",
+      });
   };
-  const arrow = "absolute inset-x-0 z-10 grid h-6 place-items-center bg-card/95 text-muted-foreground hover:text-foreground [&_svg]:h-4 [&_svg]:w-4";
+  const arrow =
+    "absolute inset-x-0 z-10 grid h-6 place-items-center bg-card/95 text-muted-foreground hover:text-foreground [&_svg]:h-4 [&_svg]:w-4";
   return (
     <div className="relative min-h-0 min-w-0 flex-1 border-l bg-card">
       <div
@@ -148,12 +207,24 @@ function ScrollColumn({ children }: { children: ReactNode }) {
         <div ref={content}>{children}</div>
       </div>
       {more.up && (
-        <button type="button" aria-label="Rolar para cima" title="Rolar para cima" className={cn(arrow, "top-0 border-b")} onClick={() => scroll(-1)}>
+        <button
+          type="button"
+          aria-label="Rolar para cima"
+          title="Rolar para cima"
+          className={cn(arrow, "top-0 border-b")}
+          onClick={() => scroll(-1)}
+        >
           <ChevronUp />
         </button>
       )}
       {more.down && (
-        <button type="button" aria-label="Rolar para baixo" title="Rolar para baixo" className={cn(arrow, "bottom-0 border-t")} onClick={() => scroll(1)}>
+        <button
+          type="button"
+          aria-label="Rolar para baixo"
+          title="Rolar para baixo"
+          className={cn(arrow, "bottom-0 border-t")}
+          onClick={() => scroll(1)}
+        >
           <ChevronDown />
         </button>
       )}
