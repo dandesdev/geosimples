@@ -119,3 +119,8 @@
 .dockview-theme-geosimples .dv-resize-container:has([data-toolbar]) > [class^="dv-resize-handle-"] {
   display: none;
 }
+
+/* Ferramentas as a bar: its folder tabs hang over the preview's paper, so no line runs between them. */
+.dockview-theme-geosimples .dv-view:has([data-tools-bar])::before {
+  display: none;
+}

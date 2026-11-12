@@ -1,10 +1,26 @@
 import { useCallback, useMemo, useRef, useState, type ComponentType } from "react";
-import { Blend, Calculator, ChartSpline, MoveUpRight, Plus, Search, Spline, Type } from "lucide-react";
+import { Plus, Search, SquareFunction, Type } from "lucide-react";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { AddPointIcon, AxesIcon, GridIcon, NumberLineIcon, ToFunctionsIcon, VerticalLineIcon } from "@/components/icons";
+import {
+  AddPointIcon,
+  AxesIcon,
+  BasisIcon,
+  GridIcon,
+  NumberLineIcon,
+  SetElementsIcon,
+  ToFunctionsIcon,
+  TypeRegionIcon,
+  TypeVectorIcon,
+  Venn1Icon,
+  Venn2Icon,
+  Venn3Icon,
+  VectorBetweenIcon,
+  VerticalLineIcon,
+  WireIcon,
+} from "@/components/icons";
 import { actions } from "@/lib/actions";
 import { previewProps, useInsertAvailability, type Availability, type InsertCheckId } from "@/lib/availability";
 import { useCommand } from "@/lib/commands";
@@ -73,7 +89,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
     },
     {
       section: "Gráficos",
-      Icon: ChartSpline,
+      Icon: SquareFunction,
       title: "Nova função…",
       hint: "y = na barra de entrada, como x^2 - 1. Os eixos vêm junto.",
       words: "grafico curva parabola reta f(x)",
@@ -121,7 +137,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
     },
     {
       section: "Vetores",
-      Icon: MoveUpRight,
+      Icon: VectorBetweenIcon,
       title: "Vetor entre pontos",
       hint: "Selecione a origem e depois a extremidade.",
       words: "seta forca fisica",
@@ -130,7 +146,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
     },
     {
       section: "Vetores",
-      Icon: MoveUpRight,
+      Icon: TypeVectorIcon,
       title: "Digitar vetor…",
       hint: "vetor u=(3;2), vetor F=(5:30)@(1;1)",
       words: "seta forca fisica",
@@ -138,11 +154,11 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
       run: typing("vetor "),
       typing: true,
     },
-    { section: "Vetores", Icon: MoveUpRight, title: "Versores i e j", hint: "Saindo da origem.", words: "base unitario", availability: av.basis, run: actions.basis },
+    { section: "Vetores", Icon: BasisIcon, title: "Versores i e j", hint: "Saindo da origem.", words: "base unitario", availability: av.basis, run: actions.basis },
     ...([1, 2, 3] as const).map(
       (n): CatalogItem => ({
         section: "Conjuntos",
-        Icon: Blend,
+        Icon: [Venn1Icon, Venn2Icon, Venn3Icon][n - 1],
         title: n === 1 ? "Diagrama com 1 conjunto" : `Diagrama com ${n} conjuntos`,
         hint: n === 1 ? "Dentro de um retângulo U. Arraste os círculos no modo Mover." : n === 2 ? "A e B, dentro de U." : "A, B e C, dentro de U.",
         words: "venn",
@@ -152,7 +168,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
     ),
     {
       section: "Conjuntos",
-      Icon: Blend,
+      Icon: TypeRegionIcon,
       title: "Digitar região…",
       hint: "região (A U B)' n C, com U para união e n para interseção.",
       words: "venn uniao intersecao diferenca complementar",
@@ -162,7 +178,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
     },
     {
       section: "Conjuntos",
-      Icon: Blend,
+      Icon: SetElementsIcon,
       title: "Elementos…",
       hint: "A={1,2,3}. Cada um vai para a região certa. Ou n(A n B)=3.",
       words: "venn",
@@ -183,7 +199,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
     ),
     {
       section: "Circuitos",
-      Icon: Spline,
+      Icon: WireIcon,
       title: "Fio",
       hint: "Liga pontas distantes: arraste cada ponta até a de um componente.",
       words: "eletrico ligacao condutor",
@@ -196,7 +212,7 @@ function catalog(av: Record<InsertCheckId, Availability>): CatalogItem[] {
         : [
             {
               section: "Contas e quadros",
-              Icon: Calculator,
+              Icon: item.Icon,
               title: item.title,
               hint: item.hint,
               words: BOARD_WORDS[item.title],

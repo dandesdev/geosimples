@@ -1,7 +1,24 @@
 import type { ComponentType } from "react";
-import { Blend, Calculator, ChartSpline, MoveUpRight, Power, Shapes, Spline, Type, Zap } from "lucide-react";
+import { Blend, Calculator, ChartSpline, Power, Shapes, SquareFunction, Type, Zap } from "lucide-react";
 import { SHAPE_OPERATIONS, circuitOf, type ShapeOperation } from "@geosimples/core/figure";
 import {
+  BasisIcon,
+  CurrentConventionalIcon,
+  CurrentNoneIcon,
+  CurrentRealIcon,
+  SetElementsIcon,
+  ShapeDifferenceIcon,
+  ShapeExclusionIcon,
+  ShapeIntersectionIcon,
+  ShapeUnionIcon,
+  TypeRegionIcon,
+  TypeVectorIcon,
+  Venn1Icon,
+  Venn2Icon,
+  Venn3Icon,
+  VectorBetweenIcon,
+  VectorIcon,
+  WireIcon,
   AddPointIcon,
   AngleIcon,
   AxesIcon,
@@ -14,9 +31,6 @@ import {
   NumberLineIcon,
   PolygonIcon,
   RootsIcon,
-  SetDifferenceIcon,
-  SetIntersectionIcon,
-  SetUnionIcon,
   TangentIcon,
   ToFunctionsIcon,
   VerticalLineIcon,
@@ -69,10 +83,10 @@ export interface Area {
 const typing = (prefill: string, hint: string) => () => actions.startTyping(prefill, hint);
 
 const SHAPE_ITEMS: { op: ShapeOperation; Icon: ComponentType; short: string; title: string; hint: string }[] = [
-  { op: "union", Icon: SetUnionIcon, short: "União", title: "Preencher a união", hint: "Tudo o que as formas selecionadas cobrem." },
-  { op: "inter", Icon: SetIntersectionIcon, short: "Interseção", title: "Preencher a interseção", hint: "Só onde todas as formas selecionadas se cruzam." },
-  { op: "diff", Icon: SetDifferenceIcon, short: "Diferença", title: "Preencher a diferença", hint: "A primeira forma selecionada menos as outras." },
-  { op: "xor", Icon: Blend, short: "Exclusão", title: "Preencher a exclusão", hint: "Onde só uma das duas formas cobre: tudo menos a interseção." },
+  { op: "union", Icon: ShapeUnionIcon, short: "União", title: "Preencher a união", hint: "Tudo o que as formas selecionadas cobrem." },
+  { op: "inter", Icon: ShapeIntersectionIcon, short: "Interseção", title: "Preencher a interseção", hint: "Só onde todas as formas selecionadas se cruzam." },
+  { op: "diff", Icon: ShapeDifferenceIcon, short: "Diferença", title: "Preencher a diferença", hint: "A primeira forma selecionada menos as outras." },
+  { op: "xor", Icon: ShapeExclusionIcon, short: "Exclusão", title: "Preencher a exclusão", hint: "Onde só uma das duas formas cobre: tudo menos a interseção." },
 ];
 
 /** The fills between shapes, for the Conjuntos tab and Propriedades. */
@@ -221,7 +235,7 @@ export const AREAS: Area[] = [
         tools: [
           {
             id: "function",
-            Icon: ChartSpline,
+            Icon: SquareFunction,
             short: "Função",
             title: "Gráfico de função",
             hint: "y = na barra de entrada. Os eixos vêm junto.",
@@ -315,31 +329,31 @@ export const AREAS: Area[] = [
   {
     id: "vectors",
     title: "Vetores",
-    Icon: MoveUpRight,
+    Icon: VectorIcon,
     groups: [
       {
         title: "Inserir",
         tools: [
           {
             id: "typeVector",
-            Icon: MoveUpRight,
+            Icon: TypeVectorIcon,
             short: "Digitar",
             title: "Digitar vetor",
             hint: "vetor u=(3;2), ou vetor F=(5:30)@(1;1) em módulo e ângulo.",
             availability: () => ALWAYS,
             run: typing("vetor ", "Digite o vetor, como vetor u=(3;2), ou vetor F=(5:30)@(1;1) com módulo, ângulo e origem."),
           },
-          { id: "basis", Icon: MoveUpRight, short: "Versores", title: "Versores i e j", hint: "Saindo da origem.", availability: (c) => c.ins.basis, run: actions.basis },
+          { id: "basis", Icon: BasisIcon, short: "Versores", title: "Versores i e j", hint: "Saindo da origem.", availability: (c) => c.ins.basis, run: actions.basis },
         ],
       },
       {
         title: "Com a seleção",
         tools: [
-          { id: "vector", Icon: MoveUpRight, short: "Entre pontos", title: "Vetor entre pontos", hint: "A origem primeiro, depois a extremidade.", availability: (c) => c.av.vector, run: actions.vector },
+          { id: "vector", Icon: VectorBetweenIcon, short: "Entre pontos", title: "Vetor entre pontos", hint: "A origem primeiro, depois a extremidade.", availability: (c) => c.av.vector, run: actions.vector },
           ...VECTOR_ITEMS.map(
             (item): AreaTool => ({
               id: `vector-${item.op}`,
-              Icon: MoveUpRight,
+              Icon: item.Icon,
               short: VECTOR_SHORT[item.op],
               title: item.title,
               hint: item.hint,
@@ -362,7 +376,7 @@ export const AREAS: Area[] = [
           ...([1, 2, 3] as const).map(
             (n): AreaTool => ({
               id: `venn-${n}`,
-              Icon: Blend,
+              Icon: [Venn1Icon, Venn2Icon, Venn3Icon][n - 1],
               short: n === 1 ? "1 conjunto" : `${n} conjuntos`,
               title: n === 1 ? "Diagrama com 1 conjunto" : `Diagrama com ${n} conjuntos`,
               hint: "Dentro de um retângulo U. Arraste os círculos no modo Mover.",
@@ -372,7 +386,7 @@ export const AREAS: Area[] = [
           ),
           {
             id: "members",
-            Icon: Blend,
+            Icon: SetElementsIcon,
             short: "Elementos",
             title: "Elementos de um conjunto",
             hint: "A={1,2,3}: cada um vai para a região certa. Ou n(A n B)=3.",
@@ -381,7 +395,7 @@ export const AREAS: Area[] = [
           },
           {
             id: "region",
-            Icon: Blend,
+            Icon: TypeRegionIcon,
             short: "Região",
             title: "Digitar região",
             hint: "região (A U B)' n C, com U para união e n para interseção.",
@@ -441,7 +455,7 @@ export const AREAS: Area[] = [
           ),
           {
             id: "wire",
-            Icon: Spline,
+            Icon: WireIcon,
             short: "Fio",
             title: "Fio",
             hint: "Para ligar pontas distantes: arraste cada ponta do fio até uma ponta de componente.",
@@ -465,7 +479,7 @@ export const AREAS: Area[] = [
           },
           {
             id: "current-conventional",
-            Icon: MoveUpRight,
+            Icon: CurrentConventionalIcon,
             short: "Convencional",
             title: "Sentido convencional da corrente",
             hint: "Do polo positivo ao negativo, por fora do gerador.",
@@ -475,7 +489,7 @@ export const AREAS: Area[] = [
           },
           {
             id: "current-real",
-            Icon: MoveUpRight,
+            Icon: CurrentRealIcon,
             short: "Real",
             title: "Sentido real da corrente (elétrons)",
             hint: "Do polo negativo ao positivo, por fora do gerador.",
@@ -485,7 +499,7 @@ export const AREAS: Area[] = [
           },
           {
             id: "current-none",
-            Icon: MoveUpRight,
+            Icon: CurrentNoneIcon,
             short: "Sem setas",
             title: "Não indicar a corrente",
             hint: "Sem setas.",
@@ -510,7 +524,7 @@ export const AREAS: Area[] = [
             : [
                 {
                   id: `board-${item.prefill}`,
-                  Icon: Calculator,
+                  Icon: item.Icon,
                   short: BOARD_SHORT[item.title] ?? item.title,
                   title: item.title.replace("…", ""),
                   hint: item.hint,

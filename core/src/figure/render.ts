@@ -178,6 +178,20 @@ export function circlePath(cx: number, cy: number, r: number, ry = r): string {
   );
 }
 
+/** How wide an open arrowhead opens, as a share of its length on each side. */
+export const OPEN_HEAD = 0.5;
+
+/**
+ * An open arrowhead: two strokes from the tip back to either side of `back`.
+ * Axes and number lines have it; vectors keep a filled head, so the two never look alike.
+ */
+function openHead(tip: Vec, back: Vec, dir: Vec, half: number): string {
+  return (
+    `M${f(back.x - dir.y * half)} ${f(back.y + dir.x * half)}L${f(tip.x)} ${f(tip.y)}L${f(back.x + dir.y * half)} ${f(back.y - dir.x * half)}` +
+    `M${f(back.x)} ${f(back.y)}L${f(tip.x)} ${f(tip.y)}`
+  );
+}
+
 export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
   const k = PT_PER_CM * (options.scale ?? 1);
   // Axes with their own scale stretch the whole figure, so graphs and geometry stay on one plane.
@@ -326,6 +340,12 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
           const c = T(m.tip);
           const dir = { x: m.dir.x, y: -m.dir.y };
           const back = { x: c.x - dir.x * m.length, y: c.y - dir.y * m.length };
+          if (m.open) {
+            const half = m.length * OPEN_HEAD;
+            path(openHead(c, back, dir, half), lineStroke(0.6), null);
+            reach(c, half);
+            break;
+          }
           const half = m.length * 0.4;
           path(`M${f(c.x)} ${f(c.y)}L${f(back.x - dir.y * half)} ${f(back.y + dir.x * half)}L${f(back.x + dir.y * half)} ${f(back.y - dir.x * half)}Z`, null, solidFill);
           reach(c, half);
@@ -657,20 +677,12 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         const y1 = P({ x: o.x, y: el.y[1] });
         const d = `M${f(x0.x)} ${f(x0.y)}L${f(x1.x)} ${f(x1.y)}M${f(y0.x)} ${f(y0.y)}L${f(y1.x)} ${f(y1.y)}`;
         layers.axes.push({ kind: "path", owner: el.id, d, stroke, fill: null });
-        // Arrowheads at the positive ends, as textbooks draw them.
+        // Open arrowheads at the positive ends, as textbooks draw axes: a filled head means a vector.
         const head = (tip: Vec, dx: number, dy: number) => {
           const len = 4 + stroke.width * 2;
-          const half = len * 0.4;
-          const back = { x: tip.x - dx * len, y: tip.y - dy * len };
-          return `M${f(tip.x)} ${f(tip.y)}L${f(back.x - dy * half)} ${f(back.y + dx * half)}L${f(back.x + dy * half)} ${f(back.y - dx * half)}Z`;
+          return openHead(tip, { x: tip.x - dx * len, y: tip.y - dy * len }, { x: dx, y: dy }, len * OPEN_HEAD);
         };
-        layers.axes.push({
-          kind: "path",
-          owner: el.id,
-          d: head(x1, 1, 0) + head(y1, 0, -1),
-          stroke: null,
-          fill: { color: stroke.color, opacity: stroke.opacity, pattern: "solid", angle: 0 },
-        });
+        layers.axes.push({ kind: "path", owner: el.id, d: head(x1, 1, 0) + head(y1, 0, -1), stroke: { ...stroke, dash: "solid" }, fill: null });
         const tick = 2.5;
         const tickD =
           xs.map((x) => `M${f(x * kx)} ${f(x0.y - tick)}L${f(x * kx)} ${f(x0.y + tick)}`).join("") +
@@ -751,20 +763,13 @@ export function buildScene(doc: FigureDoc, options: SceneOptions = {}): Scene {
         const d = `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`;
         layers.axes.push({ kind: "path", owner: el.id, d, stroke, fill: null });
         const len = 4 + stroke.width * 2;
-        const half = len * 0.4;
-        layers.axes.push({
-          kind: "path",
-          owner: el.id,
-          d: `M${f(b.x)} ${f(b.y)}L${f(b.x - len)} ${f(b.y - half)}L${f(b.x - len)} ${f(b.y + half)}Z`,
-          stroke: null,
-          fill: { color: stroke.color, opacity: stroke.opacity, pattern: "solid", angle: 0 },
-        });
+        layers.axes.push({ kind: "path", owner: el.id, d: openHead(b, { x: b.x - len, y: b.y }, { x: 1, y: 0 }, len * OPEN_HEAD), stroke: solid(stroke), fill: null });
         const tick = 2.5;
         const xs = axisTicks(el.x, el.step, NaN);
         const tickD = xs.map((x) => `M${f(x * kx)} ${f(a.y - tick)}L${f(x * kx)} ${f(a.y + tick)}`).join("");
         if (tickD) layers.axes.push({ kind: "path", owner: el.id, d: tickD, stroke: solid(stroke), fill: null });
         box.add(a.x, a.y, tick);
-        box.add(b.x, b.y, half);
+        box.add(b.x, b.y, len * OPEN_HEAD);
         if (el.numbers) {
           for (const x of xs) {
             const s = formatNumber(x, 2, doc.locale);

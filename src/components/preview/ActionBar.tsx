@@ -1,5 +1,5 @@
 import { emitCommand } from "@/lib/commands";
-import { Blend, ChartSpline, Download, MoveUpRight, Power, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Blend, ChartSpline, Download, Power, Redo2, Trash2, Undo2 } from "lucide-react";
 import { ModeSwitch } from "./ModeSwitch";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,13 @@ import {
 } from "@/components/icons";
 import { CIRCLE_OPTIONS, CONSTRUCTIONS, SET_ITEMS, VECTOR_ITEMS } from "./tools";
 import { InsertCatalog } from "./InsertCatalog";
+import {
+  CurrentConventionalIcon,
+  CurrentNoneIcon,
+  CurrentRealIcon,
+  VectorBetweenIcon,
+  VectorIcon,
+} from "@/components/icons";
 import { actions } from "@/lib/actions";
 import {
   CONSTRUCTION_KINDS,
@@ -337,17 +344,17 @@ export function Tools({ menuSide, tiles = false }: { menuSide: MenuSide; tiles?:
               dimmed={!anyVectorOp}
               className={tiles ? undefined : APPEAR}
             >
-              <MoveUpRight />
+              <VectorIcon />
             </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent {...menu} className="w-80">
             <DropdownMenuLabel>Vetores</DropdownMenuLabel>
-            <MenuItem icon={<MoveUpRight />} title="Vetor entre pontos" hint="A origem primeiro, depois a extremidade." availability={av.vector} onSelect={actions.vector} />
+            <MenuItem icon={<VectorBetweenIcon />} title="Vetor entre pontos" hint="A origem primeiro, depois a extremidade." availability={av.vector} onSelect={actions.vector} />
             <DropdownMenuSeparator />
             {VECTOR_ITEMS.map((item) => (
               <MenuItem
                 key={item.op}
-                icon={<MoveUpRight />}
+                icon={<item.Icon />}
                 title={item.title}
                 hint={item.hint}
                 availability={av[`vector-${item.op}`]}
@@ -384,26 +391,26 @@ export function Tools({ menuSide, tiles = false }: { menuSide: MenuSide; tiles?:
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="gap-3 py-2">
                 <span className="[&_svg]:h-5 [&_svg]:w-5">
-                  <MoveUpRight />
+                  <CurrentConventionalIcon />
                 </span>
                 <span className="font-medium">Indicar sentido da corrente</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-72">
                 <MenuItem
-                  icon={<MoveUpRight />}
+                  icon={<CurrentRealIcon />}
                   title="Sentido real (elétrons)"
                   hint="Do polo negativo ao positivo, por fora do gerador."
                   availability={av["current-real"]}
                   onSelect={() => actions.circuit({ current: "real" })}
                 />
                 <MenuItem
-                  icon={<MoveUpRight />}
+                  icon={<CurrentConventionalIcon />}
                   title="Sentido convencional"
                   hint="Do polo positivo ao negativo, por fora do gerador."
                   availability={av["current-conventional"]}
                   onSelect={() => actions.circuit({ current: "conventional" })}
                 />
-                <MenuItem icon={<MoveUpRight />} title="Não indicar" hint="Sem setas." availability={av["current-none"]} onSelect={() => actions.circuit({ current: "none" })} />
+                <MenuItem icon={<CurrentNoneIcon />} title="Não indicar" hint="Sem setas." availability={av["current-none"]} onSelect={() => actions.circuit({ current: "none" })} />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />

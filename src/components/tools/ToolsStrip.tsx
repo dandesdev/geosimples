@@ -5,6 +5,8 @@ import { TooltipSide } from "@/components/tooltipSide";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { previewProps, useAvailability, useInsertAvailability } from "@/lib/availability";
 import { canPick, startTool } from "@/lib/toolPick";
+import { paperColor } from "@geosimples/core/figure";
+import { usePreviewPaper } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useFigureStore } from "@/store/figureStore";
 import { usePanelStore, type AreaId } from "@/store/panelStore";
@@ -18,6 +20,7 @@ import { AREAS, type AreaTool, type ToolContext } from "./areas";
  */
 export function ToolsStrip() {
   const area = usePanelStore((s) => s.area);
+  const paper = usePreviewPaper();
   const setArea = usePanelStore((s) => s.setArea);
   const hasSelection = useFigureStore((s) => s.selection.length > 0);
   const c: ToolContext = {
@@ -28,10 +31,17 @@ export function ToolsStrip() {
   return (
     // The bar sits between the preview and the panels: tooltips open over the preview.
     <TooltipSide.Provider value="left">
-      <Tabs value={area} onValueChange={(v) => setArea(v as AreaId)} orientation="vertical" className="flex h-full min-h-0">
+      <Tabs value={area} onValueChange={(v) => setArea(v as AreaId)} orientation="vertical" data-tools-bar="" className="flex h-full min-h-0">
+        {/*
+          Folder tabs on the side of the column, over the preview's paper: under the last tab the preview
+          goes on, instead of a second strip down the whole height. The open tab takes the column's
+          color and covers its border, so it reads as one piece with its tools.
+        */}
         <TabsList
           aria-label="Ferramentas por área"
-          className="flex h-full w-8 shrink-0 flex-col items-stretch justify-start gap-0.5 rounded-none border-r bg-transparent p-0 py-1"
+          className="flex h-full w-[30px] shrink-0 flex-col items-stretch justify-start gap-[3px] rounded-none bg-transparent p-0 pt-2"
+          // The preview's paper comes from core, as the preview's own background does.
+          style={{ backgroundColor: paperColor(paper) }}
         >
           {AREAS.map((a) => (
             <TabsTrigger
@@ -39,8 +49,7 @@ export function ToolsStrip() {
               value={a.id}
               title={a.title}
               aria-label={a.title}
-              // The open area is marked on the side that faces its tools.
-              className="-mr-px h-8 rounded-none border-r-2 border-transparent p-0 hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none [&_svg]:h-4 [&_svg]:w-4"
+              className="relative z-10 -mr-px ml-1 h-[30px] rounded-none rounded-l-md border border-r-0 bg-muted p-0 text-muted-foreground hover:text-foreground data-[state=active]:ml-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:h-4 [&_svg]:w-4"
             >
               <a.Icon />
             </TabsTrigger>
@@ -122,7 +131,7 @@ function ScrollColumn({ children }: { children: ReactNode }) {
   };
   const arrow = "absolute inset-x-0 z-10 grid h-6 place-items-center bg-card/95 text-muted-foreground hover:text-foreground [&_svg]:h-4 [&_svg]:w-4";
   return (
-    <div className="relative min-h-0 min-w-0 flex-1">
+    <div className="relative min-h-0 min-w-0 flex-1 border-l bg-card">
       <div
         ref={scroller}
         data-area-scroll=""

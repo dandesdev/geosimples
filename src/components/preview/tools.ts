@@ -2,6 +2,22 @@ import { Hand, Move, SquareDashedMousePointer } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ConstructionKind, SetOperation, VectorOperation } from "@geosimples/core/figure";
 import {
+  AbsoluteIcon,
+  ColumnSumIcon,
+  EuclidIcon,
+  FactorIcon,
+  GcdIcon,
+  IntervalsIcon,
+  LcmIcon,
+  SignSketchIcon,
+  SignTableIcon,
+  UnitVectorIcon,
+  VectorComponentsIcon,
+  VectorDifferenceIcon,
+  VectorMultipleIcon,
+  VectorParallelogramIcon,
+  VectorProjectionIcon,
+  VectorSumIcon,
   AddPointIcon,
   AltitudeIcon,
   BisectorIcon,
@@ -70,14 +86,14 @@ export const CONSTRUCTIONS: Record<ConstructionKind, { Icon: ComponentType; titl
 };
 
 /** What the Vetores menu builds on the selected vectors. */
-export const VECTOR_ITEMS: { op: VectorOperation; title: string; hint: string }[] = [
-  { op: "sum", title: "Soma (regra do polígono)", hint: "Cada vetor sai da ponta do anterior, na ordem da seleção." },
-  { op: "parallelogram", title: "Soma (paralelogramo)", hint: "Dois vetores da mesma origem, com os lados tracejados." },
-  { op: "difference", title: "Diferença", hint: "O primeiro menos o segundo, na ordem da seleção." },
-  { op: "projection", title: "Projeção", hint: "O primeiro na direção do segundo, com perpendiculares tracejadas." },
-  { op: "unit", title: "Versor", hint: "Módulo 1, com a direção e o sentido do vetor." },
-  { op: "components", title: "Componentes", hint: "Decompõe na horizontal e na vertical." },
-  { op: "scale", title: "Múltiplo", hint: "2 vezes o vetor. Mude o fator em Propriedades." },
+export const VECTOR_ITEMS: { op: VectorOperation; Icon: ComponentType; title: string; hint: string }[] = [
+  { op: "sum", Icon: VectorSumIcon, title: "Soma (regra do polígono)", hint: "Cada vetor sai da ponta do anterior, na ordem da seleção." },
+  { op: "parallelogram", Icon: VectorParallelogramIcon, title: "Soma (paralelogramo)", hint: "Dois vetores da mesma origem, com os lados tracejados." },
+  { op: "difference", Icon: VectorDifferenceIcon, title: "Diferença", hint: "O primeiro menos o segundo, na ordem da seleção." },
+  { op: "projection", Icon: VectorProjectionIcon, title: "Projeção", hint: "O primeiro na direção do segundo, com perpendiculares tracejadas." },
+  { op: "unit", Icon: UnitVectorIcon, title: "Versor", hint: "Módulo 1, com a direção e o sentido do vetor." },
+  { op: "components", Icon: VectorComponentsIcon, title: "Componentes", hint: "Decompõe na horizontal e na vertical." },
+  { op: "scale", Icon: VectorMultipleIcon, title: "Múltiplo", hint: "2 vezes o vetor. Mude o fator em Propriedades." },
 ];
 
 /** The operations of the Conjuntos menu, which mark a region of the diagram. */
@@ -89,18 +105,18 @@ export const SET_ITEMS: { op: SetOperation; Icon: ComponentType; title: string; 
 ];
 
 /** What the Contas e quadros menu starts in the input bar. Null is a divider. */
-export const BOARD_ITEMS: ({ title: string; hint: string; prefill: string } | null)[] = [
-  { title: "Conta armada…", hint: "1234÷5, 58+67, 302-5, 12x34. Também com vírgula.", prefill: "conta " },
+export const BOARD_ITEMS: ({ Icon: ComponentType; title: string; hint: string; prefill: string } | null)[] = [
+  { Icon: ColumnSumIcon, title: "Conta armada…", hint: "1234÷5, 58+67, 302-5, 12x34. Também com vírgula.", prefill: "conta " },
   null,
-  { title: "Fatoração em primos…", hint: "fatorar 360", prefill: "fatorar " },
-  { title: "MMC…", hint: "mmc(12; 18), pela fatoração simultânea.", prefill: "mmc(" },
-  { title: "MDC…", hint: "mdc(12; 18), com os primos comuns marcados.", prefill: "mdc(" },
-  { title: "MDC por divisões sucessivas…", hint: "euclides(48; 18), no jogo da velha.", prefill: "euclides(" },
+  { Icon: FactorIcon, title: "Fatoração em primos…", hint: "fatorar 360", prefill: "fatorar " },
+  { Icon: LcmIcon, title: "MMC…", hint: "mmc(12; 18), pela fatoração simultânea.", prefill: "mmc(" },
+  { Icon: GcdIcon, title: "MDC…", hint: "mdc(12; 18), com os primos comuns marcados.", prefill: "mdc(" },
+  { Icon: EuclidIcon, title: "MDC por divisões sucessivas…", hint: "euclides(48; 18), no jogo da velha.", prefill: "euclides(" },
   null,
-  { title: "Varal de intervalos…", hint: "varal [1;3] n ]2;5[, com U (união), n (interseção) ou -.", prefill: "varal " },
-  { title: "Esboço de sinal…", hint: "sinal x²-4, a curva sobre a reta.", prefill: "sinal " },
-  { title: "Quadro de sinais…", hint: "quadro (x-1)(x+2)/(x-3), um fator por linha.", prefill: "quadro " },
-  { title: "Equação modular…", hint: "modular |x-1| + |x+2| = 5, em colunas.", prefill: "modular " },
+  { Icon: IntervalsIcon, title: "Varal de intervalos…", hint: "varal [1;3] n ]2;5[, com U (união), n (interseção) ou -.", prefill: "varal " },
+  { Icon: SignSketchIcon, title: "Esboço de sinal…", hint: "sinal x²-4, a curva sobre a reta.", prefill: "sinal " },
+  { Icon: SignTableIcon, title: "Quadro de sinais…", hint: "quadro (x-1)(x+2)/(x-3), um fator por linha.", prefill: "quadro " },
+  { Icon: AbsoluteIcon, title: "Equação modular…", hint: "modular |x-1| + |x+2| = 5, em colunas.", prefill: "modular " },
 ];
 
 /** The ways to build a circle, for the toolbar and the preview's menu. */
