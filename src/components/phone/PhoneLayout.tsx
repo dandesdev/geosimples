@@ -14,6 +14,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useFigureStore } from "@/store/figureStore";
 import { usePanelStore } from "@/store/panelStore";
 import { cn } from "@/lib/utils";
+import { CloseMenuContext } from "./menuContext";
 
 /** The preview's height on a phone, as a share of the screen: from a sliver of it to most of it. */
 const MIN_SHARE = 0.1;
@@ -100,6 +101,7 @@ const MENU_BUTTON =
  */
 function PhoneMenu() {
   const [open, setOpen] = useState(false);
+  const closeMenu = () => setOpen(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -125,7 +127,9 @@ function PhoneMenu() {
         >
           <DialogTitle className="sr-only">Menu</DialogTitle>
           <DialogClose className="sr-only">Fechar o menu</DialogClose>
-          <SidePanel phone />
+          <CloseMenuContext.Provider value={closeMenu}>
+            <SidePanel phone />
+          </CloseMenuContext.Provider>
         </DialogPrimitive.Content>
         {/*
           The menu button turned into an X, on the same spot: outside the sheet so it doesn't slide in with it,
