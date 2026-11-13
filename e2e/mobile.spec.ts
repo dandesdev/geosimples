@@ -184,6 +184,8 @@ for (const phone of PHONES) {
       await tap(page, menu.getByRole("tab", { name: "Prontos" }));
       await tap(page, menu.getByRole("button", { name: /Circuito em série/ }));
       await expect.poll(async () => (await counts(page)).component).toBe(3);
+      // The sheet gets out of the way, so the new figure shows in the preview.
+      await expect(menu).toHaveCount(0);
     });
 
     test("Configurações fills the screen and goes back with an arrow", async ({ page }) => {

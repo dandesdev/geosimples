@@ -239,7 +239,7 @@ export const actions = {
   setShapeOperation: (id: Id, op: ShapeOperation) => perform((doc) => setShapeOperation(doc, id, op), "keep"),
 
   /** A ready-made circuit, right of the figure. */
-  circuitTemplate: (template: CircuitTemplate) => perform((doc) => addCircuitTemplate(doc, template, opOptions())),
+  circuitTemplate: (template: CircuitTemplate): boolean => perform((doc) => addCircuitTemplate(doc, template, opOptions())),
 
   /** Switches the circuit on or off, and picks its current arrows and what it writes. */
   circuit: (patch: CircuitPatch) => perform((doc) => setCircuit(doc, patch, opOptions()), "keep"),
