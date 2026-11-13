@@ -703,6 +703,17 @@ export const SignSketchIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** Estudo na reta: a line with two critical points, dividers down from them and a parabola through them. */
+export const StudyIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 9h19M19 7l2 2-2 2" />
+    <path d="M8 9v12M15 9v12" />
+    <path d="M5 4Q11.5 18 18 4" />
+    <circle cx={8} cy={9} r={1.3} fill="currentColor" />
+    <circle cx={15} cy={9} r={1.3} fill="currentColor" />
+  </Icon>
+);
+
 /** Quadro de sinais: a table of signs. */
 export const SignTableIcon = (p: IconProps) => (
   <Icon {...p}>

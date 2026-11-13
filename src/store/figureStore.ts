@@ -82,6 +82,15 @@ export interface ActiveTool {
   chainStart?: Id;
 }
 
+/** An object gone inside of, and the piece of it picked, by its path (`studyPiece`). */
+export interface PieceFocus {
+  owner: Id;
+  path: string | null;
+}
+
+/** The focus kept when the selection becomes `ids`: only while it is the object gone inside of. */
+const keptFocus = (focus: PieceFocus | null, ids: Id[]) => (focus && ids.length === 1 && ids[0] === focus.owner ? focus : null);
+
 interface FigureState extends LibrarySlice {
   doc: FigureDoc;
   /** Selected ids in the order they were picked. Order matters for connect and angles. */
@@ -104,6 +113,12 @@ interface FigureState extends LibrarySlice {
    * Changing mode ends it.
    */
   tool: ActiveTool | null;
+  /**
+   * Inside an object made of pieces, like a study, after a double click: the
+   * piece picked in it, or null while none is. Only while that object is
+   * the whole selection; selecting anything else leaves it.
+   */
+  focus: PieceFocus | null;
 
   commit: (doc: FigureDoc, coalesceKey?: string) => void;
   /** Runs an operation on the current figure and selects what it created. */
@@ -128,6 +143,8 @@ interface FigureState extends LibrarySlice {
   setMultiSelect: (on: boolean) => void;
   setQuickFigure: (figure: QuickFigure) => void;
   setTool: (tool: ActiveTool | null) => void;
+  /** Goes inside an object, selecting it, and picks one of its pieces; null leaves it. */
+  setFocus: (focus: PieceFocus | null) => void;
   setInputDraft: (text: string) => void;
   setActionPreview: (preview: ActionPreview | null) => void;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
@@ -320,6 +337,7 @@ function withLibrary(
         past: [],
         future: [],
         selection: [],
+        focus: null,
         inputDraft: "",
         actionPreview: null,
         quickFigure: NO_QUICK_FIGURE,
@@ -402,6 +420,7 @@ export const useFigureStore = create<FigureState>()(
     (set, get) => ({
       doc: emptyDoc(),
       selection: [],
+      focus: null,
       past: [],
       future: [],
       mode: "select",
@@ -453,8 +472,8 @@ export const useFigureStore = create<FigureState>()(
         if (result.error) return result;
         commit(result.doc);
         const picked = result.selected ?? result.created;
-        if (select === "created" && picked.length > 0) set({ selection: picked });
-        else if (select === "none") set({ selection: [] });
+        if (select === "created" && picked.length > 0) set((s) => ({ selection: picked, focus: keptFocus(s.focus, picked) }));
+        else if (select === "none") set({ selection: [], focus: null });
         return result;
       },
 
@@ -483,16 +502,18 @@ export const useFigureStore = create<FigureState>()(
       },
 
       toggleSelect: (id) =>
-        set((s) => ({
-          selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id],
-        })),
+        set((s) => {
+          const selection = s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id];
+          return { selection, focus: keptFocus(s.focus, selection) };
+        }),
       pick: (id, additive) => {
         if (additive) get().toggleSelect(id);
-        else set({ selection: [id] });
+        else set((s) => ({ selection: [id], focus: keptFocus(s.focus, [id]) }));
       },
-      select: (ids) => set({ selection: ids }),
-      clearSelection: () => set({ selection: [] }),
-      selectAll: () => set((s) => ({ selection: s.doc.elements.map((e) => e.id) })),
+      select: (ids) => set((s) => ({ selection: ids, focus: keptFocus(s.focus, ids) })),
+      clearSelection: () => set({ selection: [], focus: null }),
+      setFocus: (focus) => set(focus ? { focus, selection: [focus.owner] } : { focus: null }),
+      selectAll: () => set((s) => ({ selection: s.doc.elements.map((e) => e.id), focus: null })),
 
       undo: () => {
         flushSettle(get, set);
@@ -525,7 +546,7 @@ export const useFigureStore = create<FigureState>()(
       },
       clear: () => {
         get().commit(emptyDoc());
-        set({ selection: [] });
+        set({ selection: [], focus: null });
       },
       setMode: (mode) => set({ mode, quickFigure: NO_QUICK_FIGURE, tool: null }),
       setTool: (tool) => set({ tool }),

@@ -38,6 +38,7 @@ export function elementsInBox(doc: FigureDoc, ppu: { x: number; y: number }, box
         // Its values go with the pieces: picked by clicking them.
         return false;
       case "board":
+      case "study":
         return inside(el.x * kx, -el.y * ky);
       case "region":
       case "vennitems":

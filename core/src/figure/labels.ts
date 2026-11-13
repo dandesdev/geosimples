@@ -21,7 +21,7 @@ import { add, dist, len, mid, perp, polar, scale, sub, unit, type Vec } from "./
 type Unlabeled = Extract<Element, { label?: never }>;
 
 export function canHaveLabel(el: Element): el is Exclude<Element, Unlabeled> {
-  return !["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board", "circuit"].includes(el.type);
+  return !["text", "axes", "grid", "numberline", "extension", "region", "vennitems", "board", "study", "circuit"].includes(el.type);
 }
 
 /** Formats a number with no trailing zeros, with the decimal comma (pt-BR) or point (en). */
@@ -141,6 +141,7 @@ export const MEASURES: Record<ElementType, readonly MeasureKind[]> = {
   region: [],
   vennitems: [],
   board: [],
+  study: [],
   component: [],
   circuit: [],
 };
@@ -390,7 +391,7 @@ const SYMBOLS = Object.keys(SYMBOL_TEX).join("");
 /** Signs math mode already puts space around. */
 const OPERATORS = "=<>+-≅≡∼≈≠≤≥×·±−→∈∉⊂⊃∖∩∪⊥∥";
 
-const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()/+\\-=_\\s${SYMBOLS}]*$`, "u");
+const MATH_SAFE = new RegExp(`^[A-Za-z0-9α-ωΑ-Ω′'₀-₉⁰-⁹¹²³°,.;:()/+\\-=<>_\\s${SYMBOLS}]*$`, "u");
 
 /**
  * How a label is typeset. Names and numbers (A', A₁, x², 3,5, 60°) are math,

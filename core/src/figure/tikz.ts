@@ -12,6 +12,7 @@ import {
 } from "./geometry";
 import { canHaveLabel, formatNumber, labelPlacement, labelText, labelToLatex, measureNumber, measureToLatex, vectorLabelToLatex } from "./labels";
 import { boardLayout, mathToLatex, type Mark } from "./board";
+import { studyLayout } from "./study";
 import { circuitDrawings, componentDrawing } from "./circuit";
 import { regionOutline, vennItemSpots } from "./sets";
 import {
@@ -261,6 +262,11 @@ export function toTikz(doc: FigureDoc, options: TikzOptions = {}): string {
         const layout = boardLayout(el, doc);
         if (!layout) break;
         writeMarks(at(el), layout.marks, { color: el.color, width: el.width, font: el.font, opacity: 1 }, sections.board);
+        break;
+      }
+      case "study": {
+        const marks = studyLayout(el).groups.flatMap((g) => g.marks);
+        writeMarks(at(el), marks, { color: el.color, width: el.width, font: el.font, opacity: 1 }, sections.board);
         break;
       }
       case "component": {

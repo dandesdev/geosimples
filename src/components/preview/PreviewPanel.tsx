@@ -26,6 +26,13 @@ import {
   type ParsedInput,
   type Prim,
   type SceneSlot,
+  type ScenePart,
+  type SceneStudy,
+  setStudyWidth,
+  stretchWidths,
+  studyPaths,
+  updateStudyPoint,
+  type Study,
   type Spot,
   type Vec,
 } from "@geosimples/core/figure";
@@ -48,6 +55,8 @@ import { useCommand } from "@/lib/commands";
 import { pinchOf, pinchView, zoomView, type Pinch, type View } from "@/lib/camera";
 import { useCoarsePointer, useRoomyPreview } from "@/lib/useMediaQuery";
 import { SPOT_NAMES } from "@/lib/names";
+import { editPiece, useStudyFocus, type FocusedStudy } from "@/lib/studyFocus";
+import { PieceEditor } from "./PieceEditor";
 
 const PRIMARY = "#10b981";
 
@@ -65,7 +74,19 @@ type Gesture =
    * `additive`: the click adds to the selection (Shift, Ctrl or Seleção múltipla);
    * `keys`: Shift, Ctrl or Cmd was held, so a click on nothing keeps the selection.
    */
-  | { kind: "press"; owner: Id | null; x: number; y: number; additive: boolean; keys: boolean; slop: number }
+  | {
+      kind: "press";
+      owner: Id | null;
+      x: number;
+      y: number;
+      additive: boolean;
+      keys: boolean;
+      slop: number;
+      /** The piece of a study under the press, and whether Ctrl or Cmd asks for it directly. */
+      part?: string | null;
+      deep?: boolean;
+      touch?: boolean;
+    }
   | {
       kind: "drag";
       owner: Id;
@@ -83,7 +104,21 @@ type Gesture =
   /** A finger left a pinch: the rest are ignored until all are up, so nothing gets selected by accident. */
   | { kind: "spent" }
   /** Mover dragging an end of axes, a grid, a number line, a vertical line or a graph. */
-  | { kind: "handle"; owner: Id; end: HandleEnd; base: FigureDoc; moved: boolean; x: number; y: number; slop: number };
+  | { kind: "handle"; owner: Id; end: HandleEnd; base: FigureDoc; moved: boolean; x: number; y: number; slop: number }
+  /** Inside a study: a point dragged along the line (the stretch before it widens), or a divider's end up or down. */
+  | {
+      kind: "study";
+      owner: Id;
+      what: "width" | "drop";
+      point: Id;
+      index: number;
+      /** The width or drop when the drag started, in pt. */
+      from: number;
+      base: FigureDoc;
+      start: { x: number; y: number };
+      moved: boolean;
+      slop: number;
+    };
 
 /** The circuit ends among the points that dragging `ids` moves. */
 function movedEnds(doc: FigureDoc, ids: Id[]): Id[] {
@@ -189,6 +224,12 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
   /** Pointers down on the preview, by id, at their last client position. */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const coarse = useCoarsePointer();
+  /** The study gone inside of, with its piece. */
+  const inside = useStudyFocus();
+  /** Whether the last press was already inside the study pressed: its double click then types over the piece. */
+  const pressedInside = useRef(false);
+  /** The last pointer's kind: a double tap on a phone doesn't open the typing, which the list in Propriedades does. */
+  const lastPointer = useRef("mouse");
 
   const draft = useFigureStore((s) => s.inputDraft);
   const ghost = useMemo(() => {
@@ -319,6 +360,10 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
 
   const ownerAt = (target: EventTarget | null): Id | null =>
     (target instanceof Element && target.closest("[data-owner]")?.getAttribute("data-owner")) || null;
+  const partAt = (target: EventTarget | null): string | null =>
+    (target instanceof Element && target.closest("[data-part]")?.getAttribute("data-part")) || null;
+  const studyOf = (doc: FigureDoc, id: Id | null): Study | null =>
+    (id && doc.elements.find((e): e is Study => e.id === id && e.type === "study")) || null;
 
   /** A right click: an object under the pointer becomes the selection, unless it is already part of it. */
   const onContextMenu = (e: React.MouseEvent) => {
@@ -338,7 +383,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     const g = gesture.current;
     gesture.current = { kind: "none" };
     if (g.kind === "box") setBox(null);
-    else if (g.kind === "drag" || g.kind === "handle") {
+    else if (g.kind === "drag" || g.kind === "handle" || g.kind === "study") {
       const store = useFigureStore.getState();
       if (g.moved) store.setTransient(g.base);
       // The doc is the base again, so this adds no undo step.
@@ -379,14 +424,36 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
     }
     const slop = e.pointerType === "touch" ? 10 : 4;
     const owner = ownerAt(e.target);
+    const part = partAt(e.target);
     const store = useFigureStore.getState();
     const keys = e.shiftKey || e.ctrlKey || e.metaKey;
-    const additive = keys || store.multiSelect;
+    // Ctrl or Cmd on a piece of a study picks the piece, as in Figma, when the study is all that is
+    // selected or nothing is; with other objects selected it adds the study, as for any object.
+    const alone = store.selection.length === 0 || (store.selection.length === 1 && store.selection[0] === owner);
+    const deep = (e.ctrlKey || e.metaKey) && !!part && alone;
+    const additive = !deep && (keys || store.multiSelect);
+    const studyInside = store.focus && store.selection.length === 1 && store.selection[0] === store.focus.owner ? store.focus.owner : null;
+    pressedInside.current = !!owner && studyInside === owner;
+    lastPointer.current = e.pointerType;
     // A waiting tool takes the click, whatever the mode: a press picks, a drag moves the view.
     if (tool) {
       store.setActionPreview(null);
       gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, additive: false, keys, slop };
       return;
+    }
+    const studyHandle = e.target instanceof Element ? e.target.closest("[data-study-handle]") : null;
+    if (studyHandle && studyInside) {
+      const [what, point, index] = studyHandle.getAttribute("data-study-handle")!.split(":") as ["width" | "drop", Id, string];
+      const study = studyOf(store.doc, studyInside);
+      if (study) {
+        const i = Number(index);
+        const from = what === "width" ? stretchWidths(study)[i] : (study.axis.points.find((p) => p.id === point)?.drop ?? 0);
+        store.beginTransient();
+        setFrozen(vb);
+        setDragCursor(what === "width" ? "cursor-ew-resize" : "cursor-ns-resize");
+        gesture.current = { kind: "study", owner: study.id, what, point, index: i, from, base: store.doc, start: toUser(svg, e.clientX, e.clientY), moved: false, slop };
+        return;
+      }
     }
     const handle = mode === "move" && e.target instanceof Element ? e.target.closest("[data-handle]") : null;
     if (handle) {
@@ -398,7 +465,8 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       return;
     }
     const movable = movables(store.doc);
-    if (mode === "move" && owner && movable.has(owner)) {
+    // Inside a study, a press picks its pieces: only from outside does Mover drag it whole.
+    if (mode === "move" && owner && movable.has(owner) && studyInside !== owner) {
       const selectedMovable = store.selection.filter((id) => movable.has(id));
       const ids = store.selection.includes(owner) ? selectedMovable : [owner];
       store.beginTransient();
@@ -416,7 +484,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       };
       return;
     }
-    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, additive, keys, slop };
+    gesture.current = { kind: "press", owner, x: e.clientX, y: e.clientY, additive, keys, slop, part, deep, touch: e.pointerType === "touch" };
   };
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -461,6 +529,16 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
         dy = snap.y;
       }
       useFigureStore.getState().setTransient(moveElements(g.base, g.ids, { x: dx, y: dy }));
+    } else if (g.kind === "study") {
+      const p = toUser(svg, e.clientX, e.clientY);
+      if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) < g.slop * unitsPerPx) return;
+      g.moved = true;
+      // Scene units are pt inside a study, so the pointer's travel is the change.
+      const result =
+        g.what === "width"
+          ? setStudyWidth(g.base, g.owner, g.index, g.from + (p.x - g.start.x))
+          : updateStudyPoint(g.base, g.owner, g.point, { drop: g.from + (p.y - g.start.y) });
+      if (!result.error) useFigureStore.getState().setTransient(result.doc);
     } else if (g.kind === "handle") {
       // A tap jitters: it selects, and only a real drag moves the end.
       if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < g.slop) return;
@@ -531,8 +609,20 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
       else if (graph) actions.addPointOnGraphAt(graph, pointAt(g.x, g.y).x);
       else actions.addPointAt(pointAt(g.x, g.y));
     } else if (g.kind === "press") {
-      if (g.owner) store.pick(g.owner, g.additive);
+      const study = studyOf(store.doc, g.owner);
+      const inStudy = !!study && store.focus?.owner === study.id && store.selection.length === 1 && store.selection[0] === study.id;
+      // A second tap on a selected study goes inside it, as a double click does with a mouse.
+      const tapAgain = !!study && !!g.touch && store.selection.length === 1 && store.selection[0] === study.id;
+      if (study && g.part && (inStudy || g.deep || tapAgain)) store.setFocus({ owner: study.id, path: g.part });
+      else if (study && inStudy) store.setFocus({ owner: study.id, path: null });
+      else if (g.owner) store.pick(g.owner, g.additive);
       else if (!g.keys) store.clearSelection();
+    } else if (g.kind === "study") {
+      store.endTransient();
+      setFrozen(null);
+      setDragCursor(null);
+      // A press on a handle that doesn't move picks what it belongs to.
+      if (!g.moved) store.setFocus({ owner: g.owner, path: g.what === "width" ? studyPaths.point(g.point) : studyPaths.divider(g.point) });
     } else if (g.kind === "drag") {
       // Ends left on other ends join them, in the same undo step as the drag.
       if (g.moved) {
@@ -558,6 +648,22 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
         store.select(found);
       }
     }
+  };
+
+  /**
+   * A double click on a study goes inside it, to the piece under the pointer;
+   * on a piece of the study already gone inside of, it types over the piece.
+   */
+  const onDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (tool || placing || lastPointer.current === "touch") return;
+    const store = useFigureStore.getState();
+    // The pointer was captured by the preview, so the event's target is the preview itself: look under the pointer.
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const study = studyOf(store.doc, ownerAt(under));
+    if (!study) return;
+    const part = partAt(under);
+    if (part && pressedInside.current && editPiece(study, part)) return;
+    store.setFocus({ owner: study.id, path: part });
   };
 
   const pointOrder = selection.filter((id) => scene.hits.some((h) => h.type === "point" && h.owner === id));
@@ -604,6 +710,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
+              onDoubleClick={onDoubleClick}
               onPointerLeave={() => {
                 setAddAt(null);
                 setHoverSpot(null);
@@ -630,6 +737,18 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
                 doc={doc}
                 hit={coarse ? HIT_COARSE : HIT_FINE}
                 paper={paper}
+                inside={inside?.study.id ?? null}
+              />
+              <StudyLayer
+                // Only the selected study's pieces take clicks: elsewhere they would hide what is drawn over a study.
+                parts={selection.length === 1 ? scene.parts.filter((p) => p.owner === selection[0]) : []}
+                studies={scene.studies}
+                inside={inside}
+                frame={inside ? (scene.hits.find((h) => h.owner === inside.study.id && h.type === "study") ?? null) : null}
+                px={unitsPerPx}
+                stroke={(coarse ? HIT_COARSE : HIT_FINE).stroke}
+                paper={paper}
+                onInsert={(index) => inside && actions.insertStudyPoint(inside.study.id, index)}
               />
               {selection.length === 1 && <GapPicker slots={scene.boardSlots.filter((s) => s.owner === selection[0])} px={unitsPerPx} />}
               {ghost && <DraftGhost parsed={ghost} ppu={ppu} px={unitsPerPx} paper={paper} />}
@@ -655,6 +774,7 @@ export function PreviewPanel({ pro = false }: { pro?: boolean }) {
               )}
             </svg>
             {/* In add mode the whole preview is for clicking, and the hint below says how. A phone's preview is too short for the card, and a waiting tool needs the clicks. */}
+            {inside && <PieceEditor parts={scene.parts} vb={vb} size={size} />}
             {empty && !placing && !tool && !phone && <EmptyState pro={pro} />}
             {roomy && zoom && <ZoomBar {...zoom} placement="overlay" />}
             {phone && <PhoneCorners zoom={zoom} />}
@@ -770,6 +890,7 @@ function Overlay({
   doc,
   hit,
   paper,
+  inside,
 }: {
   hits: Hit[];
   selection: Id[];
@@ -783,8 +904,10 @@ function Overlay({
   /** Hit target sizes in screen px. They only change the preview, never the export. */
   hit: { point: number; stroke: number };
   paper: Paper;
+  /** The study gone inside of: its pieces show the selection, not the whole of it. */
+  inside: Id | null;
 }) {
-  const selected = new Set(selection);
+  const selected = new Set(selection.filter((id) => id !== inside));
   const hidden = new Set(
     doc.elements.filter((e) => e.type === "point" && e.shape === "none").map((e) => e.id),
   );
@@ -1000,6 +1123,130 @@ function GapPicker({ slots, px }: { slots: SceneSlot[]; px: number }) {
           onClick={() => actions.toggleGap(s.owner, s.index)}
         />
       ))}
+    </g>
+  );
+}
+
+/**
+ * The pieces of every study, to pick them by, even from outside with Ctrl or
+ * a second tap. Inside one: a dashed frame around it, its blank pieces as
+ * dashed boxes, the piece picked, a handle under each point to drag it along
+ * the line, one at the end of each divider, and a + in each stretch for a new
+ * point. Drawn over the figure, in the preview only.
+ */
+function StudyLayer({
+  parts,
+  studies,
+  inside,
+  frame,
+  px,
+  stroke,
+  paper,
+  onInsert,
+}: {
+  parts: ScenePart[];
+  studies: SceneStudy[];
+  inside: FocusedStudy | null;
+  frame: Hit | null;
+  px: number;
+  stroke: number;
+  paper: Paper;
+  onInsert: (stretch: number) => void;
+}) {
+  const owner = inside?.study.id ?? null;
+  const mine = owner ? studies.find((s) => s.owner === owner) : undefined;
+  const handle = 4.5 * px;
+  return (
+    <g>
+      {frame && frame.type !== "point" && (
+        <path d={frame.d} fill="none" stroke={PRIMARY} strokeOpacity={0.6} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+      )}
+      {parts.map((p, i) => {
+        const here = p.owner === owner;
+        const picked = here && p.path === inside?.path;
+        return (
+          <g key={`${p.owner}:${p.path}:${i}`} data-owner={p.owner} data-part={p.path} className="cursor-pointer">
+            {here && p.empty && !picked && (
+              <path
+                // Where its text would go, rather than all it covers.
+                d={p.text ? `M${p.text.x} ${p.text.y}h${p.text.w}v${p.text.h}h${-p.text.w}Z` : p.d}
+                fill={PRIMARY}
+                fillOpacity={0.05}
+                stroke={PRIMARY}
+                strokeOpacity={0.5}
+                strokeWidth={1}
+                strokeDasharray="3 2"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            {picked && (
+              <path
+                d={p.d}
+                fill={p.area ? PRIMARY : "none"}
+                fillOpacity={0.15}
+                stroke={PRIMARY}
+                strokeOpacity={0.6}
+                strokeWidth={p.area ? 1.5 : 5}
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            <path d={p.d} fill={p.area ? "transparent" : "none"} stroke="transparent" strokeWidth={stroke} vectorEffect="non-scaling-stroke" pointerEvents={p.area ? "all" : "stroke"} />
+          </g>
+        );
+      })}
+      {mine && (
+        <g>
+          {mine.stretches.map((s) => (
+            <g
+              key={`add-${s.index}`}
+              role="button"
+              aria-label={`Novo ponto no trecho ${s.index + 1}`}
+              className="cursor-copy"
+              // The preview would take the press as the start of a selection.
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onInsert(s.index)}
+            >
+              <circle cx={s.x} cy={s.y + 14 * px} r={7 * px} fill={paperColor(paper)} stroke={PRIMARY} strokeWidth={1.2 * px} />
+              <path d={`M${s.x - 3.5 * px} ${s.y + 14 * px}h${7 * px}M${s.x} ${s.y + 10.5 * px}v${7 * px}`} stroke={PRIMARY} strokeWidth={1.4 * px} />
+            </g>
+          ))}
+          {mine.points.map((p, i) => (
+            <g key={p.id}>
+              <rect
+                data-study-handle={`width:${p.id}:${i}`}
+                aria-label={`Arrastar o ponto ${i + 1} na reta`}
+                x={p.x - handle}
+                y={p.y + 5 * px}
+                width={handle * 2}
+                height={handle * 2}
+                rx={1.5 * px}
+                fill={paperColor(paper)}
+                stroke={PRIMARY}
+                strokeWidth={1.4 * px}
+                className="cursor-ew-resize"
+              />
+              {p.bottom !== null && (
+                <rect
+                  data-study-handle={`drop:${p.id}:${i}`}
+                  aria-label={`Comprimento da divisória do ponto ${i + 1}`}
+                  x={p.x - handle}
+                  y={p.bottom - handle}
+                  width={handle * 2}
+                  height={handle * 2}
+                  rx={1.5 * px}
+                  fill={paperColor(paper)}
+                  stroke={PRIMARY}
+                  strokeWidth={1.4 * px}
+                  className="cursor-ns-resize"
+                />
+              )}
+            </g>
+          ))}
+        </g>
+      )}
     </g>
   );
 }

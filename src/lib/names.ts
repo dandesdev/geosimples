@@ -25,6 +25,7 @@ export const TYPE_NAMES: Record<ElementType, { one: string; many: string; title:
   region: { one: "região", many: "regiões", title: "Região" },
   vennitems: { one: "conteúdo do diagrama", many: "conteúdos do diagrama", title: "Conteúdo do diagrama" },
   board: { one: "conta ou quadro", many: "contas e quadros", title: "Conta ou quadro" },
+  study: { one: "estudo na reta", many: "estudos na reta", title: "Estudo na reta" },
   component: { one: "componente", many: "componentes", title: "Componente" },
   circuit: { one: "valor do circuito", many: "valores do circuito", title: "Valores do circuito" },
 };

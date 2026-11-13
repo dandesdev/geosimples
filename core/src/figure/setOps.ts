@@ -41,7 +41,7 @@ function bounds(centers: Vec[]) {
 
 /** How far down a new diagram goes so it doesn't land on what is drawn: under everything, with a gap. */
 function shiftBelow(doc: FigureDoc, height: number): number {
-  const ys = doc.elements.flatMap((e) => (e.type === "point" || e.type === "text" || e.type === "board" ? [e.y] : []));
+  const ys = doc.elements.flatMap((e) => (e.type === "point" || e.type === "text" || e.type === "board" || e.type === "study" ? [e.y] : []));
   if (ys.length === 0) return 0;
   return Math.min(...ys) - height / 2 - 1.5;
 }

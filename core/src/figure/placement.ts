@@ -100,6 +100,7 @@ const PRIORITY: Record<ElementType, number> = {
   region: 9,
   vennitems: 9,
   board: 9,
+  study: 9,
   polygon: 3,
   circle: 4,
   function: 5,

@@ -45,6 +45,20 @@ import {
   addNumberLine,
   toggleBoardGap,
   setAllBoardGaps,
+  addStudySketch,
+  insertStudyPoint,
+  removeStudyPiece,
+  setStudyDividers,
+  setStudyBalls,
+  fillStudyIntervals,
+  type StudyBall,
+  setStudyText,
+  setStudyWidth,
+  updateStudyPoint,
+  updateStudySketch,
+  type StudyOpResult,
+  type StudyPoint,
+  type StudySketch,
   addAxes,
   addGrid,
   markNotable,
@@ -66,6 +80,7 @@ import {
   type Spot,
 } from "@geosimples/core/figure";
 import { useFigureStore } from "@/store/figureStore";
+import { currentStudyFocus } from "@/lib/studyFocus";
 import { emitCommand } from "@/lib/commands";
 import { useInputHint } from "@/store/inputHintStore";
 import { activePrefs, opOptions } from "@/store/prefsStore";
@@ -80,6 +95,22 @@ function perform(
     return false;
   }
   if (result.notice) toast(result.notice);
+  return true;
+}
+
+/**
+ * Runs an op on a study, as one undo step merged by `key`, and picks the piece
+ * it names: a point just put in, a sketch just added, or none after a removal.
+ */
+function studyEdit(owner: Id, op: (doc: FigureDoc) => StudyOpResult, key?: string): boolean {
+  const store = useFigureStore.getState();
+  const result = op(store.doc);
+  if (result.error) {
+    toast.error(result.error);
+    return false;
+  }
+  store.commit(result.doc, key ? `${owner}:${key}` : undefined);
+  if (result.part !== undefined) store.setFocus({ owner, path: result.part });
   return true;
 }
 
@@ -158,6 +189,20 @@ export const actions = {
 
   /** Leaves a result of the selected board out, or puts it back. */
   toggleGap: (id: Id, index: number) => perform((doc) => toggleBoardGap(doc, id, index), "keep"),
+
+  /** Estudo na reta: a blank point in the middle of a stretch, picked to be named. */
+  insertStudyPoint: (owner: Id, stretch: number) => studyEdit(owner, (doc) => insertStudyPoint(doc, owner, stretch)),
+  removeStudyPiece: (owner: Id, path: string) => studyEdit(owner, (doc) => removeStudyPiece(doc, owner, path)),
+  setStudyText: (owner: Id, path: string, text: string) => studyEdit(owner, (doc) => setStudyText(doc, owner, path, text), `text:${path}`),
+  updateStudyPoint: (owner: Id, point: Id, patch: Partial<Pick<StudyPoint, "ball" | "divider" | "drop">>) =>
+    studyEdit(owner, (doc) => updateStudyPoint(doc, owner, point, patch), `point:${point}:${Object.keys(patch).join()}`),
+  setStudyDividers: (owner: Id, on: boolean) => studyEdit(owner, (doc) => setStudyDividers(doc, owner, on)),
+  setStudyBalls: (owner: Id, ball: StudyBall) => studyEdit(owner, (doc) => setStudyBalls(doc, owner, ball)),
+  fillStudyIntervals: (owner: Id) => studyEdit(owner, (doc) => fillStudyIntervals(doc, owner)),
+  setStudyWidth: (owner: Id, stretch: number, width: number) => studyEdit(owner, (doc) => setStudyWidth(doc, owner, stretch, width), `width:${stretch}`),
+  addStudySketch: (owner: Id, shape: StudySketch["shape"]) => studyEdit(owner, (doc) => addStudySketch(doc, owner, shape)),
+  updateStudySketch: (owner: Id, sketch: Id, patch: Partial<Pick<StudySketch, "shape" | "up" | "roots">>) =>
+    studyEdit(owner, (doc) => updateStudySketch(doc, owner, sketch, patch)),
 
   /** Every result of the board as a gap, or none. */
   allGaps: (id: Id, all: boolean) => perform((doc) => setAllBoardGaps(doc, id, all), "keep"),
@@ -244,6 +289,12 @@ export const actions = {
   deleteSelected: () => {
     const { selection } = useFigureStore.getState();
     if (selection.length === 0) return false;
+    // Inside a study, Delete takes the piece picked, not the whole study; with none picked, nothing.
+    const inside = currentStudyFocus();
+    if (inside) {
+      const { study, path } = inside;
+      return path ? studyEdit(study.id, (d) => removeStudyPiece(d, study.id, path)) : false;
+    }
     return perform((doc, sel) => deleteElements(doc, sel), "none");
   },
 

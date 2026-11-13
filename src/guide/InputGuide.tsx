@@ -178,7 +178,7 @@ const TOPICS: Topic[] = [
   },
   {
     id: "reta",
-    title: "Varal, sinais e módulos",
+    title: "Estudo na reta, varal, sinais e módulos",
     intro: (
       <>
         Frações e raízes continuam exatas. Entre intervalos, use U, n ou -. Para infinito, escreva <code>inf</code>. Em sinal, quadro
@@ -187,6 +187,13 @@ const TOPICS: Topic[] = [
       </>
     ),
     samples: [
+      {
+        caption: "Estudo na reta em branco, para preencher: um ? para cada ponto crítico.",
+        lines: ["estudo ?; ?; ?"],
+        after: "Dois cliques numa parte, na prévia, entram no estudo; mais dois, nela, escrevem. Pelo + entre os pontos entra outro ponto.",
+      },
+      { caption: "Com os nomes dos pontos.", lines: ["estudo a; b"] },
+      { caption: "Com as curvas: as raízes viram os pontos, com os esboços e os intervalos em x.", lines: ["estudo x-2; x^2-5x+4"] },
       { caption: "Varal da interseção de dois intervalos.", lines: ["varal [1/2;3] n ]2;5["] },
       { caption: "A curva sobre a reta, para o estudo de sinal.", lines: ["sinal x^2-4"] },
       { caption: "Quadro de sinais, um fator por linha.", lines: ["quadro (x-1)(x+2)/(x-3)"] },

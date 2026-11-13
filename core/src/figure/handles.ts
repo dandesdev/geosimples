@@ -221,7 +221,7 @@ export function draggedPoints(el: Element, doc?: FigureDoc): Id[] {
 
 /** Whether Mover drags the element. */
 export function isDraggable(el: Element): boolean {
-  return el.type === "text" || el.type === "board" || el.type === "vline" || el.type === "numberline" || draggedPoints(el).length > 0;
+  return el.type === "text" || el.type === "board" || el.type === "study" || el.type === "vline" || el.type === "numberline" || draggedPoints(el).length > 0;
 }
 
 /**
@@ -240,8 +240,8 @@ export function moveElements(doc: FigureDoc, ids: Id[], by: Vec): FigureDoc {
     const el = byId.get(id);
     if (!el) continue;
     if (el.type === "text") moves.push({ id, x: r2(el.x + by.x), y: r2(el.y + by.y) });
-    else if (el.type === "board") {
-      working = withElements(working, working.elements.map((e) => (e.id === id && e.type === "board" ? { ...e, x: r2(el.x + by.x), y: r2(el.y + by.y) } : e)));
+    else if (el.type === "board" || el.type === "study") {
+      working = withElements(working, working.elements.map((e) => (e.id === id && (e.type === "board" || e.type === "study") ? { ...e, x: r2(el.x + by.x), y: r2(el.y + by.y) } : e)));
     } else if (el.type === "vline") {
       working = withElements(working, working.elements.map((e) => (e.id === id && e.type === "vline" ? { ...e, x: r2(el.x + by.x) } : e)));
     } else if (el.type === "numberline") working = moveNumberLine(working, id, r2(el.y + by.y));
